@@ -1,15 +1,21 @@
 <script setup lang="ts">
-import { computed, onMounted, provide, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, provide, ref, shallowRef, watch } from 'vue'
 import { COMMENTS, SELECT_FIELD } from './utils/injection'
 import { useComments } from './composables/useComments'
-import type { AnnotateResponse, JsonValue, ViewMode } from './types'
+import type { AnnotateResponse, JsonObject, JsonValue, ViewMode } from './types'
 import { annotateJson, createShare, getShare } from './api'
-import { countNodes, findNodePath, parseJson, toSchemaPath } from './utils/json'
+import { countNodes, describeParseError, findNodePath, parseJson, toSchemaPath } from './utils/json'
 import { buildSearchIndex, EMPTY_SEARCH } from './utils/search'
 import { buildRefIndex, EMPTY_REF_INDEX } from './utils/references'
+import { isObjectArray } from './utils/flatten'
+import { tryRepair } from './utils/repair'
+import { pushRecent, readRecents, type RecentFile } from './utils/storage'
 import JsonTree from './components/JsonTree.vue'
 import JsonGrid from './components/JsonGrid.vue'
 import IataPanel from './components/IataPanel.vue'
+import EditorPane from './components/EditorPane.vue'
+import EmptyState from './components/EmptyState.vue'
+import ArrayTable from './components/ArrayTable.vue'
 
 const SAMPLE_JSON = `{
   "IATA_OrderViewRS": {
@@ -34,19 +40,24 @@ const SAMPLE_JSON = `{
 /** Agacin kok dugumune verilen etiket; arama yollari da bu onekle kurulur. */
 const ROOT_KEY = 'json'
 
-const rawInput = ref(SAMPLE_JSON)
-const viewMode = ref<ViewMode>('tree')
+// Uygulama bos durumla acilir (tasarimin 1. ekrani); ornek oradan yuklenir.
+const rawInput = ref('')
+const fileName = ref<string | null>(null)
+const viewMode = ref<ViewMode>('grid')
+const arrayTableMode = ref(false)
 const searchInput = ref('')
 const searchTerm = ref('')
 const filterMatches = ref(false)
 const activeIndex = ref(0)
-const editorCollapsed = ref(false)
+const editorVisible = ref(true)
 const iataVisible = ref(true)
+const recents = ref<RecentFile[]>(readRecents())
 
 const shareUrl = ref<string | null>(null)
 const shareCopied = ref(false)
 const shareLoading = ref(false)
 const shareError = ref<string | null>(null)
+const shareMenuOpen = ref(false)
 const loadError = ref<string | null>(null)
 
 const shareTitle = ref('')
@@ -59,8 +70,8 @@ const isShared = computed(() => sharedId.value !== null)
 
 const sharedAtLabel = computed(() => {
   if (!sharedAt.value) return null
-  const d = new Date(sharedAt.value)
-  return Number.isNaN(d.getTime()) ? null : d.toLocaleString('tr-TR')
+  const date = new Date(sharedAt.value)
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleString('tr-TR')
 })
 
 const annotation = ref<AnnotateResponse | null>(null)
@@ -68,6 +79,8 @@ const annotationLoading = ref(false)
 const annotationError = ref<string | null>(null)
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const filterInputRef = ref<HTMLInputElement | null>(null)
+const gridRef = ref<InstanceType<typeof JsonGrid> | null>(null)
 
 // Her tus vurusunda tum belgeyi ayristirmamak icin girisi geciktiriyoruz;
 // paylasim/dosya yukleme gibi programatik degisikliklerde aninda uygulanir.
@@ -85,17 +98,42 @@ function applyInputNow(value: string) {
   parsedInput.value = value
 }
 
-const parseResult = computed(() => parseJson(parsedInput.value))
-const parsed = computed(() => parseResult.value.data)
-const parseError = computed(() => parseResult.value.error)
+/**
+ * Ayristirma sonucu ve suresi birlikte tutuluyor: sure alt durum cubugunda
+ * gosterilecegi icin olcumun ayristirmayla ayni geciste yapilmasi gerekiyor.
+ */
+// shallowRef: JsonValue ozyinelemeli oldugu icin derin unwrap tip cozumunu patlatiyor,
+// ustelik agacin ic dugumlerinin reaktif olmasina da gerek yok.
+const parseState = shallowRef<{ data: JsonValue | null; error: string | null; ms: number }>({
+  data: null, error: null, ms: 0,
+})
+
+watch(parsedInput, (text) => {
+  const started = performance.now()
+  const result = parseJson(text)
+  parseState.value = { ...result, ms: performance.now() - started }
+}, { immediate: true })
+
+const parsed = computed(() => parseState.value.data)
+const parseError = computed(() => parseState.value.error)
 const hasData = computed(() => parsed.value !== null)
 const nodeCount = computed(() => (parsed.value !== null ? countNodes(parsed.value) : 0))
+
+const errorDetail = computed(() =>
+  parseError.value ? describeParseError(parseError.value, parsedInput.value) : null,
+)
+
 /** Dugum yolundan o alanin XSD bilgisini bulan arama fonksiyonu. */
 const docLookup = computed(() => {
   const byPath = new Map((annotation.value?.fields ?? []).map(field => [field.path, field]))
   const messageType = annotation.value?.messageType ?? null
   return (nodePath: string) => byPath.get(toSchemaPath(nodePath, ROOT_KEY, messageType))
 })
+
+/** Sema isaretleri yalnizca sunucudan alan listesi geldiyse anlamli. */
+const schemaKnown = computed(
+  () => annotation.value?.schemaLoaded === true && (annotation.value?.fields.length ?? 0) > 0,
+)
 
 const searchIndex = computed(() =>
   parsed.value !== null && searchTerm.value.trim()
@@ -109,8 +147,7 @@ const refIndex = computed(() =>
 
 /**
  * Odak istegi. Yalnizca yolu tutsaydik ayni hedefe ikinci kez atlamak izleyicileri
- * tetiklemezdi; sira numarasi her istegi benzersiz kilar. (Onceki cozum
- * requestAnimationFrame ile sifirliyordu, ama arka plandaki sekmede rAF calismaz.)
+ * tetiklemezdi; sira numarasi her istegi benzersiz kilar.
  */
 const focusRequest = ref<{ path: string; seq: number } | null>(null)
 let focusSeq = 0
@@ -146,7 +183,8 @@ function goToComment(step: number) {
   focusOnPath(paths[next])
 }
 
-/** Uzerine gelinen alan; IATA paneli bunun XSD karsiligini gosterir. */
+// --- Secim, breadcrumb ve odak ----------------------------------------------
+
 const selectedNodePath = ref<string | null>(null)
 provide(SELECT_FIELD, (path: string | null) => { selectedNodePath.value = path })
 
@@ -155,6 +193,78 @@ const selectedSchemaPath = computed(() =>
     ? toSchemaPath(selectedNodePath.value, ROOT_KEY, annotation.value?.messageType ?? null)
     : null,
 )
+
+/** Bağlam şeridi; kok etiketi atilir, cok derin yollarda bas kirpilir. */
+const crumbs = computed(() => {
+  const segments = (selectedNodePath.value ?? ROOT_KEY).split('.').slice(1)
+  if (segments.length === 0) return [{ label: ROOT_KEY, last: true }]
+  const trimmed = segments.length > 6 ? ['…', ...segments.slice(-6)] : segments
+  return trimmed.map((label, index) => ({ label, last: index === trimmed.length - 1 }))
+})
+
+const pathCopied = ref(false)
+let copyTimer: ReturnType<typeof setTimeout> | null = null
+
+async function copySelectedPath() {
+  const path = selectedNodePath.value ?? ROOT_KEY
+  try {
+    await navigator.clipboard.writeText(path)
+    pathCopied.value = true
+    if (copyTimer) clearTimeout(copyTimer)
+    copyTimer = setTimeout(() => { pathCopied.value = false }, 1500)
+  } catch {
+    pathCopied.value = false
+  }
+}
+
+/** Bir JSON yolundaki degeri okur; Tablo modu icin gerekli. */
+function valueAt(path: string): JsonValue | undefined {
+  if (parsed.value === null) return undefined
+  let current: JsonValue = parsed.value
+  for (const segment of path.split('.').slice(1)) {
+    if (current === null || typeof current !== 'object') return undefined
+    current = Array.isArray(current)
+      ? (current[Number(segment)] as JsonValue)
+      : (current as JsonObject)[segment]
+    if (current === undefined) return undefined
+  }
+  return current
+}
+
+/** Tam ekran Tablo modunda gosterilecek dizi; secimden yukari dogru aranir. */
+const tablePath = ref<string | null>(null)
+
+const tableCandidate = computed(() => {
+  const segments = (selectedNodePath.value ?? '').split('.')
+  for (let i = segments.length; i > 1; i--) {
+    const path = segments.slice(0, i).join('.')
+    const value = valueAt(path)
+    if (value !== undefined && isObjectArray(value)) return path
+  }
+  return null
+})
+
+const tableItems = computed(() => {
+  const path = tablePath.value
+  if (!path) return null
+  const value = valueAt(path)
+  return value !== undefined && isObjectArray(value) ? value : null
+})
+
+function openTable(path: string) {
+  tablePath.value = path
+  viewMode.value = 'table'
+}
+
+function setViewMode(mode: ViewMode) {
+  if (mode === 'table') {
+    const path = tablePath.value ?? tableCandidate.value
+    if (!path) return
+    openTable(path)
+    return
+  }
+  viewMode.value = mode
+}
 
 /** IATA panelindeki XSD yolunu goruntuleyicideki dugume cevirip oraya atlar. */
 function focusUnmatched(schemaPath: string) {
@@ -166,8 +276,13 @@ function focusUnmatched(schemaPath: string) {
 }
 
 function focusOnPath(path: string) {
+  // Tablo modundayken hedef satir grid'de; once grid'e donuyoruz.
+  if (viewMode.value === 'table') viewMode.value = 'grid'
+  selectedNodePath.value = path
   focusRequest.value = { path, seq: ++focusSeq }
 }
+
+// --- Arama -------------------------------------------------------------------
 
 const matchCount = computed(() => searchIndex.value.matches.length)
 const activePath = computed(() => searchIndex.value.matches[activeIndex.value] ?? null)
@@ -190,6 +305,8 @@ watch(searchInput, (value) => {
 function goToMatch(step: number) {
   if (matchCount.value === 0) return
   activeIndex.value = (activeIndex.value + step + matchCount.value) % matchCount.value
+  const path = searchIndex.value.matches[activeIndex.value]
+  if (path && viewMode.value === 'grid') focusOnPath(path)
 }
 
 function clearSearch() {
@@ -199,10 +316,18 @@ function clearSearch() {
   activeIndex.value = 0
 }
 
+const filterHint = computed(() => {
+  if (!searchTerm.value) return 'Ctrl+F'
+  if (matchCount.value === 0) return 'yok'
+  return `${activeIndex.value + 1}/${matchCount.value}`
+})
+
 const matchPercent = computed(() => {
   if (!annotation.value?.messageType) return null
   return Math.round((annotation.value.confidence ?? 0) * 100)
 })
+
+// --- Veri yukleme ------------------------------------------------------------
 
 let annotateTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -215,6 +340,7 @@ async function loadFromShareId(id: string) {
     sharedId.value = share.id
     sharedTitle.value = share.title
     sharedAt.value = share.createdAt
+    fileName.value = share.title ?? `paylaşım-${share.id}.json`
   } catch (e) {
     loadError.value = (e as Error).message
     sharedId.value = null
@@ -231,7 +357,7 @@ function forkShared() {
   sharedTitle.value = null
   sharedAt.value = null
   shareUrl.value = null
-  editorCollapsed.value = false
+  editorVisible.value = true
   const url = new URL(window.location.href)
   url.searchParams.delete('s')
   window.history.replaceState({}, '', url.pathname + url.search)
@@ -259,6 +385,12 @@ watch(parsed, (json) => {
   annotateTimer = setTimeout(() => runAnnotation(json), 400)
 })
 
+// Veri degisince tabloya kilitlenmis gorunum gecersiz kalabilir.
+watch(parsed, () => {
+  tablePath.value = null
+  if (viewMode.value === 'table') viewMode.value = 'grid'
+})
+
 onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
   const shareId = params.get('s')
@@ -274,23 +406,60 @@ onMounted(async () => {
   if (parsed.value !== null) {
     await runAnnotation(parsed.value)
   }
+  window.addEventListener('keydown', onKeydown)
+  window.addEventListener('resize', applyResponsivePanels)
+  applyResponsivePanels()
 })
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('resize', applyResponsivePanels)
+})
+
+/**
+ * Dar ekranda once IATA paneli, sonra editor kapanir. Kullanici bunlari alt
+ * cubuktan geri acabildigi icin genisleyince otomatik geri getirmiyoruz.
+ */
+function applyResponsivePanels() {
+  if (window.innerWidth < 1280) iataVisible.value = false
+  if (window.innerWidth < 1024) editorVisible.value = false
+}
 
 function readFile(file: File) {
   const reader = new FileReader()
-  reader.onload = ev => applyInputNow(ev.target?.result as string)
+  reader.onload = (event) => {
+    const text = event.target?.result as string
+    applyInputNow(text)
+    fileName.value = file.name
+    recents.value = pushRecent(file.name, text)
+  }
   reader.readAsText(file)
 }
 
-function handleFile(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
+function handleFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (file) readFile(file)
+  // Ayni dosya arka arkaya secilebilsin diye girdi sifirlanir.
+  input.value = ''
+}
+
+function handleDrop(event: DragEvent) {
+  event.preventDefault()
+  const file = event.dataTransfer?.files?.[0]
   if (file) readFile(file)
 }
 
-function handleDrop(e: DragEvent) {
-  e.preventDefault()
-  const file = e.dataTransfer?.files?.[0]
-  if (file) readFile(file)
+function openRecent(file: RecentFile) {
+  if (file.content === undefined) {
+    // Icerik saklanmayacak kadar buyuktu; kullanici dosyayi yeniden secer.
+    loadError.value = `${file.name} çok büyük olduğu için saklanmadı, dosyayı yeniden seçin.`
+    fileInputRef.value?.click()
+    return
+  }
+  applyInputNow(file.content)
+  fileName.value = file.name
+  recents.value = pushRecent(file.name, file.content)
 }
 
 function handleFormat() {
@@ -307,10 +476,24 @@ function handleClear() {
   applyInputNow('')
   clearSearch()
   shareUrl.value = null
+  fileName.value = null
+  selectedNodePath.value = null
 }
 
 function loadSample() {
   applyInputNow(SAMPLE_JSON)
+  fileName.value = 'ornek.json'
+}
+
+/** "Otomatik düzelt ve dene": yorum, fazla virgul ve tek tirnak onarilir. */
+function handleRepair() {
+  const repaired = tryRepair(rawInput.value)
+  if (repaired === null) {
+    loadError.value = 'Otomatik düzeltme bu hatayı çözemedi; hatalı satırı elle düzeltin.'
+    return
+  }
+  loadError.value = null
+  applyInputNow(repaired)
 }
 
 async function handleShare() {
@@ -321,6 +504,7 @@ async function handleShare() {
   try {
     const result = await createShare(parsed.value, shareTitle.value, shareCommentsEnabled.value)
     shareUrl.value = result.url
+    shareMenuOpen.value = false
     try {
       await navigator.clipboard.writeText(result.url)
       shareCopied.value = true
@@ -333,198 +517,257 @@ async function handleShare() {
     shareLoading.value = false
   }
 }
+
+// --- Alt durum cubugu --------------------------------------------------------
+
+const gridStats = ref({ total: 0, rendered: 0 })
+
+// --- Klavye ------------------------------------------------------------------
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null
+  return element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+}
+
+function onKeydown(event: KeyboardEvent) {
+  const meta = event.metaKey || event.ctrlKey
+  if (meta && (event.key === 'k' || event.key === 'f')) {
+    event.preventDefault()
+    filterInputRef.value?.focus()
+    filterInputRef.value?.select()
+    return
+  }
+  if (event.key === 'Escape') {
+    if (searchInput.value) clearSearch()
+    shareMenuOpen.value = false
+    return
+  }
+  if (isTypingTarget(event.target) || meta || event.altKey) return
+  if (event.key === 'j' || event.key === 'J') {
+    event.preventDefault()
+    gridRef.value?.moveSelection(1)
+  } else if (event.key === 'k' || event.key === 'K') {
+    event.preventDefault()
+    gridRef.value?.moveSelection(-1)
+  }
+}
+
+// --- Basliktaki dosya adi ----------------------------------------------------
+
+const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'girdi.json' : ''))
 </script>
 
 <template>
   <div class="app">
     <header class="header">
-      <div class="header-left">
-        <div class="logo">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <rect x="3" y="3" width="18" height="18" rx="4" fill="var(--accent)" opacity="0.15" />
-            <path d="M8 8h2v2H8V8zm0 3h2v2H8v-2zm0 3h2v2H8v-2zm3-6h5v2h-5V8zm0 3h5v2h-5v-2zm0 3h5v2h-5v-2z" fill="var(--accent)" />
-          </svg>
-          <span class="logo-text">JSON <span class="logo-accent">Sarp</span></span>
-        </div>
-        <span v-if="isShared" class="shared-badge" :title="sharedAtLabel ? 'Paylaşım tarihi: ' + sharedAtLabel : undefined">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M4 6V4.5a4 4 0 118 0V6h.5A1.5 1.5 0 0114 7.5v6A1.5 1.5 0 0112.5 15h-9A1.5 1.5 0 012 13.5v-6A1.5 1.5 0 013.5 6H4zm1.5 0h5V4.5a2.5 2.5 0 00-5 0V6z"/></svg>
-          Salt okunur paylaşım
-        </span>
-        <span v-if="hasData" class="stat-badge"><span class="dot" />{{ nodeCount.toLocaleString() }} node</span>
-        <span v-if="matchPercent !== null" class="match-badge">
-          IATA · {{ annotation?.messageType }} · %{{ matchPercent }}
-        </span>
+      <div class="brand">
+        <svg width="26" height="26" viewBox="0 0 24 24">
+          <rect x="1" y="1" width="22" height="22" rx="6" fill="var(--accent)" opacity=".14" />
+          <ellipse cx="12" cy="12" rx="8" ry="5.2" fill="none" stroke="var(--accent)" stroke-width="1.6" />
+          <circle cx="12" cy="12" r="2.7" fill="var(--accent)" />
+          <circle cx="13.4" cy="10.6" r="0.9" fill="var(--bg-primary)" />
+        </svg>
+        <span class="wordmark">JSON <span class="wordmark-accent">EYES</span></span>
+      </div>
+      <div class="divider" />
+
+      <div v-if="displayName" class="file">
+        <span class="file-name">{{ displayName }}</span>
+        <span v-if="hasData" class="valid-badge"><span class="dot" />geçerli</span>
+        <span v-else-if="parseError" class="valid-badge bad"><span class="dot" />geçersiz</span>
       </div>
 
-      <div class="header-center">
-        <div class="mode-switch">
-          <button class="mode-btn" :class="{ active: viewMode === 'tree' }" @click="viewMode = 'tree'">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.5a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zM1 8a1.5 1.5 0 113 0A1.5 1.5 0 011 8zm0 5.5a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zM6 3h9v1H6V3zm0 5h9v1H6V8zm0 5h9v1H6v-1z"/></svg>
-            Tree
-          </button>
-          <button class="mode-btn" :class="{ active: viewMode === 'grid' }" @click="viewMode = 'grid'">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 2a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H2a2 2 0 01-2-2V2zm5 0v4H1V2h4zm5 0v4H6V2h4zm5 0v4h-4V2h4zM5 7v4H1V7h4zm5 0v4H6V7h4zm5 0v4h-4V7h4zM5 12v3H1v-3h4zm5 0v3H6v-3h4zm5 0v3h-4v-3h4z"/></svg>
-            Grid
-          </button>
-        </div>
-      </div>
+      <span v-if="isShared" class="lock-badge" :title="sharedAtLabel ? `Paylaşım: ${sharedAtLabel}` : undefined">
+        🔒 salt okunur
+      </span>
 
-      <div class="header-right">
-        <button v-if="!isShared" class="icon-btn" :class="{ active: !editorCollapsed }" @click="editorCollapsed = !editorCollapsed">
-          {{ editorCollapsed ? 'Editörü Aç' : 'Editörü Gizle' }}
-        </button>
-        <button class="icon-btn" :class="{ active: iataVisible }" @click="iataVisible = !iataVisible">IATA</button>
-        <template v-if="!isShared">
-          <button class="icon-btn" @click="fileInputRef?.click()">Yükle</button>
-          <input
-            v-if="hasData"
-            v-model="shareTitle"
-            class="share-title-input"
-            type="text"
-            maxlength="120"
-            placeholder="Paylaşım başlığı (isteğe bağlı)"
-            @keydown.enter="handleShare"
-          />
-          <label v-if="hasData" class="comments-toggle" title="Linke erişen herkes alanlara yorum bırakabilsin">
-            <input v-model="shareCommentsEnabled" type="checkbox" />
-            Yorum
-          </label>
-          <button v-if="hasData" class="icon-btn share-btn" :disabled="shareLoading" @click="handleShare">
-            {{ shareLoading ? '...' : 'Paylaş' }}
-          </button>
-          <input ref="fileInputRef" type="file" accept=".json,application/json" style="display:none" @change="handleFile" />
-        </template>
-        <template v-else>
-          <span v-if="comments.total.value > 0" class="comment-nav">
-            <button class="nav-btn" title="Önceki yorum" @click="goToComment(-1)">↑</button>
-            <span class="nav-label">{{ comments.total.value }} yorum</span>
-            <button class="nav-btn" title="Sonraki yorum" @click="goToComment(1)">↓</button>
+      <div class="command-wrap">
+        <button class="command" @click="filterInputRef?.focus()">
+          <span class="command-icon">⌕</span>
+          <span class="command-text" :class="{ filled: searchTerm }">
+            {{ searchTerm || 'Alan, değer veya komut' }}
           </span>
-          <button class="icon-btn fork-btn" @click="forkShared">Kopyasını al ve düzenle</button>
-        </template>
+          <span v-if="searchTerm" class="command-count">{{ filterHint }}</span>
+          <span class="command-key">Ctrl K</span>
+        </button>
       </div>
+
+      <span v-if="isShared && comments.total.value > 0" class="comment-total">
+        <button class="comment-nav" title="Önceki yorum" @click="goToComment(-1)">↑</button>
+        💬 {{ comments.total.value }}
+        <button class="comment-nav" title="Sonraki yorum" @click="goToComment(1)">↓</button>
+      </span>
+
+      <div class="mode-switch">
+        <button class="mode" :class="{ active: viewMode === 'tree' }" @click="setViewMode('tree')">Tree</button>
+        <button class="mode" :class="{ active: viewMode === 'grid' }" @click="setViewMode('grid')">Grid</button>
+        <button
+          class="mode"
+          :class="{ active: viewMode === 'table' }"
+          :disabled="!tablePath && !tableCandidate"
+          title="Seçili nesne dizisini tam ekran tabloda aç"
+          @click="setViewMode('table')"
+        >Tablo</button>
+      </div>
+
+      <div v-if="!isShared" class="share-wrap">
+        <button class="share-btn" :disabled="!hasData || shareLoading" @click="shareMenuOpen = !shareMenuOpen">
+          {{ shareLoading ? '…' : 'Paylaş' }}
+        </button>
+        <div v-if="shareMenuOpen" class="share-menu">
+          <label class="share-label">Başlık (isteğe bağlı)</label>
+          <input v-model="shareTitle" class="share-input" type="text" maxlength="120" @keydown.enter="handleShare" />
+          <label class="share-check">
+            <input v-model="shareCommentsEnabled" type="checkbox" />
+            Yorumlara açık olsun
+          </label>
+          <p class="share-note">Link salt okunur açılır; veriyi kimse değiştiremez.</p>
+          <button class="share-confirm" :disabled="shareLoading" @click="handleShare">
+            {{ shareLoading ? 'Paylaşılıyor…' : 'Link oluştur' }}
+          </button>
+        </div>
+      </div>
+      <button v-else class="fork-btn" @click="forkShared">Kopyasını al ve düzenle</button>
     </header>
 
-    <div v-if="isShared" class="banner info">
-      <strong v-if="sharedTitle" class="banner-title">{{ sharedTitle }}</strong>
-      Bu JSON paylaşılmış bir kayıt ve değiştirilemez.
-      <span v-if="sharedAtLabel" class="banner-meta">Paylaşım: {{ sharedAtLabel }}</span>
-    </div>
     <div v-if="shareUrl" class="banner accent">
-      {{ shareCopied ? 'Paylaşım linki kopyalandı:' : 'Paylaşım linki oluşturuldu (kopyalanamadı, elle kopyalayın):' }}
-      <a :href="shareUrl" target="_blank">{{ shareUrl }}</a>
-      <span class="banner-meta">Link salt okunur açılır.</span>
+      {{ shareCopied ? 'Link kopyalandı —' : 'Link oluşturuldu (kopyalanamadı) —' }}
+      <a :href="shareUrl" target="_blank" class="banner-link">{{ shareUrl }}</a>
+      <span class="banner-note">Açan herkes yorum bırakabilir, veriyi değiştiremez.</span>
       <button class="banner-close" @click="shareUrl = null">×</button>
     </div>
-    <div v-if="shareError" class="banner error">{{ shareError }}<button class="banner-close" @click="shareError = null">×</button></div>
-    <div v-if="loadError" class="banner error">{{ loadError }}<button class="banner-close" @click="loadError = null">×</button></div>
+    <div v-if="isShared" class="banner accent">
+      <strong v-if="sharedTitle" class="banner-strong">{{ sharedTitle }}</strong>
+      Paylaşılmış görünüm — düzenleme kapalı.
+      <span v-if="sharedAtLabel" class="banner-note">Paylaşım: {{ sharedAtLabel }}</span>
+      <button class="banner-action" @click="forkShared">Kopyasını al ve düzenle</button>
+    </div>
+    <div v-if="shareError" class="banner bad">{{ shareError }}<button class="banner-close" @click="shareError = null">×</button></div>
+    <div v-if="loadError" class="banner bad">{{ loadError }}<button class="banner-close" @click="loadError = null">×</button></div>
+
+    <div v-if="hasData" class="crumbs-bar">
+      <nav class="crumbs">
+        <template v-for="(crumb, index) in crumbs" :key="index">
+          <span class="crumb" :class="{ last: crumb.last }">{{ crumb.label }}</span>
+          <span v-if="!crumb.last" class="crumb-sep">›</span>
+        </template>
+      </nav>
+      <button class="copy-path" @click="copySelectedPath">
+        {{ pathCopied ? '✓ kopyalandı' : '⧉ yolu kopyala' }}
+      </button>
+      <div class="crumbs-spacer" />
+
+      <div class="filter-box">
+        <span class="filter-icon">⌕</span>
+        <input
+          ref="filterInputRef"
+          v-model="searchInput"
+          class="filter-input"
+          type="text"
+          placeholder="Bu görünümü filtrele"
+          @keydown.enter.prevent="goToMatch($event.shiftKey ? -1 : 1)"
+          @keydown.esc="clearSearch"
+        />
+        <span class="filter-hint" :class="{ empty: searchTerm && matchCount === 0 }">{{ filterHint }}</span>
+      </div>
+      <button
+        class="only-matches"
+        :class="{ active: filterMatches }"
+        :disabled="!searchTerm"
+        title="Yalnızca eşleşen alanları ve onlara giden yolu göster"
+        @click="filterMatches = !filterMatches"
+      >yalnız eşleşen</button>
+
+      <div class="segment">
+        <button class="seg-btn" :class="{ 'active-nested': !arrayTableMode }" @click="arrayTableMode = false">İç içe</button>
+        <button class="seg-btn" :class="{ 'active-table': arrayTableMode }" @click="arrayTableMode = true">Tablo</button>
+      </div>
+    </div>
 
     <div class="workspace">
       <!-- Sol: JSON editoru (paylasilan gorunumde hic render edilmez) -->
-      <section v-if="!editorCollapsed && !isShared" class="editor-pane" @drop="handleDrop" @dragover.prevent>
-        <div class="pane-head">
-          <span class="pane-title">JSON Girişi</span>
-          <div class="pane-actions">
-            <button class="mini-btn" :disabled="!hasData" @click="handleFormat">Format</button>
-            <button class="mini-btn" :disabled="!hasData" @click="handleMinify">Minify</button>
-            <button class="mini-btn" @click="loadSample">Örnek</button>
-            <button class="mini-btn danger" @click="handleClear">Temizle</button>
-          </div>
+      <EditorPane
+        v-if="editorVisible && !isShared"
+        v-model="rawInput"
+        :parse-error="parseError"
+        :error-line="errorDetail?.line ?? null"
+        :node-count="nodeCount"
+        :has-data="hasData"
+        :recents="recents"
+        @format="handleFormat"
+        @minify="handleMinify"
+        @sample="loadSample"
+        @clear="handleClear"
+        @repair="handleRepair"
+        @open-recent="openRecent"
+        @drop="handleDrop"
+      />
+
+      <!-- Orta: goruntuleyici -->
+      <section class="viewer">
+        <div v-if="sharedLoading" class="center-note">Paylaşılan JSON yükleniyor…</div>
+
+        <div v-else-if="parseError" class="center-note error">
+          <h2 class="error-title">JSON ayrıştırılamadı</h2>
+          <code class="error-code">{{ parseError }}</code>
+          <p class="error-hint">Hatalı satır solda işaretlendi. Düzeltince grid kendiliğinden oluşur.</p>
+          <button class="error-action" @click="handleRepair">Otomatik düzelt ve dene</button>
         </div>
-        <textarea
-          v-model="rawInput"
-          class="editor"
-          :class="{ invalid: parseError }"
-          placeholder="JSON verisini buraya yapıştırın veya dosya sürükleyin..."
-          spellcheck="false"
+
+        <EmptyState
+          v-else-if="!hasData"
+          :recents="recents"
+          @pick-file="fileInputRef?.click()"
+          @sample="loadSample"
+          @open-recent="openRecent"
+          @drop="handleDrop"
         />
-        <div v-if="parseError" class="editor-status error">
-          <span class="status-dot error" /> {{ parseError }}
+
+        <ArrayTable
+          v-else-if="viewMode === 'table' && tableItems"
+          :items="tableItems"
+          :path="tablePath!"
+          variant="full"
+          @focus-path="focusOnPath"
+        />
+
+        <div v-else-if="viewMode === 'tree'" class="tree-scroll">
+          <JsonTree
+            :data="parsed!"
+            :root-key="ROOT_KEY"
+            :search-term="searchTerm"
+            :doc-lookup="docLookup"
+            :search="searchIndex"
+            :active-path="activePath"
+            :filter-matches="filterMatches"
+            :ref-index="refIndex"
+            :focus-request="focusRequest"
+            @focus-path="focusOnPath"
+          />
         </div>
-        <div v-else-if="hasData" class="editor-status ok">
-          <span class="status-dot ok" /> Geçerli JSON · {{ nodeCount.toLocaleString() }} node
-        </div>
+
+        <JsonGrid
+          v-else
+          ref="gridRef"
+          :data="parsed!"
+          :root-key="ROOT_KEY"
+          :search-term="searchTerm"
+          :doc-lookup="docLookup"
+          :filter-matches="filterMatches"
+          :array-table-mode="arrayTableMode"
+          :ref-index="refIndex"
+          :focus-request="focusRequest"
+          :selected-path="selectedNodePath"
+          :schema-known="schemaKnown"
+          @focus-path="focusOnPath"
+          @expand-table="openTable"
+          @stats="gridStats = $event"
+        />
       </section>
 
-      <!-- Orta: Tree / Grid goruntuleyici -->
-      <section class="viewer-pane">
-        <div class="viewer-head">
-          <div class="search-wrap">
-            <svg class="search-icon" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M11.7 10.3a6.5 6.5 0 10-1.4 1.4l3.8 3.9a1 1 0 001.5-1.4l-3.9-3.9zM6.5 11a4.5 4.5 0 110-9 4.5 4.5 0 010 9z"/></svg>
-            <input
-              v-model="searchInput"
-              class="search-input"
-              type="text"
-              placeholder="Değer veya key ara..."
-              :disabled="!hasData"
-              @keydown.enter.prevent="goToMatch($event.shiftKey ? -1 : 1)"
-              @keydown.esc="clearSearch"
-            />
-            <span v-if="searchTerm" class="search-count" :class="{ empty: matchCount === 0 }">
-              {{ matchCount === 0 ? 'eşleşme yok' : `${activeIndex + 1} / ${matchCount}` }}
-            </span>
-            <button v-if="searchTerm" class="search-nav" title="Önceki eşleşme (Shift+Enter)" :disabled="matchCount === 0" @click="goToMatch(-1)">↑</button>
-            <button v-if="searchTerm" class="search-nav" title="Sonraki eşleşme (Enter)" :disabled="matchCount === 0" @click="goToMatch(1)">↓</button>
-            <button v-if="searchInput" class="search-clear" title="Aramayı temizle (Esc)" @click="clearSearch">×</button>
-          </div>
-          <button
-            class="filter-btn"
-            :class="{ active: filterMatches }"
-            :disabled="!searchTerm"
-            title="Yalnızca eşleşen alanları ve onlara giden yolu göster"
-            @click="filterMatches = !filterMatches"
-          >
-            Sadece eşleşenler
-          </button>
-          <span v-if="searchIndex.truncated" class="search-warn">
-            İlk {{ matchCount }} eşleşme gösteriliyor; aramayı daraltın.
-          </span>
-        </div>
-        <div class="viewer-body">
-          <template v-if="hasData">
-            <JsonTree
-              v-if="viewMode === 'tree'"
-              :data="parsed!"
-              :root-key="ROOT_KEY"
-              :search-term="searchTerm"
-              :doc-lookup="docLookup"
-              :search="searchIndex"
-              :active-path="activePath"
-              :filter-matches="filterMatches"
-              :ref-index="refIndex"
-              :focus-request="focusRequest"
-              @focus-path="focusOnPath"
-            />
-            <JsonGrid
-              v-else
-              :data="parsed!"
-              :root-key="ROOT_KEY"
-              :search-term="searchTerm"
-              :doc-lookup="docLookup"
-              :filter-matches="filterMatches"
-              :ref-index="refIndex"
-              :focus-request="focusRequest"
-              @focus-path="focusOnPath"
-            />
-          </template>
-          <div v-else-if="sharedLoading" class="placeholder">
-            <p class="ph-title">Paylaşılan JSON yükleniyor...</p>
-          </div>
-          <div v-else-if="parseError" class="placeholder error">
-            <p class="ph-title">Geçersiz JSON</p>
-            <p class="ph-detail">{{ parseError }}</p>
-          </div>
-          <div v-else class="placeholder">
-            <p class="ph-title">Görüntülenecek JSON yok</p>
-            <p class="ph-detail">Soldaki editöre JSON girin; tree ve grid burada oluşur.</p>
-            <button class="ph-btn" @click="loadSample">Örnek JSON yükle</button>
-          </div>
-        </div>
-      </section>
-
-      <!-- Sag: IATA benzerlik paneli -->
+      <!-- Sag: IATA paneli -->
       <IataPanel
-        v-if="iataVisible"
+        v-if="iataVisible && hasData"
         :annotation="annotation"
         :loading="annotationLoading"
         :error="annotationError"
@@ -532,93 +775,135 @@ async function handleShare() {
         @focus-path="focusUnmatched"
       />
     </div>
+
+    <footer class="status-bar">
+      <span v-if="hasData" class="stat">{{ nodeCount.toLocaleString('tr-TR') }} node</span>
+      <span v-if="hasData" class="stat">ayrıştırma {{ Math.round(parseState.ms) }} ms</span>
+      <span v-if="viewMode === 'grid'" class="stat">{{ gridStats.rendered }}/{{ gridStats.total }} satır render</span>
+      <span v-if="annotation?.messageType" class="stat">{{ annotation.messageType }} %{{ matchPercent }}</span>
+      <div class="status-spacer" />
+      <button v-if="!isShared" class="status-toggle" :class="{ active: editorVisible }" @click="editorVisible = !editorVisible">editör</button>
+      <button class="status-toggle" :class="{ active: iataVisible }" @click="iataVisible = !iataVisible">IATA</button>
+      <span class="stat">Ctrl+K komutlar · Ctrl+F filtre · J/K satır</span>
+    </footer>
+
+    <input ref="fileInputRef" type="file" accept=".json,application/json" hidden @change="handleFile" />
   </div>
 </template>
 
 <style scoped>
 .app { display: flex; flex-direction: column; height: 100vh; background: var(--bg-primary); overflow: hidden; }
 
-.header { display: flex; align-items: center; justify-content: space-between; padding: 0 16px; height: 52px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); flex-shrink: 0; gap: 12px; }
-.header-left, .header-right { display: flex; align-items: center; gap: 8px; }
-.logo { display: flex; align-items: center; gap: 8px; }
-.logo-text { font-size: 15px; font-weight: 700; }
-.logo-accent { color: var(--accent); }
-.stat-badge { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); background: var(--bg-tertiary); padding: 3px 8px; border-radius: 20px; border: 1px solid var(--border-subtle); white-space: nowrap; }
-.dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
-.match-badge { font-size: 11px; color: var(--accent); background: var(--accent-dim); padding: 3px 10px; border-radius: 20px; white-space: nowrap; font-family: 'JetBrains Mono', monospace; }
+/* --- Ust bar --------------------------------------------------------------- */
+.header { display: flex; align-items: center; gap: 14px; padding: 0 16px; height: var(--header-h); background: var(--bg-secondary); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.brand { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
+.wordmark { font-size: 15.5px; font-weight: 700; letter-spacing: .2px; white-space: nowrap; }
+.wordmark-accent { color: var(--accent); }
+.divider { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
 
-.mode-switch { display: flex; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 3px; gap: 2px; }
-.mode-btn { display: flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 6px; font-size: 13px; color: var(--text-muted); }
-.mode-btn:hover { color: var(--text-primary); }
-.mode-btn.active { background: var(--bg-tertiary); color: var(--text-primary); }
+.file { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.file-name { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 190px; }
+.valid-badge { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--green); background: var(--bg-array); border-radius: 20px; padding: 2px 8px; white-space: nowrap; }
+.valid-badge.bad { color: var(--red); background: rgba(255,123,114,.10); }
+.dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.lock-badge { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text-secondary); background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 20px; padding: 3px 9px; white-space: nowrap; }
 
-.icon-btn { padding: 5px 10px; border-radius: 6px; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
-.icon-btn:hover, .icon-btn.active { background: var(--bg-tertiary); color: var(--text-primary); }
-.share-btn { color: var(--accent); }
-.share-title-input { width: 190px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 12px; padding: 5px 9px; outline: none; }
-.share-title-input:focus { border-color: var(--accent); }
-.comments-toggle { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); cursor: pointer; white-space: nowrap; }
-.comments-toggle input { accent-color: var(--accent); cursor: pointer; }
+.command-wrap { flex: 1; display: flex; justify-content: center; min-width: 0; }
+.command { display: flex; align-items: center; gap: 8px; width: 360px; max-width: 100%; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 9px; padding: 7px 11px; }
+.command:hover { border-color: var(--accent); }
+.command-icon { color: var(--text-muted); font-size: 12px; }
+.command-text { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text-muted); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.command-text.filled { color: var(--text-primary); }
+.command-count { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--accent); }
+.command-key { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; white-space: nowrap; }
 
-.comment-nav { display: flex; align-items: center; gap: 4px; background: rgba(188,140,255,.12); border-radius: 20px; padding: 2px 8px; }
-.nav-label { font-size: 11px; color: var(--purple); white-space: nowrap; }
-.nav-btn { color: var(--purple); font-size: 11px; width: 18px; height: 18px; border-radius: 4px; }
-.nav-btn:hover { background: rgba(188,140,255,.2); }
-.fork-btn { color: var(--accent); border: 1px solid var(--border); }
+.comment-total { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--purple); background: var(--bg-object); border-radius: 20px; padding: 4px 10px; white-space: nowrap; }
+.comment-nav { color: var(--purple); font-size: 11px; line-height: 1; }
+.comment-nav:hover { color: var(--text-primary); }
 
-.shared-badge { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); background: var(--bg-tertiary); padding: 3px 9px; border-radius: 20px; border: 1px solid var(--border); white-space: nowrap; }
+.mode-switch { display: flex; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 3px; gap: 2px; flex-shrink: 0; }
+.mode { padding: 5px 11px; border-radius: 6px; font-size: 12.5px; color: var(--text-muted); }
+.mode:hover:not(:disabled) { color: var(--text-primary); }
+.mode.active { background: var(--bg-tertiary); color: var(--text-primary); }
+.mode:disabled { opacity: .35; cursor: not-allowed; }
 
-.banner { display: flex; align-items: center; gap: 8px; padding: 8px 16px; font-size: 12px; flex-shrink: 0; }
-.banner.accent { background: var(--accent-dim); color: var(--accent); }
-.banner.error { background: rgba(255,123,114,.08); color: var(--red); }
-.banner.info { background: var(--bg-tertiary); color: var(--text-secondary); border-bottom: 1px solid var(--border-subtle); }
-.banner-meta { color: var(--text-muted); font-size: 11px; }
-.banner-title { color: var(--text-primary); }
-.banner a { color: inherit; }
+.share-wrap { position: relative; flex-shrink: 0; }
+.share-btn { font-size: 12.5px; font-weight: 600; color: var(--bg-primary); background: var(--accent); border-radius: 7px; padding: 6px 13px; }
+.share-btn:hover:not(:disabled) { background: var(--cyan); }
+.share-btn:disabled { opacity: .4; cursor: not-allowed; }
+.share-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 20; width: 260px; display: flex; flex-direction: column; gap: 7px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.share-label { font-size: 11px; color: var(--text-muted); }
+.share-input { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 12px; padding: 6px 9px; outline: none; }
+.share-input:focus { border-color: var(--accent); }
+.share-check { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-secondary); cursor: pointer; }
+.share-check input { accent-color: var(--accent); cursor: pointer; }
+.share-note { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+.share-confirm { font-size: 12px; font-weight: 600; color: var(--bg-primary); background: var(--accent); border-radius: 6px; padding: 6px 12px; }
+.fork-btn { font-size: 12px; color: var(--accent); border: 1px solid var(--border); border-radius: 6px; padding: 5px 11px; white-space: nowrap; }
+.fork-btn:hover { background: var(--accent-dim); }
+
+/* --- Bantlar --------------------------------------------------------------- */
+.banner { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 12.5px; flex-shrink: 0; border-bottom: 1px solid var(--border-subtle); }
+.banner.accent { background: rgba(88,166,255,.10); color: var(--accent); }
+.banner.bad { background: rgba(255,123,114,.08); color: var(--red); }
+.banner-link { font-family: 'JetBrains Mono', monospace; color: inherit; }
+.banner-note { font-size: 11.5px; color: var(--text-muted); }
+.banner-strong { color: var(--text-primary); }
+.banner-action { margin-left: auto; font-size: 12px; color: var(--accent); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; white-space: nowrap; }
 .banner-close { margin-left: auto; color: inherit; font-size: 16px; line-height: 1; opacity: .7; }
 .banner-close:hover { opacity: 1; }
 
+/* --- Baglam seridi --------------------------------------------------------- */
+.crumbs-bar { display: flex; align-items: center; gap: 8px; height: var(--crumbs-h); padding: 0 16px; background: var(--bg-primary); border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; overflow: hidden; }
+.crumbs { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; }
+.crumb { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; }
+.crumb.last { color: var(--text-primary); background: var(--bg-tertiary); border-radius: 5px; padding: 2px 7px; }
+.crumb-sep { color: var(--border); font-size: 11px; }
+.copy-path { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; white-space: nowrap; flex-shrink: 0; }
+.copy-path:hover { color: var(--accent); border-color: var(--accent); }
+.crumbs-spacer { flex: 1; }
+
+.filter-box { display: flex; align-items: center; gap: 6px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 7px; padding: 0 9px; flex-shrink: 0; }
+.filter-box:focus-within { border-color: var(--accent); }
+.filter-icon { color: var(--text-muted); font-size: 11px; }
+.filter-input { width: 190px; background: transparent; border: none; outline: none; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 5px 0; }
+.filter-hint { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
+.filter-hint.empty { color: var(--red); }
+.only-matches { font-size: 11px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; white-space: nowrap; flex-shrink: 0; }
+.only-matches:hover:not(:disabled) { color: var(--text-primary); }
+.only-matches.active { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+.only-matches:disabled { opacity: .4; cursor: not-allowed; }
+
+.segment { display: flex; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 7px; padding: 2px; gap: 2px; flex-shrink: 0; }
+.seg-btn { padding: 3px 9px; border-radius: 5px; font-size: 11.5px; color: var(--text-muted); }
+.seg-btn.active-nested { color: var(--text-primary); background: var(--bg-tertiary); }
+.seg-btn.active-table { color: var(--green); background: rgba(63,185,80,.14); }
+
+/* --- Calisma alani --------------------------------------------------------- */
 .workspace { display: flex; flex: 1; min-height: 0; }
+.viewer { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg-primary); }
+.tree-scroll { flex: 1; min-height: 0; overflow: auto; padding: 4px 16px 40px; }
 
-.editor-pane { width: 380px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg-secondary); }
-.pane-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); }
-.pane-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); }
-.pane-actions { display: flex; gap: 4px; }
-.mini-btn { font-size: 11px; padding: 3px 8px; border-radius: 5px; color: var(--text-secondary); background: var(--bg-tertiary); border: 1px solid var(--border); }
-.mini-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
-.mini-btn:disabled { opacity: .4; cursor: not-allowed; }
-.mini-btn.danger { color: var(--red); border-color: transparent; }
-.editor { flex: 1; width: 100%; background: var(--bg-primary); color: var(--text-primary); border: none; outline: none; padding: 14px 16px; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.6; resize: none; }
-.editor.invalid { box-shadow: inset 0 0 0 1px rgba(255,123,114,.4); }
-.editor-status { display: flex; align-items: center; gap: 8px; padding: 8px 16px; font-size: 12px; border-top: 1px solid var(--border-subtle); font-family: 'JetBrains Mono', monospace; }
-.editor-status.error { color: var(--red); background: rgba(255,123,114,.06); }
-.editor-status.ok { color: var(--green); }
-.status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.status-dot.error { background: var(--red); }
-.status-dot.ok { background: var(--green); }
+.center-note { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 40px; font-size: 13px; color: var(--text-muted); }
+.error-title { font-size: 17px; font-weight: 600; color: var(--red); }
+.error-code { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--text-secondary); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; max-width: 560px; text-align: center; word-break: break-word; }
+.error-hint { font-size: 13px; color: var(--text-muted); max-width: 360px; text-align: center; text-wrap: pretty; }
+.error-action { margin-top: 4px; font-size: 13px; color: var(--accent); background: var(--accent-dim); border-radius: 8px; padding: 8px 18px; }
+.error-action:hover { background: rgba(88,166,255,.25); }
 
-.viewer-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.viewer-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-secondary); }
-.search-wrap { display: flex; align-items: center; gap: 6px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; flex: 1; max-width: 480px; }
-.search-wrap:focus-within { border-color: var(--accent); }
-.search-icon { color: var(--text-muted); flex-shrink: 0; }
-.search-input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: var(--text-primary); font-size: 13px; padding: 8px 0; }
-.search-count { font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
-.search-count.empty { color: var(--red); }
-.search-nav { color: var(--text-muted); font-size: 12px; width: 20px; height: 20px; border-radius: 4px; flex-shrink: 0; }
-.search-nav:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
-.search-nav:disabled { opacity: .3; cursor: not-allowed; }
-.search-clear { color: var(--text-muted); font-size: 18px; line-height: 1; flex-shrink: 0; }
-.filter-btn { font-size: 11px; padding: 5px 10px; border-radius: 6px; color: var(--text-muted); background: var(--bg-tertiary); border: 1px solid var(--border); white-space: nowrap; }
-.filter-btn:hover:not(:disabled) { color: var(--text-primary); }
-.filter-btn.active { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
-.filter-btn:disabled { opacity: .4; cursor: not-allowed; }
-.search-warn { font-size: 11px; color: var(--yellow, #d29922); }
-.viewer-body { flex: 1; overflow: auto; padding: 4px 16px 40px; }
+/* --- Alt durum cubugu ------------------------------------------------------ */
+.status-bar { display: flex; align-items: center; gap: 16px; height: var(--status-h); padding: 0 16px; background: var(--bg-secondary); border-top: 1px solid var(--border); flex-shrink: 0; }
+.stat { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
+.status-spacer { flex: 1; }
+.status-toggle { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); border: 1px solid transparent; border-radius: 5px; padding: 1px 7px; }
+.status-toggle:hover { color: var(--text-primary); }
+.status-toggle.active { color: var(--accent); border-color: var(--border); }
 
-.placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 60%; text-align: center; padding: 40px; }
-.ph-title { font-size: 16px; font-weight: 600; color: var(--text-secondary); }
-.placeholder.error .ph-title { color: var(--red); }
-.ph-detail { font-size: 13px; color: var(--text-muted); max-width: 360px; }
-.ph-btn { margin-top: 8px; padding: 8px 16px; border-radius: 8px; font-size: 13px; color: var(--accent); background: var(--accent-dim); }
+/* Dar ekranlarda once IATA paneli, sonra editor yer birakir. */
+@media (max-width: 1280px) {
+  .filter-input { width: 130px; }
+}
+@media (max-width: 1024px) {
+  .command-wrap { display: none; }
+}
 </style>

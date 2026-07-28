@@ -1,6 +1,9 @@
 # Frontend
 frontend/node_modules/
 frontend/dist/
+frontend/.vercel/
+frontend/.env
+frontend/.env.local
 frontend/*.tsbuildinfo
 # vite.config.ts derlendiginde uretilir
 frontend/vite.config.js
@@ -21,3 +24,6 @@ Thumbs.db
 
 # XSD arsivi; semalar zaten backend/src/main/resources/xsd altinda
 xsd-schema.zip
+
+# Tasarim arsivi; acilmis hali design_handoff_json_eyes/ altinda
+Full Design UX çalışması.zip

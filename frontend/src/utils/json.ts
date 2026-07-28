@@ -31,6 +31,32 @@ export function countNodes(data: unknown, depth = 0): number {
   return 1
 }
 
+/**
+ * Ayristirma hatasindan satir/sutun cikarir.
+ *
+ * Tarayicilar mesaji farkli bicimlerde veriyor: bazilari `(line 14 column 7)`
+ * yaziyor, bazilari yalnizca `position 312`. Ikinci durumda konum metin uzerinden
+ * satira cevriliyor ki editorde hatali satir isaretlenebilsin.
+ */
+export function describeParseError(
+  message: string,
+  text: string,
+): { line: number | null; column: number | null; message: string } {
+  const lineMatch = /line (\d+) column (\d+)/i.exec(message)
+  if (lineMatch) {
+    return { line: Number(lineMatch[1]), column: Number(lineMatch[2]), message }
+  }
+  const posMatch = /position (\d+)/i.exec(message)
+  if (posMatch) {
+    const position = Math.min(Number(posMatch[1]), text.length)
+    const before = text.slice(0, position)
+    const line = before.split('\n').length
+    const column = position - before.lastIndexOf('\n')
+    return { line, column, message }
+  }
+  return { line: null, column: null, message }
+}
+
 export function parseJson(input: string): { data: JsonValue | null; error: string | null } {
   const trimmed = input.trim()
   if (!trimmed) return { data: null, error: null }

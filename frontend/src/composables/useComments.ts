@@ -1,25 +1,22 @@
 import { computed, ref, watch, onBeforeUnmount, type Ref } from 'vue'
 import type { Comment } from '../types'
 import { createComment, deleteComment, listComments } from '../api'
+import { readStored, writeStored } from '../utils/storage'
 
-const AUTHOR_KEY = 'json-sarp:author'
-const TOKENS_KEY = 'json-sarp:comment-tokens'
+const AUTHOR_KEY = 'author'
+const TOKENS_KEY = 'comment-tokens'
 const REFRESH_MS = 20_000
 
 function readTokens(): Record<number, string> {
   try {
-    return JSON.parse(localStorage.getItem(TOKENS_KEY) ?? '{}') as Record<number, string>
+    return JSON.parse(readStored(TOKENS_KEY) ?? '{}') as Record<number, string>
   } catch {
     return {}
   }
 }
 
 function writeTokens(tokens: Record<number, string>) {
-  try {
-    localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens))
-  } catch {
-    // localStorage kapali olabilir; token kaybi yalnizca silme yetkisini etkiler.
-  }
+  writeStored(TOKENS_KEY, JSON.stringify(tokens))
 }
 
 /**
@@ -33,18 +30,12 @@ export function useComments(shareId: Ref<string | null>) {
   const enabled = ref(true)
   const loading = ref(false)
   const error = ref<string | null>(null)
-  const author = ref(localStorage.getItem(AUTHOR_KEY) ?? '')
+  const author = ref(readStored(AUTHOR_KEY) ?? '')
 
   let tokens = readTokens()
   let timer: ReturnType<typeof setInterval> | null = null
 
-  watch(author, (value) => {
-    try {
-      localStorage.setItem(AUTHOR_KEY, value)
-    } catch {
-      // yok sayilir
-    }
-  })
+  watch(author, (value) => { writeStored(AUTHOR_KEY, value) })
 
   /** Yol basina yorumlar; goruntuleyici satirlari bu haritadan okur. */
   const byPath = computed(() => {

@@ -7,7 +7,13 @@ import type {
   ShareResponse,
 } from './types'
 
-const API_BASE = '/api'
+/**
+ * Varsayilan `/api`: gelistirmede Vite proxy'si, Vercel'de `vercel.json` rewrite'i
+ * istegi backend'e tasir. Backend'e dogrudan (baska bir alan adindan) gidilecekse
+ * `VITE_API_BASE` ile tam adres verilir — o durumda backend'in CORS listesine bu
+ * on yuzun adresi eklenmelidir.
+ */
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 const STATUS_MESSAGES: Record<number, string> = {
   404: 'Paylaşım bulunamadı. Link yanlış olabilir veya kayıt silinmiş olabilir.',
@@ -37,7 +43,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
       ...init,
     })
   } catch {
-    throw new Error('Backend bağlantısı kurulamadı. Spring Boot (port 8080) çalışıyor mu?')
+    throw new Error(`Backend bağlantısı kurulamadı (${API_BASE}). Sunucu çalışıyor mu?`)
   }
   if (!response.ok) {
     throw new Error(await errorMessage(response))

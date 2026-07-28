@@ -19,12 +19,13 @@ const emit = defineEmits<{
 
 const draft = ref('')
 const replyTo = ref<number | null>(null)
-const submitting = ref(false)
+/** Ad girisi yalnizca gerektiginde acilir; sonraki yorumlarda tarayicidan gelir. */
+const editingName = ref(props.author.trim().length === 0)
 
-const roots = computed(() => props.comments.filter(c => c.parentId === null))
+const roots = computed(() => props.comments.filter(comment => comment.parentId === null))
 
 function repliesOf(id: number): Comment[] {
-  return props.comments.filter(c => c.parentId === id)
+  return props.comments.filter(comment => comment.parentId === id)
 }
 
 const nameModel = computed({
@@ -33,23 +34,23 @@ const nameModel = computed({
 })
 
 const canSubmit = computed(
-  () => draft.value.trim().length > 0 && props.author.trim().length > 0 && !submitting.value,
+  () => draft.value.trim().length > 0 && props.author.trim().length > 0,
 )
 
-async function submit() {
+function submit() {
   if (!canSubmit.value) return
-  submitting.value = true
-  try {
-    emit('add', { path: props.path, body: draft.value.trim(), parentId: replyTo.value })
-    draft.value = ''
-    replyTo.value = null
-  } finally {
-    submitting.value = false
-  }
+  emit('add', { path: props.path, body: draft.value.trim(), parentId: replyTo.value })
+  draft.value = ''
+  replyTo.value = null
+  editingName.value = false
 }
 
 function startReply(id: number) {
   replyTo.value = replyTo.value === id ? null : id
+}
+
+function initial(name: string): string {
+  return name.trim().slice(0, 1).toUpperCase() || '?'
 }
 
 function formatDate(iso: string): string {
@@ -60,94 +61,97 @@ function formatDate(iso: string): string {
 
 <template>
   <div class="thread">
-    <div class="thread-head">
-      <span class="thread-title">{{ comments.length }} yorum</span>
-      <code class="thread-path">{{ path }}</code>
-      <button class="thread-close" title="Kapat" @click="emit('close')">×</button>
-    </div>
-
-    <div v-for="root in roots" :key="root.id" class="comment-group">
+    <div v-for="root in roots" :key="root.id" class="group">
       <article class="comment">
-        <header class="comment-head">
-          <span class="comment-author">{{ root.author }}</span>
-          <time class="comment-date">{{ formatDate(root.createdAt) }}</time>
-          <button v-if="enabled" class="comment-action" @click="startReply(root.id)">
-            {{ replyTo === root.id ? 'vazgeç' : 'yanıtla' }}
-          </button>
-          <button v-if="canDelete(root.id)" class="comment-action danger" @click="emit('remove', root.id)">sil</button>
-        </header>
-        <p class="comment-body">{{ root.body }}</p>
+        <span class="avatar">{{ initial(root.author) }}</span>
+        <div class="body">
+          <div class="meta">
+            <span class="author">{{ root.author }}</span>
+            <time class="time">{{ formatDate(root.createdAt) }}</time>
+            <button v-if="enabled" class="action" @click="startReply(root.id)">
+              {{ replyTo === root.id ? 'vazgeç' : 'yanıtla' }}
+            </button>
+            <button v-if="canDelete(root.id)" class="action danger" @click="emit('remove', root.id)">sil</button>
+          </div>
+          <p class="text">{{ root.body }}</p>
+        </div>
       </article>
 
       <article v-for="reply in repliesOf(root.id)" :key="reply.id" class="comment reply">
-        <header class="comment-head">
-          <span class="comment-author">{{ reply.author }}</span>
-          <time class="comment-date">{{ formatDate(reply.createdAt) }}</time>
-          <button v-if="canDelete(reply.id)" class="comment-action danger" @click="emit('remove', reply.id)">sil</button>
-        </header>
-        <p class="comment-body">{{ reply.body }}</p>
+        <span class="avatar">{{ initial(reply.author) }}</span>
+        <div class="body">
+          <div class="meta">
+            <span class="author">{{ reply.author }}</span>
+            <time class="time">{{ formatDate(reply.createdAt) }}</time>
+            <button v-if="canDelete(reply.id)" class="action danger" @click="emit('remove', reply.id)">sil</button>
+          </div>
+          <p class="text">{{ reply.body }}</p>
+        </div>
       </article>
     </div>
 
-    <form v-if="enabled" class="comment-form" @submit.prevent="submit">
+    <p v-if="comments.length === 0" class="empty">Bu alana ilk yorumu siz bırakın.</p>
+
+    <template v-if="enabled">
       <p v-if="replyTo !== null" class="reply-hint">
         Yanıt yazıyorsunuz
-        <button type="button" class="comment-action" @click="replyTo = null">iptal</button>
+        <button class="action" @click="replyTo = null">iptal</button>
       </p>
-      <input
-        v-model="nameModel"
-        class="name-input"
-        type="text"
-        maxlength="60"
-        placeholder="Adınız"
-      />
-      <textarea
-        v-model="draft"
-        class="body-input"
-        rows="2"
-        maxlength="4000"
-        placeholder="Bu alanla ilgili yorumunuz..."
-        @keydown.ctrl.enter="submit"
-      />
-      <div class="form-actions">
-        <span class="form-hint">Ctrl+Enter ile gönder</span>
-        <button type="submit" class="submit-btn" :disabled="!canSubmit">Yorum ekle</button>
-      </div>
-    </form>
-    <p v-else class="disabled-note">Bu paylaşım yorumlara kapalı.</p>
+      <form class="form" @submit.prevent="submit">
+        <input
+          v-if="editingName"
+          v-model="nameModel"
+          class="input name"
+          type="text"
+          maxlength="60"
+          placeholder="Adınız"
+        />
+        <button v-else type="button" class="who" @click="editingName = true">{{ author }} olarak</button>
+        <input
+          v-model="draft"
+          class="input"
+          type="text"
+          maxlength="4000"
+          placeholder="Bu alana yorum yaz…"
+        />
+        <button type="submit" class="send" :disabled="!canSubmit">Gönder</button>
+      </form>
+    </template>
+    <p v-else class="empty">Bu paylaşım yorumlara kapalı.</p>
+
+    <button class="close" title="Kapat" @click="emit('close')">×</button>
   </div>
 </template>
 
 <style scoped>
-.thread { border-left: 2px solid var(--purple); background: rgba(188,140,255,.05); border-radius: 0 6px 6px 0; padding: 8px 12px; margin: 4px 0 8px; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
-.thread-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.thread-title { font-size: 11px; font-weight: 600; color: var(--purple); }
-.thread-path { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); word-break: break-all; }
-.thread-close { margin-left: auto; color: var(--text-muted); font-size: 16px; line-height: 1; }
-.thread-close:hover { color: var(--text-primary); }
+.thread { position: relative; border-left: 2px solid var(--purple); background: rgba(188,140,255,.05); border-radius: 0 6px 6px 0; padding: 9px 12px; }
 
-.comment-group { margin-bottom: 8px; }
-.comment { padding: 6px 0; border-top: 1px solid var(--border-subtle); }
-.comment.reply { margin-left: 18px; border-left: 2px solid var(--border); padding-left: 10px; border-top: none; }
-.comment-head { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
-.comment-author { font-size: 12px; font-weight: 600; color: var(--text-primary); }
-.comment-date { font-size: 10px; color: var(--text-muted); }
-.comment-action { font-size: 10px; color: var(--accent); padding: 1px 5px; border-radius: 4px; }
-.comment-action:hover { background: var(--accent-dim); }
-.comment-action.danger { color: var(--red); }
-.comment-action.danger:hover { background: rgba(255,123,114,.12); }
-.comment-body { font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); white-space: pre-wrap; word-break: break-word; }
+.group { margin-bottom: 4px; }
+.comment { display: flex; gap: 9px; margin-bottom: 9px; }
+.comment.reply { margin-left: 18px; }
+.avatar { width: 22px; height: 22px; border-radius: 50%; background: rgba(188,140,255,.2); color: var(--purple); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.body { min-width: 0; flex: 1; }
+.meta { display: flex; align-items: baseline; gap: 8px; }
+.author { font-size: 11.5px; font-weight: 600; color: var(--text-primary); }
+.time { font-size: 10.5px; color: var(--text-muted); }
+.action { font-size: 10.5px; color: var(--accent); padding: 0 4px; border-radius: 4px; }
+.action:hover { background: var(--accent-dim); }
+.action.danger { color: var(--red); }
+.action.danger:hover { background: rgba(255,123,114,.12); }
+.text { font-size: 12px; color: var(--text-secondary); line-height: 1.45; text-wrap: pretty; white-space: pre-wrap; word-break: break-word; }
 
-.comment-form { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-subtle); }
-.reply-hint { font-size: 11px; color: var(--text-muted); }
-.name-input, .body-input { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 12.5px; padding: 6px 8px; outline: none; font-family: inherit; }
-.name-input:focus, .body-input:focus { border-color: var(--accent); }
-.name-input { max-width: 200px; }
-.body-input { resize: vertical; }
-.form-actions { display: flex; align-items: center; gap: 10px; }
-.form-hint { font-size: 10px; color: var(--text-muted); }
-.submit-btn { margin-left: auto; font-size: 12px; color: var(--accent); background: var(--accent-dim); padding: 5px 12px; border-radius: 6px; }
-.submit-btn:hover:not(:disabled) { background: rgba(88,166,255,.25); }
-.submit-btn:disabled { opacity: .4; cursor: not-allowed; }
-.disabled-note { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+.empty { font-size: 11.5px; color: var(--text-muted); }
+.reply-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+.form { display: flex; gap: 7px; margin-top: 6px; }
+.input { flex: 1; min-width: 0; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; outline: none; color: var(--text-primary); font-size: 12px; padding: 6px 9px; }
+.input:focus { border-color: var(--purple); }
+.input.name { flex: 0 0 120px; }
+.who { font-size: 11px; color: var(--text-muted); white-space: nowrap; padding: 0 4px; }
+.who:hover { color: var(--purple); }
+.send { font-size: 12px; font-weight: 600; color: var(--bg-primary); background: var(--purple); border-radius: 6px; padding: 6px 14px; white-space: nowrap; }
+.send:disabled { opacity: .4; cursor: not-allowed; }
+
+.close { position: absolute; top: 6px; right: 8px; color: var(--text-muted); font-size: 15px; line-height: 1; }
+.close:hover { color: var(--text-primary); }
 </style>

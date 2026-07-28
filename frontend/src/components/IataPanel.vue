@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { AnnotateResponse } from '../types'
-import FieldDocCard from './FieldDocCard.vue'
 
 const props = defineProps<{
   annotation: AnnotateResponse | null
@@ -14,9 +13,12 @@ const props = defineProps<{
 const emit = defineEmits<{ focusPath: [path: string] }>()
 
 const UNMATCHED_PAGE = 30
+const listOpen = ref(false)
 const showAllUnmatched = ref(false)
 
-watch(() => props.annotation, () => { showAllUnmatched.value = false })
+watch(() => props.annotation, () => {
+  showAllUnmatched.value = false
+})
 
 const matchPercent = computed(() => {
   if (!props.annotation?.messageType) return null
@@ -24,17 +26,23 @@ const matchPercent = computed(() => {
 })
 
 const matchLevel = computed(() => {
-  const p = matchPercent.value
-  if (p === null) return 'none'
-  if (p >= 80) return 'high'
-  if (p >= 40) return 'mid'
+  const percent = matchPercent.value
+  if (percent === null) return 'none'
+  if (percent >= 80) return 'high'
+  if (percent >= 40) return 'mid'
   return 'low'
 })
 
-/** Goruntuleyicide uzerine gelinen alanin XSD karsiligi. */
 const selectedField = computed(() => {
   if (!props.selectedPath) return null
   return props.annotation?.fields.find(field => field.path === props.selectedPath) ?? null
+})
+
+/** Semada karsiligi olmayan alanlarda bile baslikta ad gosterilir. */
+const selectedName = computed(() => {
+  if (selectedField.value) return selectedField.value.name
+  if (!props.selectedPath) return null
+  return props.selectedPath.split('.').pop() ?? props.selectedPath
 })
 
 const unmatched = computed(() => props.annotation?.unmatchedPaths ?? [])
@@ -45,57 +53,53 @@ const visibleUnmatched = computed(() =>
 
 <template>
   <aside class="iata-panel">
-    <div class="panel-header">
-      <span class="panel-title">IATA Şeması</span>
-      <span v-if="loading" class="panel-status">analiz...</span>
+    <div class="panel-head">
+      <span class="panel-title">IATA</span>
+      <span v-if="loading" class="panel-loading">analiz…</span>
+      <span v-else-if="matchPercent !== null" class="panel-score" :class="matchLevel">%{{ matchPercent }}</span>
     </div>
 
-    <div v-if="error" class="panel-error">{{ error }}</div>
+    <div v-if="error" class="panel-note bad">{{ error }}</div>
 
-    <div v-else-if="annotation && !annotation.schemaLoaded" class="panel-error">
-      Sunucuda XSD şeması yüklü değil, bu yüzden alan açıklaması üretilemiyor.
+    <div v-else-if="annotation && !annotation.schemaLoaded" class="panel-note bad">
+      Sunucuda XSD şeması yüklü değil, alan açıklaması üretilemiyor.
       <code>backend/src/main/resources/xsd/</code> klasörünü kontrol edin.
     </div>
 
     <template v-else-if="annotation?.messageType">
-      <div class="match-card">
-        <div class="match-ring" :class="matchLevel">
-          <span class="match-value">%{{ matchPercent }}</span>
-        </div>
-        <div class="match-meta">
-          <span class="match-label">Eşleşen mesaj tipi</span>
-          <code class="match-type">{{ annotation.messageType }}</code>
-        </div>
+      <div class="message-row">
+        <code class="message-type">{{ annotation.messageType }}</code>
       </div>
 
-      <div class="stats">
-        <div class="stat">
-          <span class="stat-value">{{ annotation.fields.length }}</span>
-          <span class="stat-label">açıklanan alan</span>
-        </div>
-        <div class="stat" :class="{ warn: annotation.unmatchedCount > 0 }">
-          <span class="stat-value">{{ annotation.unmatchedCount }}</span>
-          <span class="stat-label">şemada yok</span>
-        </div>
+      <div class="selection">
+        <template v-if="selectedName">
+          <code class="field-name">{{ selectedName }}</code>
+          <div class="tags">
+            <span v-if="selectedField?.type" class="tag type">{{ selectedField.type }}</span>
+            <span v-if="selectedField" class="tag ok">şemada var</span>
+            <span v-else class="tag warn">şemada yok</span>
+          </div>
+          <p v-if="selectedField?.documentation" class="description">{{ selectedField.documentation }}</p>
+          <p v-else class="description muted">
+            Bu alan IATA {{ annotation.messageType }} şemasında bulunamadı; adı özel bir uzantı olabilir.
+          </p>
+        </template>
+        <p v-else class="description muted">
+          Grid'de bir satıra tıklayın; alanın XSD karşılığı burada görünür.
+        </p>
       </div>
 
-      <!-- Secili alan: butun listeyi taramak yerine odaktaki alanin detayi -->
-      <section class="section">
-        <h3 class="section-head">Seçili Alan</h3>
-        <div v-if="selectedField" class="selected">
-          <FieldDocCard :field="selectedField" />
-        </div>
-        <p v-else-if="selectedPath" class="section-empty">
-          <code>{{ selectedPath }}</code> için XSD karşılığı yok.
+      <div class="legend">
+        <p class="legend-line">
+          <span class="mark accent">ⓘ</span> şemada var · <span class="mark warn">●</span> şemada yok
         </p>
-        <p v-else class="section-empty">
-          Ağaçta veya tabloda bir alanın üzerine gelin; açıklaması burada görünür.
-          Alan adının yanındaki <span class="dot-sample">ⓘ</span> işaretiyle de balon açabilirsiniz.
-        </p>
-      </section>
+        <button v-if="unmatched.length > 0" class="legend-action" @click="listOpen = !listOpen">
+          <span class="warn-count">{{ annotation.unmatchedCount }} alan</span> karşılıksız —
+          {{ listOpen ? 'gizle' : 'listele' }}
+        </button>
+      </div>
 
-      <section v-if="unmatched.length > 0" class="section">
-        <h3 class="section-head">Şemada Karşılığı Olmayanlar</h3>
+      <div v-if="listOpen && unmatched.length > 0" class="unmatched-list">
         <button
           v-for="path in visibleUnmatched"
           :key="path"
@@ -105,73 +109,64 @@ const visibleUnmatched = computed(() =>
         >{{ path }}</button>
         <button
           v-if="!showAllUnmatched && unmatched.length > UNMATCHED_PAGE"
-          class="more-btn"
+          class="unmatched more"
           @click="showAllUnmatched = true"
         >{{ unmatched.length - UNMATCHED_PAGE }} tane daha</button>
-        <p v-if="annotation.unmatchedCount > unmatched.length" class="section-note">
+        <p v-if="annotation.unmatchedCount > unmatched.length" class="list-note">
           Toplam {{ annotation.unmatchedCount }} alandan ilk {{ unmatched.length }} tanesi listeleniyor.
         </p>
-      </section>
+      </div>
     </template>
 
-    <div v-else-if="loading" class="panel-empty">
-      <p>JSON, IATA şemalarıyla karşılaştırılıyor...</p>
-    </div>
+    <div v-else-if="loading" class="panel-note">JSON, IATA şemalarıyla karşılaştırılıyor…</div>
 
-    <div v-else class="panel-empty">
-      <p>Eşleşen IATA mesaj tipi bulunamadı.</p>
-      <p class="hint">JSON girdiğinizde kök anahtar (ör. <code>IATA_OrderViewRS</code>) veya alan adları IATA 24.4 şemalarıyla karşılaştırılır.</p>
+    <div v-else class="panel-note">
+      Eşleşen IATA mesaj tipi bulunamadı.
+      <span class="hint">Kök anahtar (ör. <code>IATA_OrderViewRS</code>) IATA 24.4 şemalarıyla karşılaştırılır.</span>
     </div>
   </aside>
 </template>
 
 <style scoped>
-.iata-panel {
-  width: 320px;
-  flex-shrink: 0;
-  border-left: 1px solid var(--border);
-  background: var(--bg-secondary);
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-}
-.panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border-subtle); }
-.panel-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); }
-.panel-status { font-size: 11px; color: var(--accent); }
-.panel-error { padding: 12px 14px; color: var(--red); font-size: 12px; line-height: 1.5; }
-.panel-error code { font-size: 11px; }
+.iata-panel { width: var(--iata-w); flex-shrink: 0; border-left: 1px solid var(--border); background: var(--bg-secondary); display: flex; flex-direction: column; min-height: 0; }
 
-.match-card { display: flex; align-items: center; gap: 14px; padding: 14px; }
-.match-ring { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 3px solid var(--border); }
-.match-ring.high { border-color: var(--green); }
-.match-ring.mid { border-color: var(--orange); }
-.match-ring.low { border-color: var(--red); }
-.match-value { font-size: 13px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
-.match-meta { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.match-label { font-size: 11px; color: var(--text-muted); }
-.match-type { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--accent); word-break: break-all; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; }
+.panel-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); }
+.panel-loading { font-size: 10.5px; color: var(--accent); }
+.panel-score { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; border-radius: 10px; padding: 2px 8px; }
+.panel-score.high { color: var(--green); background: var(--bg-array); }
+.panel-score.mid { color: var(--orange); background: rgba(210,153,34,.14); }
+.panel-score.low { color: var(--red); background: rgba(255,123,114,.12); }
 
-.stats { display: flex; gap: 8px; padding: 0 14px 14px; }
-.stat { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 8px; background: var(--bg-tertiary); border: 1px solid var(--border-subtle); }
-.stat.warn { border-color: rgba(210,153,34,.4); }
-.stat-value { font-size: 16px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--text-primary); }
-.stat.warn .stat-value { color: var(--orange); }
-.stat-label { font-size: 10px; color: var(--text-muted); }
+.message-row { padding: 10px 14px 0; }
+.message-type { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent); word-break: break-all; }
 
-.section { border-top: 1px solid var(--border-subtle); padding: 12px 14px; }
-.section-head { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); margin-bottom: 8px; }
-.section-empty { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
-.section-empty code { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--color-key); word-break: break-all; }
-.section-note { margin-top: 8px; font-size: 10px; color: var(--text-muted); }
-.dot-sample { color: var(--accent); }
-.selected { padding: 10px; border-radius: 8px; background: var(--bg-tertiary); border: 1px solid var(--border-subtle); }
+.selection { padding: 10px 14px 14px; }
+.field-name { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--color-key); word-break: break-all; }
+.tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 9px; }
+.tag { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; padding: 2px 8px; border-radius: 10px; }
+.tag.type { color: var(--cyan); background: var(--bg-bool); }
+.tag.ok { color: var(--green); background: var(--bg-array); }
+.tag.warn { color: var(--orange); background: rgba(210,153,34,.14); }
+.description { font-size: 12px; color: var(--text-secondary); line-height: 1.5; text-wrap: pretty; }
+.description.muted { color: var(--text-muted); }
 
-.unmatched { display: block; width: 100%; text-align: left; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--orange); padding: 4px 6px; border-radius: 4px; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.unmatched:hover { background: var(--bg-hover); }
-.more-btn { font-size: 11px; color: var(--accent); background: var(--accent-dim); padding: 4px 10px; border-radius: 5px; margin-top: 6px; }
-.more-btn:hover { background: rgba(88,166,255,.25); }
+.legend { margin-top: auto; padding: 11px 14px; border-top: 1px solid var(--border-subtle); flex-shrink: 0; }
+.legend-line { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+.mark.accent { color: var(--accent); }
+.mark.warn { color: var(--orange); }
+.legend-action { display: block; margin-top: 3px; font-size: 11px; color: var(--text-muted); text-align: left; }
+.legend-action:hover { color: var(--text-primary); }
+.warn-count { color: var(--orange); }
 
-.panel-empty { padding: 16px 14px; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
-.hint { margin-top: 8px; }
-.panel-empty code { color: var(--accent); font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+.unmatched-list { max-height: 240px; overflow-y: auto; padding: 8px 10px; border-top: 1px solid var(--border-subtle); flex-shrink: 0; }
+.unmatched { display: block; width: 100%; text-align: left; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--orange); padding: 3px 6px; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.unmatched:hover { background: var(--bg-tertiary); }
+.unmatched.more { color: var(--accent); }
+.list-note { margin-top: 6px; font-size: 10px; color: var(--text-muted); }
+
+.panel-note { padding: 14px; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+.panel-note.bad { color: var(--red); }
+.panel-note code { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent); }
+.hint { display: block; margin-top: 8px; }
 </style>

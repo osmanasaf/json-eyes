@@ -29,6 +29,24 @@
   --color-key: #ff7b72;
   --color-bracket: #e6edf3;
   --color-index: #8b949e;
+
+  /* JSON tip rozetlerinin zeminleri; metin renkleri yukaridaki --color-* ile ayni. */
+  --bg-string: rgba(165, 214, 255, 0.12);
+  --bg-number: rgba(247, 129, 102, 0.12);
+  --bg-bool: rgba(121, 192, 255, 0.12);
+  --bg-null: rgba(110, 118, 129, 0.12);
+  --bg-object: rgba(188, 140, 255, 0.12);
+  --bg-array: rgba(63, 185, 80, 0.12);
+
+  /* Kabuk olculeri; tasarimin sabit degerleri tek yerden yonetilir. */
+  --header-h: 56px;
+  --crumbs-h: 38px;
+  --status-h: 30px;
+  --editor-w: 292px;
+  --iata-w: 240px;
+  /* Grid'de derinlik basina girinti ve satir yogunlugu. */
+  --indent: 18px;
+  --row-pad-y: 6px;
 }
 
 html {
