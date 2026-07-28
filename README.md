@@ -161,12 +161,14 @@ indeksi de yüklenmiş demektir.
 
 ### 2. Ön yüz — Vercel
 
-1. [vercel.json](frontend/vercel.json) içindeki rewrite hedefini **1. adımda alınan
-   alan adıyla** değiştirip commit'leyin:
+1. [vercel.json](frontend/vercel.json) içindeki rewrite hedefi **1. adımda alınan
+   alan adı** olmalı:
 
    ```json
-   { "source": "/api/:path*", "destination": "https://<coolify-alan-adiniz>/api/:path*" }
+   { "source": "/api/:path*", "destination": "http://<coolify-alan-adiniz>/api/:path*" }
    ```
+
+   Backend'de HTTPS yoksa bu hop şifresizdir; bkz. aşağıdaki "Alan adı ve HTTPS".
 
 2. Vercel'de projeyi aynı depodan oluşturun, **Root Directory** ayarını `frontend`
    yapın. Derleme ayarlarını `vercel.json` taşıdığı için başka bir şey gerekmez.
@@ -179,6 +181,20 @@ indeksi de yüklenmiş demektir.
 `VITE_API_BASE=https://<coolify-alan-adiniz>/api`, Coolify'da
 `JSONSARP_CORS_ALLOWED_ORIGINS=https://<vercel-adresiniz>`. Bir hop daha az, ama
 CORS'u doğru ayarlamak size kalır.
+
+### Alan adı ve HTTPS
+
+Coolify'ın otomatik verdiği `*.sslip.io` adresinde HTTPS **çalışmaz**: Let's Encrypt
+bu ortak alan adına rate limit uyguluyor, sertifika doğrulaması başarısız oluyor.
+Bu yüzden backend şu an düz HTTP üzerinden yayında.
+
+Sonuç: tarayıcı ile Vercel arası HTTPS, **Vercel ile backend arası şifresiz**.
+Paylaşılan JSON içerikleri ve yorumlar bu hopta açık metin gider.
+
+Kalıcı çözüm: sahip olduğunuz bir alan adına alt alan adı açmak
+(ör. `json-eyes-api.ornek.com` → A kaydı sunucu IP'sine), Coolify'da Domains
+alanına `https://json-eyes-api.ornek.com` yazmak. Coolify Let's Encrypt
+sertifikasını kendisi alır; ardından `vercel.json`'daki hedefi de `https://` yapın.
 
 ### Erişim kontrolü
 
