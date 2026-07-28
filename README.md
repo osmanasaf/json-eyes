@@ -91,7 +91,10 @@ yeni bir tema eklemek `:root[data-theme='...']` bloğu yazmaktan ibarettir.
   Enter / Shift+Enter (veya ↑ ↓) ile gezinir ve eşleşen düğüme giden yolu otomatik açar.
   "yalnız eşleşen" ile ağaç yalnızca eşleşmelere ve onlara giden yola indirgenir;
   grid'de eşleşme alt dalda ise satır soluk vurguyla korunur, böylece drill-down yolu kaybolmaz.
-- **Paylaş**: JSON sunucuya kaydedilir, `/?s=<id>` kısa linki üretilir
+- **Paylaş**: JSON sunucuya kaydedilir, `/?s=<id>` kısa linki üretilir.
+  Paylaşımların ömrü `jsonsarp.share.retention-days` kadardır (varsayılan 60 gün);
+  süresi dolanlar yorumlarıyla birlikte silinir, linkleri 404 döner. Ömür olmasaydı
+  veritabanı yalnızca büyürdü — hiçbir kayıt silinmiyor.
 - **Salt okunur paylaşım**: `/?s=<id>` ile açılan JSON düzenlenemez — editör, Yükle ve
   Paylaş kontrolleri gizlenir. Değişiklik yapmak isteyen kullanıcı "Kopyasını al ve
   düzenle" ile yerel bir kopya üzerinde çalışır; orijinal paylaşım etkilenmez.
@@ -170,6 +173,7 @@ eşleştirilmemeli.
 |------|-----------|----------|
 | `jsonsarp.public-base-url` | `http://localhost:5173` | Paylaşım linklerinin taban adresi. **Deploy ederken mutlaka değiştirin.** |
 | `jsonsarp.share.max-bytes` | `2097152` (2 MB) | Tek paylaşımda saklanabilecek en büyük JSON. Aşılırsa HTTP 413. |
+| `jsonsarp.share.retention-days` | `60` | Paylaşımların saklama süresi. Bu süreden eski paylaşımlar ve yorumları günlük çalışan bir görevle silinir; `0` verilirse temizlik kapanır. |
 | `spring.h2.console.enabled` | `false` | Kapalı tutun; açıkken paylaşımlar veritabanından değiştirilebilir. |
 | `jsonsarp.comments.max-per-share` | `500` | Bir paylaşımdaki toplam yorum sınırı. |
 | `jsonsarp.comments.max-per-minute` | `20` | Dakikalık yorum sınırı (basit spam koruması). |

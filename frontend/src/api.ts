@@ -16,7 +16,7 @@ import type {
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 const STATUS_MESSAGES: Record<number, string> = {
-  404: 'Paylaşım bulunamadı. Link yanlış olabilir veya kayıt silinmiş olabilir.',
+  404: 'Paylaşım bulunamadı. Link yanlış olabilir ya da saklama süresi dolduğu için silinmiş olabilir.',
   413: 'JSON çok büyük, paylaşılamadı.',
 }
 
