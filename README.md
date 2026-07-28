@@ -40,7 +40,14 @@ Vite dev sunucusu `/api` isteklerini `http://localhost:8080` adresine proxy eder
 
 ## Özellikler
 
-- **Tree / Grid** görünüm ve drill-down
+- **Tree**: JSON sözdizimi görünümü, yerinde aç/kapa, alan başına XSD tooltip'i
+- **Grid**: hiyerarşik tablo — Alan / Tip / Değer sütunları, satırlar yerinde açılıp
+  kapanır (drill-down ve breadcrumb yok), "Tümünü aç / Tümünü kapat" düğmeleri
+- **NDC referansları**: `PaxRefID`, `PaxSegmentRefID`, `ServiceDefinitionRefID` gibi
+  alanların yanında `↳ referans` rozeti çıkar; tıklayınca `DataLists` içindeki hedef
+  nesne satırın altında açılır, "Hedefe git" ile hedefin bulunduğu yere atlanır.
+  Eşleştirme değer üzerinden yapılır, `XxxRefID → XxxID` adlandırması önceliklendirilir;
+  dizi hâlindeki referanslar (`PaxRefID: ["PAX1","PAX2"]`) de tek tek çözülür.
 - **Arama**: anahtar ve değerlerde arar, eşleşme sayısını gösterir, eşleşmeler arasında
   Enter / Shift+Enter (veya ↑ ↓) ile gezinir ve eşleşen düğüme giden yolu otomatik açar.
   "Sadece eşleşenler" ile ağaç yalnızca eşleşmelere ve onlara giden yola indirgenir;

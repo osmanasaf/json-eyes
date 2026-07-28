@@ -4,6 +4,7 @@ import type { AnnotateResponse, JsonValue, ViewMode } from './types'
 import { annotateJson, createShare, getShare } from './api'
 import { countNodes, parseJson, toSchemaPath } from './utils/json'
 import { buildSearchIndex, EMPTY_SEARCH } from './utils/search'
+import { buildRefIndex, EMPTY_REF_INDEX } from './utils/references'
 import JsonTree from './components/JsonTree.vue'
 import JsonGrid from './components/JsonGrid.vue'
 import IataPanel from './components/IataPanel.vue'
@@ -98,6 +99,19 @@ const searchIndex = computed(() =>
     ? buildSearchIndex(parsed.value, searchTerm.value, ROOT_KEY)
     : EMPTY_SEARCH,
 )
+/** NDC referanslarini (PaxRefID -> DataLists) cozmek icin ID indeksi. */
+const refIndex = computed(() =>
+  parsed.value !== null ? buildRefIndex(parsed.value, ROOT_KEY) : EMPTY_REF_INDEX,
+)
+
+const focusPath = ref<string | null>(null)
+
+function focusOnPath(path: string) {
+  // Ayni yola tekrar atlandiginda da izleyicilerin tetiklenmesi icin sifirla.
+  focusPath.value = null
+  requestAnimationFrame(() => { focusPath.value = path })
+}
+
 const matchCount = computed(() => searchIndex.value.matches.length)
 const activePath = computed(() => searchIndex.value.matches[activeIndex.value] ?? null)
 
@@ -409,6 +423,9 @@ async function handleShare() {
               :search="searchIndex"
               :active-path="activePath"
               :filter-matches="filterMatches"
+              :ref-index="refIndex"
+              :focus-path="focusPath"
+              @focus-path="focusOnPath"
             />
             <JsonGrid
               v-else
@@ -417,6 +434,9 @@ async function handleShare() {
               :search-term="searchTerm"
               :doc-lookup="docLookup"
               :filter-matches="filterMatches"
+              :ref-index="refIndex"
+              :focus-path="focusPath"
+              @focus-path="focusOnPath"
             />
           </template>
           <div v-else-if="sharedLoading" class="placeholder">

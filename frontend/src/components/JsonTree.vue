@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { FieldDoc, JsonValue } from '../types'
 import type { SearchIndex } from '../utils/search'
+import type { RefIndex } from '../utils/references'
 import JsonTreeNode from './JsonTreeNode.vue'
 
 defineProps<{
@@ -11,7 +12,11 @@ defineProps<{
   activePath?: string | null
   filterMatches?: boolean
   rootKey: string
+  refIndex?: RefIndex
+  focusPath?: string | null
 }>()
+
+const emit = defineEmits<{ focusPath: [path: string] }>()
 </script>
 
 <template>
@@ -28,6 +33,9 @@ defineProps<{
       :search="search"
       :active-path="activePath"
       :filter-matches="filterMatches"
+      :ref-index="refIndex"
+      :focus-path="focusPath"
+      @focus-path="emit('focusPath', $event)"
     />
   </div>
 </template>

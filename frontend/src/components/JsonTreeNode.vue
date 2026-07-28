@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import type { FieldDoc, JsonArray, JsonObject, JsonValue } from '../types'
 import { getType, highlightParts } from '../utils/json'
 import { childPath, type SearchIndex } from '../utils/search'
+import { effectiveFieldName, isRefField, resolveRef, type RefIndex, type RefTarget } from '../utils/references'
 import JsonTreeNode from './JsonTreeNode.vue'
 
 const props = defineProps<{
@@ -19,7 +20,14 @@ const props = defineProps<{
   filterMatches?: boolean
   /** Ustteki bir dugum arama ile eslestiyse alt agac butunuyle gorunur kalir. */
   ancestorMatched?: boolean
+  refIndex?: RefIndex
+  /** Referans onizlemesi icinde ise ic ice referans acilmaz. */
+  insidePreview?: boolean
+  /** Referanstan atlanan hedef yol; bu yola giden dugumler acilir ve hedef vurgulanir. */
+  focusPath?: string | null
 }>()
+
+const emit = defineEmits<{ focusPath: [path: string] }>()
 
 const type = computed(() => getType(props.value))
 const isExpandable = computed(() => type.value === 'object' || type.value === 'array')
@@ -66,6 +74,25 @@ const isActive = computed(
   () => props.activePath != null && props.activePath === currentPath.value,
 )
 const inMatchSubtree = computed(() => props.ancestorMatched === true || isMatched.value)
+
+// --- NDC referanslari (PaxRefID -> DataLists icindeki Pax) --------------------
+
+const refTarget = computed<RefTarget | undefined>(() => {
+  if (isExpandable.value || props.insidePreview || !props.refIndex) return undefined
+  const fieldName = effectiveFieldName(currentPath.value)
+  if (!isRefField(fieldName)) return undefined
+  return resolveRef(props.refIndex, fieldName, props.value, props.path)
+})
+
+const previewOpen = ref(false)
+
+function togglePreview() {
+  previewOpen.value = !previewOpen.value
+}
+
+function goToTarget() {
+  if (refTarget.value) emit('focusPath', refTarget.value.path)
+}
 
 /** Filtre acikken elenen cocuklar sayfalamadan once cikarilir; aksi halde
  *  sayfa siniri eslesmeleri gizleyebilirdi. */
@@ -134,6 +161,19 @@ watch(isActive, async (active) => {
   rowRef.value?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 }, { immediate: true })
 
+const isFocused = computed(() => props.focusPath != null && props.focusPath === currentPath.value)
+
+// Referanstan atlanan hedefe giden yolu ac ve hedefi gorunume kaydir.
+watch(() => props.focusPath, async (focus) => {
+  if (!focus) return
+  const path = currentPath.value
+  if (focus !== path && !focus.startsWith(`${path}.`)) return
+  expanded.value = true
+  if (focus !== path) return
+  await nextTick()
+  rowRef.value?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}, { immediate: true })
+
 function toggle() {
   if (isExpandable.value) expanded.value = !expanded.value
 }
@@ -153,7 +193,7 @@ function primitiveDisplay(value: JsonValue): string {
 </script>
 
 <template>
-  <div v-if="!hidden" class="node" :class="{ matched: isMatched, active: isActive }">
+  <div v-if="!hidden" class="node" :class="{ matched: isMatched, active: isActive, focused: isFocused }">
     <div ref="rowRef" class="row" :class="{ expandable: isExpandable }" @click="toggle">
       <span class="indent" :style="{ width: `${depth * 20}px` }" />
 
@@ -182,7 +222,33 @@ function primitiveDisplay(value: JsonValue): string {
         </template>
       </span>
 
+      <button
+        v-if="refTarget"
+        class="ref-btn"
+        :class="{ open: previewOpen }"
+        :title="`Referans: ${refTarget.idField} → ${refTarget.path}`"
+        @click.stop="togglePreview"
+      >↳ referans</button>
+
       <button class="copy" title="Kopyala" @click.stop="copyValue">{{ copied ? '✓' : '⧉' }}</button>
+    </div>
+
+    <!-- Referansin isaret ettigi nesne, satirin altinda yerinde acilir. -->
+    <div v-if="refTarget && previewOpen" class="ref-preview" :style="{ marginLeft: `${(depth + 1) * 20}px` }">
+      <div class="ref-head">
+        <code class="ref-path">{{ refTarget.path }}</code>
+        <button class="ref-goto" @click.stop="goToTarget">Hedefe git</button>
+      </div>
+      <JsonTreeNode
+        :value="refTarget.value"
+        :depth="0"
+        :is-last="true"
+        :path="refTarget.path"
+        :default-expanded="true"
+        :search-term="searchTerm"
+        :doc-lookup="docLookup"
+        :inside-preview="true"
+      />
     </div>
 
     <div v-if="isExpandable && expanded" class="children">
@@ -201,6 +267,10 @@ function primitiveDisplay(value: JsonValue): string {
           :active-path="activePath"
           :filter-matches="filterMatches"
           :ancestor-matched="inMatchSubtree"
+          :ref-index="refIndex"
+          :inside-preview="insidePreview"
+          :focus-path="focusPath"
+          @focus-path="emit('focusPath', $event)"
         />
       </template>
       <template v-else>
@@ -218,6 +288,10 @@ function primitiveDisplay(value: JsonValue): string {
           :active-path="activePath"
           :filter-matches="filterMatches"
           :ancestor-matched="inMatchSubtree"
+          :ref-index="refIndex"
+          :inside-preview="insidePreview"
+          :focus-path="focusPath"
+          @focus-path="emit('focusPath', $event)"
         />
       </template>
       <div v-if="hiddenChildCount > 0" class="row more">
@@ -242,6 +316,15 @@ function primitiveDisplay(value: JsonValue): string {
 .node { position: relative; }
 .node.matched > .row { background: rgba(255,220,0,.08); border-radius: 4px; }
 .node.active > .row { background: rgba(255,220,0,.18); box-shadow: inset 0 0 0 1px rgba(255,220,0,.45); border-radius: 4px; }
+.node.focused > .row { background: var(--accent-dim); box-shadow: inset 0 0 0 1px var(--accent); border-radius: 4px; }
+
+.ref-btn { font-size: 10px; color: var(--accent); background: var(--accent-dim); padding: 1px 7px; border-radius: 10px; margin-left: 8px; white-space: nowrap; flex-shrink: 0; }
+.ref-btn:hover, .ref-btn.open { background: rgba(88,166,255,.28); }
+.ref-preview { margin: 2px 0 6px; padding: 6px 10px; border-left: 2px solid var(--accent); background: rgba(88,166,255,.05); border-radius: 0 6px 6px 0; }
+.ref-head { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
+.ref-path { font-size: 10px; color: var(--text-muted); word-break: break-all; }
+.ref-goto { font-size: 10px; color: var(--accent); padding: 1px 8px; border-radius: 4px; border: 1px solid var(--border); white-space: nowrap; }
+.ref-goto:hover { background: var(--accent-dim); }
 .row { display: flex; align-items: center; min-height: 26px; padding: 1px 8px 1px 0; border-radius: 4px; }
 .row.expandable { cursor: pointer; }
 .row.expandable:hover { background: var(--bg-hover); }
