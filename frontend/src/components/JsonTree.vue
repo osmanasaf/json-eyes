@@ -13,7 +13,7 @@ defineProps<{
   filterMatches?: boolean
   rootKey: string
   refIndex?: RefIndex
-  focusPath?: string | null
+  focusRequest?: { path: string; seq: number } | null
 }>()
 
 const emit = defineEmits<{ focusPath: [path: string] }>()
@@ -34,7 +34,7 @@ const emit = defineEmits<{ focusPath: [path: string] }>()
       :active-path="activePath"
       :filter-matches="filterMatches"
       :ref-index="refIndex"
-      :focus-path="focusPath"
+      :focus-request="focusRequest"
       @focus-path="emit('focusPath', $event)"
     />
   </div>

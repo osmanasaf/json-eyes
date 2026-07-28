@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
+import { SELECT_FIELD } from '../utils/injection'
 import type { FieldDoc, JsonArray, JsonObject, JsonValue } from '../types'
 import { getType } from '../utils/json'
 import { childPath, matchesDeep } from '../utils/search'
 import { effectiveFieldName, isRefField, resolveRef, type RefIndex, type RefTarget } from '../utils/references'
+import InfoBubble from './InfoBubble.vue'
+import FieldDocCard from './FieldDocCard.vue'
 import GridRow from './GridRow.vue'
 
 const props = defineProps<{
@@ -17,26 +20,22 @@ const props = defineProps<{
   docLookup?: (nodePath: string) => FieldDoc | undefined
   filterMatches?: boolean
   refIndex?: RefIndex
-  focusPath?: string | null
+  focusRequest?: { path: string; seq: number } | null
   /** Referans onizlemesi icinde ise ic ice referans acilmaz. */
   insidePreview?: boolean
 }>()
 
 const emit = defineEmits<{ toggle: [path: string]; focusPath: [path: string] }>()
+const selectField = inject(SELECT_FIELD, null)
 
 const ROW_PAGE_SIZE = 100
 
 const type = computed(() => getType(props.value))
 const isContainer = computed(() => type.value === 'object' || type.value === 'array')
 const isOpen = computed(() => props.expanded.has(props.path))
-const isFocused = computed(() => props.focusPath === props.path)
+const isFocused = computed(() => props.focusRequest?.path === props.path)
 
 const doc = computed(() => props.docLookup?.(props.path))
-const docTitle = computed(() => {
-  const info = doc.value
-  if (!info) return undefined
-  return info.type ? `${info.type}\n\n${info.documentation}` : info.documentation
-})
 
 const childCount = computed(() => {
   if (!isContainer.value) return 0
@@ -122,12 +121,17 @@ function displayValue(value: JsonValue): string {
   <tr
     class="tr"
     :class="{ match: matchKind === 'self', 'match-deep': matchKind === 'deep', focused: isFocused }"
+    @mouseenter="selectField?.(path)"
   >
     <td class="td td-key">
       <span class="indent" :style="{ width: `${depth * 18}px` }" />
       <button v-if="isContainer" class="caret" :class="{ open: isOpen }" @click="emit('toggle', path)">▸</button>
       <span v-else class="caret-ph" />
-      <span class="field" :class="{ documented: !!doc }" :title="docTitle">{{ field }}</span>
+      <span class="field">{{ field }}</span>
+      <InfoBubble v-if="doc">
+        <template #trigger><span class="info-dot">ⓘ</span></template>
+        <FieldDocCard :field="doc" />
+      </InfoBubble>
     </td>
 
     <td class="td td-type">
@@ -193,7 +197,7 @@ function displayValue(value: JsonValue): string {
       :doc-lookup="docLookup"
       :filter-matches="filterMatches"
       :ref-index="refIndex"
-      :focus-path="focusPath"
+      :focus-request="focusRequest"
       :inside-preview="insidePreview"
       @toggle="emit('toggle', $event)"
       @focus-path="emit('focusPath', $event)"
@@ -225,7 +229,8 @@ function displayValue(value: JsonValue): string {
 .caret:hover { color: var(--text-primary); }
 .caret-ph { display: inline-block; width: 16px; }
 .field { color: var(--color-key); font-weight: 500; margin-left: 4px; }
-.field.documented { cursor: help; text-decoration: underline dotted var(--text-muted); }
+.info-dot { font-size: 10px; color: var(--accent); opacity: .55; cursor: pointer; margin-left: 5px; }
+.info-dot:hover { opacity: 1; }
 
 .badge { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
 .t-string { background: rgba(165,214,255,.12); color: var(--color-string); }

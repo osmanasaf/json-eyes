@@ -13,7 +13,7 @@ const props = defineProps<{
   docLookup?: (nodePath: string) => FieldDoc | undefined
   filterMatches?: boolean
   refIndex?: RefIndex
-  focusPath?: string | null
+  focusRequest?: { path: string; seq: number } | null
 }>()
 
 const emit = defineEmits<{ focusPath: [path: string] }>()
@@ -25,11 +25,11 @@ watch(() => props.data, () => {
   expanded.value = new Set([props.rootKey])
 })
 
-// Arama sonucu veya referans atlamasi ilgili dallari acar.
-watch([() => props.focusPath, () => props.searchTerm], () => {
-  if (!props.focusPath) return
+// Odak istegi ilgili dallari acar.
+watch(() => props.focusRequest, (request) => {
+  if (!request) return
   const next = new Set(expanded.value)
-  const segments = props.focusPath.split('.')
+  const segments = request.path.split('.')
   for (let i = 1; i <= segments.length; i++) next.add(segments.slice(0, i).join('.'))
   expanded.value = next
 })
@@ -117,7 +117,7 @@ const hiddenRootCount = computed(() => rootChildren.value.length - visibleRootCh
             :doc-lookup="docLookup"
             :filter-matches="filterMatches"
             :ref-index="refIndex"
-            :focus-path="focusPath"
+            :focus-request="focusRequest"
             @toggle="toggle"
             @focus-path="emit('focusPath', $event)"
           />

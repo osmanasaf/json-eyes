@@ -25,25 +25,31 @@ public class JsonAnnotator {
         this.detector = detector;
     }
 
+    /** Yanitta tasinacak en fazla eslesmeyen alan yolu. */
+    private static final int MAX_UNMATCHED_PATHS = 200;
+
     public AnnotateResponse annotate(JsonNode json) {
         boolean schemaLoaded = schemaService.isSchemaLoaded();
         MessageTypeDetector.DetectionResult detection = detector.detect(json);
         if (!detection.isKnown()) {
-            return new AnnotateResponse(null, 0, schemaLoaded, 0, List.of());
+            return new AnnotateResponse(null, 0, schemaLoaded, 0, List.of(), List.of());
         }
 
         MessageInfo message = schemaService.getMessage(detection.messageType());
         if (message == null) {
-            return new AnnotateResponse(detection.messageType(), detection.confidence(), schemaLoaded, 0, List.of());
+            return new AnnotateResponse(
+                    detection.messageType(), detection.confidence(), schemaLoaded, 0, List.of(), List.of());
         }
 
         Walk walk = new Walk();
         walk.visit(detection.body(), "", message.rootTypeKey());
+        List<String> unmatchedPaths = walk.unmatched.stream().sorted().limit(MAX_UNMATCHED_PATHS).toList();
         return new AnnotateResponse(
                 detection.messageType(),
                 detection.confidence(),
                 schemaLoaded,
                 walk.unmatched.size(),
+                unmatchedPaths,
                 walk.fields);
     }
 

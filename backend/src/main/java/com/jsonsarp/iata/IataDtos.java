@@ -34,14 +34,16 @@ record AnnotateRequest(com.fasterxml.jackson.databind.JsonNode json) {
 }
 
 /**
- * @param schemaLoaded  false ise sunucuda hic XSD yok; bos alan listesi "eslesme yok" anlamina gelmez
+ * @param schemaLoaded   false ise sunucuda hic XSD yok; bos alan listesi "eslesme yok" anlamina gelmez
  * @param unmatchedCount XSD'de karsiligi bulunamayan JSON alani sayisi
+ * @param unmatchedPaths bu alanlarin yollari (uzun listelerde kirpilir)
  */
 record AnnotateResponse(
         String messageType,
         double confidence,
         boolean schemaLoaded,
         int unmatchedCount,
+        List<String> unmatchedPaths,
         List<FieldDoc> fields
 ) {
 }

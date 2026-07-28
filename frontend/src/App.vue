@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, provide, ref, watch } from 'vue'
+import { SELECT_FIELD } from './utils/injection'
 import type { AnnotateResponse, JsonValue, ViewMode } from './types'
 import { annotateJson, createShare, getShare } from './api'
-import { countNodes, parseJson, toSchemaPath } from './utils/json'
+import { countNodes, findNodePath, parseJson, toSchemaPath } from './utils/json'
 import { buildSearchIndex, EMPTY_SEARCH } from './utils/search'
 import { buildRefIndex, EMPTY_REF_INDEX } from './utils/references'
 import JsonTree from './components/JsonTree.vue'
@@ -104,12 +105,35 @@ const refIndex = computed(() =>
   parsed.value !== null ? buildRefIndex(parsed.value, ROOT_KEY) : EMPTY_REF_INDEX,
 )
 
-const focusPath = ref<string | null>(null)
+/**
+ * Odak istegi. Yalnizca yolu tutsaydik ayni hedefe ikinci kez atlamak izleyicileri
+ * tetiklemezdi; sira numarasi her istegi benzersiz kilar. (Onceki cozum
+ * requestAnimationFrame ile sifirliyordu, ama arka plandaki sekmede rAF calismaz.)
+ */
+const focusRequest = ref<{ path: string; seq: number } | null>(null)
+let focusSeq = 0
+
+/** Uzerine gelinen alan; IATA paneli bunun XSD karsiligini gosterir. */
+const selectedNodePath = ref<string | null>(null)
+provide(SELECT_FIELD, (path: string | null) => { selectedNodePath.value = path })
+
+const selectedSchemaPath = computed(() =>
+  selectedNodePath.value
+    ? toSchemaPath(selectedNodePath.value, ROOT_KEY, annotation.value?.messageType ?? null)
+    : null,
+)
+
+/** IATA panelindeki XSD yolunu goruntuleyicideki dugume cevirip oraya atlar. */
+function focusUnmatched(schemaPath: string) {
+  if (parsed.value === null) return
+  const nodePath = findNodePath(
+    parsed.value, ROOT_KEY, annotation.value?.messageType ?? null, schemaPath,
+  )
+  if (nodePath) focusOnPath(nodePath)
+}
 
 function focusOnPath(path: string) {
-  // Ayni yola tekrar atlandiginda da izleyicilerin tetiklenmesi icin sifirla.
-  focusPath.value = null
-  requestAnimationFrame(() => { focusPath.value = path })
+  focusRequest.value = { path, seq: ++focusSeq }
 }
 
 const matchCount = computed(() => searchIndex.value.matches.length)
@@ -424,7 +448,7 @@ async function handleShare() {
               :active-path="activePath"
               :filter-matches="filterMatches"
               :ref-index="refIndex"
-              :focus-path="focusPath"
+              :focus-request="focusRequest"
               @focus-path="focusOnPath"
             />
             <JsonGrid
@@ -435,7 +459,7 @@ async function handleShare() {
               :doc-lookup="docLookup"
               :filter-matches="filterMatches"
               :ref-index="refIndex"
-              :focus-path="focusPath"
+              :focus-request="focusRequest"
               @focus-path="focusOnPath"
             />
           </template>
@@ -460,6 +484,8 @@ async function handleShare() {
         :annotation="annotation"
         :loading="annotationLoading"
         :error="annotationError"
+        :selected-path="selectedSchemaPath"
+        @focus-path="focusUnmatched"
       />
     </div>
   </div>

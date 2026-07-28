@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, inject, nextTick, ref, watch } from 'vue'
+import { SELECT_FIELD } from '../utils/injection'
 import type { FieldDoc, JsonArray, JsonObject, JsonValue } from '../types'
 import { getType, highlightParts } from '../utils/json'
 import { childPath, type SearchIndex } from '../utils/search'
 import { effectiveFieldName, isRefField, resolveRef, type RefIndex, type RefTarget } from '../utils/references'
+import InfoBubble from './InfoBubble.vue'
+import FieldDocCard from './FieldDocCard.vue'
 import JsonTreeNode from './JsonTreeNode.vue'
 
 const props = defineProps<{
@@ -24,10 +27,11 @@ const props = defineProps<{
   /** Referans onizlemesi icinde ise ic ice referans acilmaz. */
   insidePreview?: boolean
   /** Referanstan atlanan hedef yol; bu yola giden dugumler acilir ve hedef vurgulanir. */
-  focusPath?: string | null
+  focusRequest?: { path: string; seq: number } | null
 }>()
 
 const emit = defineEmits<{ focusPath: [path: string] }>()
+const selectField = inject(SELECT_FIELD, null)
 
 const type = computed(() => getType(props.value))
 const isExpandable = computed(() => type.value === 'object' || type.value === 'array')
@@ -61,13 +65,6 @@ const currentPath = computed(() =>
 const doc = computed(() =>
   props.keyName !== undefined ? props.docLookup?.(currentPath.value) : undefined,
 )
-
-// Tooltip: once XSD tip adi, sonra aciklama.
-const docText = computed(() => {
-  const info = doc.value
-  if (!info) return undefined
-  return info.type ? `${info.type}\n\n${info.documentation}` : info.documentation
-})
 
 const isMatched = computed(() => props.search?.matchSet.has(currentPath.value) ?? false)
 const isActive = computed(
@@ -161,15 +158,17 @@ watch(isActive, async (active) => {
   rowRef.value?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 }, { immediate: true })
 
-const isFocused = computed(() => props.focusPath != null && props.focusPath === currentPath.value)
+const isFocused = computed(
+  () => props.focusRequest != null && props.focusRequest.path === currentPath.value,
+)
 
-// Referanstan atlanan hedefe giden yolu ac ve hedefi gorunume kaydir.
-watch(() => props.focusPath, async (focus) => {
-  if (!focus) return
+// Odaklanilan hedefe giden yolu ac ve hedefi gorunume kaydir.
+watch(() => props.focusRequest, async (request) => {
+  if (!request) return
   const path = currentPath.value
-  if (focus !== path && !focus.startsWith(`${path}.`)) return
+  if (request.path !== path && !request.path.startsWith(`${path}.`)) return
   expanded.value = true
-  if (focus !== path) return
+  if (request.path !== path) return
   await nextTick()
   rowRef.value?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 }, { immediate: true })
@@ -194,18 +193,28 @@ function primitiveDisplay(value: JsonValue): string {
 
 <template>
   <div v-if="!hidden" class="node" :class="{ matched: isMatched, active: isActive, focused: isFocused }">
-    <div ref="rowRef" class="row" :class="{ expandable: isExpandable }" @click="toggle">
+    <div
+      ref="rowRef"
+      class="row"
+      :class="{ expandable: isExpandable }"
+      @click="toggle"
+      @mouseenter="selectField?.(currentPath)"
+    >
       <span class="indent" :style="{ width: `${depth * 20}px` }" />
 
       <span v-if="isExpandable" class="toggle" :class="{ open: expanded }">▾</span>
       <span v-else class="toggle-ph" />
 
       <template v-if="keyName !== undefined">
-        <span class="key" :class="{ documented: !!doc }" :title="docText">
+        <span class="key">
           <template v-for="(part, i) in highlightParts(String(keyName), searchTerm ?? '')" :key="i">
             <mark v-if="part.match">{{ part.text }}</mark><template v-else>{{ part.text }}</template>
           </template>
         </span>
+        <InfoBubble v-if="doc" @click.stop>
+          <template #trigger><span class="info-dot">ⓘ</span></template>
+          <FieldDocCard :field="doc" />
+        </InfoBubble>
         <span class="colon">:</span>
       </template>
 
@@ -269,7 +278,7 @@ function primitiveDisplay(value: JsonValue): string {
           :ancestor-matched="inMatchSubtree"
           :ref-index="refIndex"
           :inside-preview="insidePreview"
-          :focus-path="focusPath"
+          :focus-request="focusRequest"
           @focus-path="emit('focusPath', $event)"
         />
       </template>
@@ -290,7 +299,7 @@ function primitiveDisplay(value: JsonValue): string {
           :ancestor-matched="inMatchSubtree"
           :ref-index="refIndex"
           :inside-preview="insidePreview"
-          :focus-path="focusPath"
+          :focus-request="focusRequest"
           @focus-path="emit('focusPath', $event)"
         />
       </template>
@@ -334,8 +343,9 @@ function primitiveDisplay(value: JsonValue): string {
 .toggle.open { transform: rotate(0deg); }
 .toggle-ph { display: inline-block; width: 20px; flex-shrink: 0; }
 .key { color: var(--color-key); margin-right: 2px; }
-/* XSD karsiligi olan alanlar noktali alt cizgiyle isaretlenir. */
-.key.documented { cursor: help; border-bottom: 1px dotted var(--text-muted); }
+/* XSD karsiligi olan alanlarda aciklama isareti. */
+.info-dot { font-size: 10px; color: var(--accent); opacity: .55; cursor: pointer; margin-right: 3px; }
+.info-dot:hover { opacity: 1; }
 .colon { color: var(--text-muted); margin-right: 6px; }
 .comma { color: var(--text-muted); }
 .bracket { color: var(--color-bracket); font-weight: 500; }

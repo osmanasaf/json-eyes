@@ -62,7 +62,12 @@ Vite dev sunucusu `/api` isteklerini `http://localhost:8080` adresine proxy eder
 - **IATA**: JSON mesaj tipi otomatik tespit edilir; her alan için XSD'deki **tip adı**
   (ör. `ID_Type`) ve açıklama gösterilir. Eşleştirme yol tabanlıdır: NDC'de `DescText`,
   `TypeCode`, `RefID` gibi adlar onlarca tipte farklı anlam taşıdığı için açıklama
-  alanın bulunduğu bağlamdan alınır. XSD'de karşılığı olmayan alanlar sayılıp bildirilir.
+  alanın bulunduğu bağlamdan alınır.
+- **Alan açıklaması**: XSD karşılığı olan alanların yanında `ⓘ` işareti çıkar; üzerine
+  gelince açıklama balonu açılır, tıklayınca sabitlenir (metin seçilebilir). Sağdaki
+  IATA paneli mesaj özetini, üzerine gelinen alanın detayını ve **şemada karşılığı
+  olmayan alanların listesini** gösterir; listeden bir alana tıklayınca görüntüleyicide
+  o alana atlanır.
 
 ## Yapılandırma
 

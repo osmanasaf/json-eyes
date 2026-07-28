@@ -51,6 +51,37 @@ export function parseJson(input: string): { data: JsonValue | null; error: strin
  * Alan adina gore geri dusmuyoruz: ayni ad NDC'de baglama gore farkli anlamlara
  * geldigi icin yalnizca tam yol eslesmesi dogru aciklamayi verir.
  */
+/**
+ * XSD yolundan (`Response.Order.OrderID`) goruntuleyicideki ilk dugum yolunu bulur.
+ * Dizi indeksleri XSD yolunda tasinmadigi icin arama JSON uzerinde yapilir.
+ */
+export function findNodePath(
+  data: JsonValue,
+  rootKey: string,
+  messageType: string | null,
+  schemaPath: string,
+): string | null {
+  let found: string | null = null
+
+  function walk(value: JsonValue, path: string) {
+    if (found) return
+    if (toSchemaPath(path, rootKey, messageType) === schemaPath) {
+      found = path
+      return
+    }
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => walk(item, `${path}.${index}`))
+    } else if (value !== null && typeof value === 'object') {
+      for (const [key, child] of Object.entries(value as Record<string, JsonValue>)) {
+        walk(child, `${path}.${key}`)
+      }
+    }
+  }
+
+  walk(data, rootKey)
+  return found
+}
+
 export function toSchemaPath(nodePath: string, rootKey: string, messageType: string | null): string {
   const segments = nodePath.split('.')
   if (segments[0] === rootKey) segments.shift()

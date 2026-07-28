@@ -25,6 +25,8 @@ export interface AnnotateResponse {
   schemaLoaded: boolean
   /** XSD'de karsiligi bulunamayan JSON alani sayisi. */
   unmatchedCount: number
+  /** Bu alanlarin yollari; uzun listelerde kirpilir. */
+  unmatchedPaths: string[]
   fields: FieldDoc[]
 }
 
