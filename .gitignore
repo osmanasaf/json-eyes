@@ -1,0 +1,23 @@
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+# vite.config.ts derlendiginde uretilir
+frontend/vite.config.js
+frontend/vite.config.d.ts
+
+# Backend
+backend/target/
+backend/data/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# XSD arsivi; semalar zaten backend/src/main/resources/xsd altinda
+xsd-schema.zip
