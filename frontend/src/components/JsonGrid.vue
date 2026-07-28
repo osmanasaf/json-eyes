@@ -289,6 +289,12 @@ defineExpose({ moveSelection, expandAll, collapseAll })
                   {{ displayValue(rows[vrow.index].value!) }}
                 </span>
                 <button
+                  v-if="rows[vrow.index].tableReady"
+                  class="table-chip"
+                  title="Bu diziyi tam ekran tabloda aç (kolon sıralama, filtre, CSV)"
+                  @click.stop="emit('expandTable', rows[vrow.index].path)"
+                >⊞ tablo</button>
+                <button
                   v-if="rows[vrow.index].refTarget"
                   class="ref-chip"
                   :class="{ open: rows[vrow.index].refOpen }"
@@ -384,9 +390,9 @@ defineExpose({ moveSelection, expandAll, collapseAll })
 
 .row { display: grid; grid-template-columns: minmax(300px, 1fr) 84px minmax(220px, 1.4fr); align-items: center; border-bottom: 1px solid var(--border-subtle); cursor: pointer; transition: background .1s; }
 .row:hover { background: var(--bg-secondary); }
-.row.match { background: rgba(255,220,0,.10); }
-.row.match-deep { background: rgba(255,220,0,.04); }
-.row.selected { background: rgba(88,166,255,.10); box-shadow: inset 2px 0 0 var(--accent); }
+.row.match { background: var(--match-bg); }
+.row.match-deep { background: var(--match-soft); }
+.row.selected { background: var(--accent-wash); box-shadow: inset 2px 0 0 var(--accent); }
 
 .cell { padding: var(--row-pad-y) 12px; min-width: 0; }
 .cell-field { display: flex; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; }
@@ -418,8 +424,10 @@ defineExpose({ moveSelection, expandAll, collapseAll })
 .v-null { color: var(--color-null); font-style: italic; }
 .summary { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--text-muted); font-style: italic; }
 
+.table-chip { font-size: 10px; color: var(--green); background: var(--bg-array); padding: 1px 8px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
+.table-chip:hover { background: var(--green-wash); }
 .ref-chip { font-size: 10px; color: var(--accent); background: var(--accent-dim); padding: 1px 8px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
-.ref-chip:hover, .ref-chip.open { background: rgba(88,166,255,.28); }
+.ref-chip:hover, .ref-chip.open { background: var(--accent-strong); }
 .comment-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--text-muted); opacity: .35; padding: 1px 7px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
 .comment-chip:hover { background: var(--bg-tertiary); opacity: 1; }
 .comment-chip.has, .comment-chip.open { opacity: 1; color: var(--purple); }
@@ -427,7 +435,7 @@ defineExpose({ moveSelection, expandAll, collapseAll })
 .extra-row { display: flex; align-items: center; border-bottom: 1px solid var(--border-subtle); padding: 7px 12px; }
 .extra-row > div { flex: 1; min-width: 0; }
 
-.ref-box { border-left: 2px solid var(--accent); background: rgba(88,166,255,.05); border-radius: 0 6px 6px 0; padding: 7px 11px; }
+.ref-box { border-left: 2px solid var(--accent); background: var(--accent-soft); border-radius: 0 6px 6px 0; padding: 7px 11px; }
 .ref-head { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
 .ref-path { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); word-break: break-all; }
 .ref-goto { font-size: 10.5px; color: var(--accent); padding: 1px 8px; border-radius: 4px; border: 1px solid var(--border); white-space: nowrap; }
@@ -437,7 +445,7 @@ defineExpose({ moveSelection, expandAll, collapseAll })
 .ref-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .more-btn { font-size: 11px; color: var(--accent); background: var(--accent-dim); padding: 3px 10px; border-radius: 5px; }
-.more-btn:hover { background: rgba(88,166,255,.25); }
+.more-btn:hover { background: var(--accent-strong); }
 
 .note { padding: 14px 16px; font-size: 12px; color: var(--text-muted); }
 .note code { font-family: 'JetBrains Mono', monospace; color: var(--color-string); }

@@ -124,12 +124,12 @@ function formatDate(iso: string): string {
 </template>
 
 <style scoped>
-.thread { position: relative; border-left: 2px solid var(--purple); background: rgba(188,140,255,.05); border-radius: 0 6px 6px 0; padding: 9px 12px; }
+.thread { position: relative; border-left: 2px solid var(--purple); background: var(--purple-soft); border-radius: 0 6px 6px 0; padding: 9px 12px; }
 
 .group { margin-bottom: 4px; }
 .comment { display: flex; gap: 9px; margin-bottom: 9px; }
 .comment.reply { margin-left: 18px; }
-.avatar { width: 22px; height: 22px; border-radius: 50%; background: rgba(188,140,255,.2); color: var(--purple); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.avatar { width: 22px; height: 22px; border-radius: 50%; background: var(--purple-avatar); color: var(--purple); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .body { min-width: 0; flex: 1; }
 .meta { display: flex; align-items: baseline; gap: 8px; }
 .author { font-size: 11.5px; font-weight: 600; color: var(--text-primary); }
@@ -137,7 +137,7 @@ function formatDate(iso: string): string {
 .action { font-size: 10.5px; color: var(--accent); padding: 0 4px; border-radius: 4px; }
 .action:hover { background: var(--accent-dim); }
 .action.danger { color: var(--red); }
-.action.danger:hover { background: rgba(255,123,114,.12); }
+.action.danger:hover { background: var(--red-dim); }
 .text { font-size: 12px; color: var(--text-secondary); line-height: 1.45; text-wrap: pretty; white-space: pre-wrap; word-break: break-word; }
 
 .empty { font-size: 11.5px; color: var(--text-muted); }

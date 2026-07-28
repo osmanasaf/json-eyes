@@ -9,7 +9,7 @@ import { buildSearchIndex, EMPTY_SEARCH } from './utils/search'
 import { buildRefIndex, EMPTY_REF_INDEX } from './utils/references'
 import { isObjectArray } from './utils/flatten'
 import { tryRepair } from './utils/repair'
-import { pushRecent, readRecents, type RecentFile } from './utils/storage'
+import { pushRecent, readRecents, readTheme, writeTheme, type RecentFile, type Theme } from './utils/storage'
 import JsonTree from './components/JsonTree.vue'
 import JsonGrid from './components/JsonGrid.vue'
 import IataPanel from './components/IataPanel.vue'
@@ -55,6 +55,14 @@ const iataVisible = ref(true)
 const editorPinned = ref(false)
 const iataPinned = ref(false)
 const recents = ref<RecentFile[]>(readRecents())
+
+const theme = ref<Theme>(readTheme())
+
+// Tema kok elemandaki data-theme ile degisir; tum renkler oradaki token setinden okunur.
+watch(theme, (value) => {
+  document.documentElement.dataset.theme = value
+  writeTheme(value)
+}, { immediate: true })
 
 const shareUrl = ref<string | null>(null)
 const shareCopied = ref(false)
@@ -499,6 +507,23 @@ function loadSample() {
   fileName.value = 'ornek.json'
 }
 
+/**
+ * Logo tiklamasi: bos duruma (ana sayfa) doner. Ustunde calisilan JSON once
+ * "Son açılanlar"a yazilir — tek tikla geri alinabilsin diye; yoksa logo
+ * kullanicinin isini sessizce silen bir dugme olurdu.
+ */
+function goHome() {
+  if (isShared.value) {
+    window.location.href = window.location.pathname
+    return
+  }
+  const text = rawInput.value.trim()
+  if (text) {
+    recents.value = pushRecent(fileName.value ?? 'yapıştırılan.json', rawInput.value)
+  }
+  handleClear()
+}
+
 /** "Otomatik düzelt ve dene": yorum, fazla virgul ve tek tirnak onarilir. */
 function handleRepair() {
   const repaired = tryRepair(rawInput.value)
@@ -574,7 +599,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 <template>
   <div class="app">
     <header class="header">
-      <div class="brand">
+      <button class="brand" title="Ana sayfa — yeni JSON" @click="goHome">
         <svg width="26" height="26" viewBox="0 0 24 24">
           <rect x="1" y="1" width="22" height="22" rx="6" fill="var(--accent)" opacity=".14" />
           <ellipse cx="12" cy="12" rx="8" ry="5.2" fill="none" stroke="var(--accent)" stroke-width="1.6" />
@@ -582,7 +607,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
           <circle cx="13.4" cy="10.6" r="0.9" fill="var(--bg-primary)" />
         </svg>
         <span class="wordmark">JSON <span class="wordmark-accent">EYES</span></span>
-      </div>
+      </button>
       <div class="divider" />
 
       <div v-if="displayName" class="file">
@@ -612,6 +637,10 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
         <button class="comment-nav" title="Sonraki yorum" @click="goToComment(1)">↓</button>
       </span>
 
+      <button class="theme-btn" :title="theme === 'dark' ? 'Aydınlık temaya geç' : 'Karanlık temaya geç'" @click="theme = theme === 'dark' ? 'light' : 'dark'">
+        {{ theme === 'dark' ? '☀' : '☾' }}
+      </button>
+
       <div class="mode-switch">
         <button class="mode" :class="{ active: viewMode === 'tree' }" @click="setViewMode('tree')">Tree</button>
         <button class="mode" :class="{ active: viewMode === 'grid' }" @click="setViewMode('grid')">Grid</button>
@@ -619,7 +648,9 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
           class="mode"
           :class="{ active: viewMode === 'table' }"
           :disabled="!tablePath && !tableCandidate"
-          title="Seçili nesne dizisini tam ekran tabloda aç"
+          :title="tablePath || tableCandidate
+            ? 'Seçili nesne dizisini tam ekran tabloda aç'
+            : 'Önce grid\'de bir nesne dizisi seçin — dizi satırlarında ⊞ tablo rozeti çıkar'"
           @click="setViewMode('table')"
         >Tablo</button>
       </div>
@@ -692,7 +723,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
         @click="filterMatches = !filterMatches"
       >yalnız eşleşen</button>
 
-      <div class="segment">
+      <div class="segment" title="Tablo: nesne dizileri (ör. Response.Order) grid içinde satır satır değil, tek bir tabloda gösterilir">
         <button class="seg-btn" :class="{ 'active-nested': !arrayTableMode }" @click="arrayTableMode = false">İç içe</button>
         <button class="seg-btn" :class="{ 'active-table': arrayTableMode }" @click="arrayTableMode = true">Tablo</button>
       </div>
@@ -737,46 +768,53 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
           @drop="handleDrop"
         />
 
-        <ArrayTable
-          v-else-if="viewMode === 'table' && tableItems"
-          :items="tableItems"
-          :path="tablePath!"
-          variant="full"
-          @focus-path="focusOnPath"
-        />
+        <!--
+          Grid mount'ta kalir (v-show): Tablo veya Tree'ye gecip geri donuldugunde
+          acilmis dallar ve sayfalama korunsun diye. Diger iki gorunum ise
+          maliyetli olduklari icin yalnizca secildiklerinde kurulur.
+        -->
+        <template v-else>
+          <ArrayTable
+            v-if="viewMode === 'table' && tableItems"
+            :items="tableItems"
+            :path="tablePath!"
+            variant="full"
+            @focus-path="focusOnPath"
+          />
 
-        <div v-else-if="viewMode === 'tree'" class="tree-scroll">
-          <JsonTree
+          <div v-else-if="viewMode === 'tree'" class="tree-scroll">
+            <JsonTree
+              :data="parsed!"
+              :root-key="ROOT_KEY"
+              :search-term="searchTerm"
+              :doc-lookup="docLookup"
+              :search="searchIndex"
+              :active-path="activePath"
+              :filter-matches="filterMatches"
+              :ref-index="refIndex"
+              :focus-request="focusRequest"
+              @focus-path="focusOnPath"
+            />
+          </div>
+
+          <JsonGrid
+            v-show="viewMode === 'grid'"
+            ref="gridRef"
             :data="parsed!"
             :root-key="ROOT_KEY"
             :search-term="searchTerm"
             :doc-lookup="docLookup"
-            :search="searchIndex"
-            :active-path="activePath"
             :filter-matches="filterMatches"
+            :array-table-mode="arrayTableMode"
             :ref-index="refIndex"
             :focus-request="focusRequest"
+            :selected-path="selectedNodePath"
+            :schema-known="schemaKnown"
             @focus-path="focusOnPath"
+            @expand-table="openTable"
+            @stats="gridStats = $event"
           />
-        </div>
-
-        <JsonGrid
-          v-else
-          ref="gridRef"
-          :data="parsed!"
-          :root-key="ROOT_KEY"
-          :search-term="searchTerm"
-          :doc-lookup="docLookup"
-          :filter-matches="filterMatches"
-          :array-table-mode="arrayTableMode"
-          :ref-index="refIndex"
-          :focus-request="focusRequest"
-          :selected-path="selectedNodePath"
-          :schema-known="schemaKnown"
-          @focus-path="focusOnPath"
-          @expand-table="openTable"
-          @stats="gridStats = $event"
-        />
+        </template>
       </section>
 
       <!-- Sag: IATA paneli -->
@@ -810,7 +848,8 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 
 /* --- Ust bar --------------------------------------------------------------- */
 .header { display: flex; align-items: center; gap: 14px; padding: 0 16px; height: var(--header-h); background: var(--bg-secondary); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.brand { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
+.brand { display: flex; align-items: center; gap: 9px; flex-shrink: 0; border-radius: 8px; padding: 2px 4px; }
+.brand:hover { background: var(--bg-tertiary); }
 .wordmark { font-size: 15.5px; font-weight: 700; letter-spacing: .2px; white-space: nowrap; }
 .wordmark-accent { color: var(--accent); }
 .divider { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
@@ -818,7 +857,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 .file { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .file-name { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 190px; }
 .valid-badge { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--green); background: var(--bg-array); border-radius: 20px; padding: 2px 8px; white-space: nowrap; }
-.valid-badge.bad { color: var(--red); background: rgba(255,123,114,.10); }
+.valid-badge.bad { color: var(--red); background: var(--red-wash); }
 .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 .lock-badge { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text-secondary); background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 20px; padding: 3px 9px; white-space: nowrap; }
 
@@ -834,6 +873,9 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 .comment-total { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--purple); background: var(--bg-object); border-radius: 20px; padding: 4px 10px; white-space: nowrap; }
 .comment-nav { color: var(--purple); font-size: 11px; line-height: 1; }
 .comment-nav:hover { color: var(--text-primary); }
+
+.theme-btn { font-size: 14px; line-height: 1; color: var(--text-muted); border: 1px solid var(--border); border-radius: 8px; width: 30px; height: 30px; flex-shrink: 0; }
+.theme-btn:hover { color: var(--accent); border-color: var(--accent); }
 
 .mode-switch { display: flex; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 3px; gap: 2px; flex-shrink: 0; }
 .mode { padding: 5px 11px; border-radius: 6px; font-size: 12.5px; color: var(--text-muted); }
@@ -858,8 +900,8 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 
 /* --- Bantlar --------------------------------------------------------------- */
 .banner { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 12.5px; flex-shrink: 0; border-bottom: 1px solid var(--border-subtle); }
-.banner.accent { background: rgba(88,166,255,.10); color: var(--accent); }
-.banner.bad { background: rgba(255,123,114,.08); color: var(--red); }
+.banner.accent { background: var(--accent-wash); color: var(--accent); }
+.banner.bad { background: var(--red-soft); color: var(--red); }
 .banner-link { font-family: 'JetBrains Mono', monospace; color: inherit; }
 .banner-note { font-size: 11.5px; color: var(--text-muted); }
 .banner-strong { color: var(--text-primary); }
@@ -891,7 +933,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 .segment { display: flex; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 7px; padding: 2px; gap: 2px; flex-shrink: 0; }
 .seg-btn { padding: 3px 9px; border-radius: 5px; font-size: 11.5px; color: var(--text-muted); }
 .seg-btn.active-nested { color: var(--text-primary); background: var(--bg-tertiary); }
-.seg-btn.active-table { color: var(--green); background: rgba(63,185,80,.14); }
+.seg-btn.active-table { color: var(--green); background: var(--green-wash); }
 
 /* --- Calisma alani --------------------------------------------------------- */
 .workspace { display: flex; flex: 1; min-height: 0; }
@@ -903,7 +945,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 .error-code { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--text-secondary); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; max-width: 560px; text-align: center; word-break: break-word; }
 .error-hint { font-size: 13px; color: var(--text-muted); max-width: 360px; text-align: center; text-wrap: pretty; }
 .error-action { margin-top: 4px; font-size: 13px; color: var(--accent); background: var(--accent-dim); border-radius: 8px; padding: 8px 18px; }
-.error-action:hover { background: rgba(88,166,255,.25); }
+.error-action:hover { background: var(--accent-strong); }
 
 /* --- Alt durum cubugu ------------------------------------------------------ */
 .status-bar { display: flex; align-items: center; gap: 16px; height: var(--status-h); padding: 0 16px; background: var(--bg-secondary); border-top: 1px solid var(--border); flex-shrink: 0; }

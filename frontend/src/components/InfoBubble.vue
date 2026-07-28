@@ -123,7 +123,7 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  box-shadow: var(--shadow-popover);
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 12.5px;
   line-height: 1.5;

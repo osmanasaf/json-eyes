@@ -26,6 +26,8 @@ export interface GridRowItem {
   /** Kapsayicilar icin "4 öğe" / "3 alan". */
   summary?: string
   doc?: FieldDoc
+  /** Nesne dizisi mi; oyleyse satirda "tabloda aç" rozeti cikar. */
+  tableReady?: boolean
   refTarget?: RefTarget
   refOpen?: boolean
   commentCount?: number
@@ -120,6 +122,7 @@ export function flattenTree(data: JsonValue, options: FlattenOptions): GridRowIt
       isOpen,
       summary: type === 'array' ? `${childCount} öğe` : type === 'object' ? `${childCount} alan` : '',
       doc: options.docLookup?.(path),
+      tableReady: isObjectArray(value),
       refTarget,
       refOpen: refTarget !== undefined && options.refOpenPath === path,
       commentCount: options.commentsAvailable ? (options.commentCountFor?.(path) ?? 0) : 0,

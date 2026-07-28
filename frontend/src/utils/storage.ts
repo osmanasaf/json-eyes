@@ -70,6 +70,19 @@ export function pushRecent(name: string, text: string): RecentFile[] {
   return next
 }
 
+export type Theme = 'dark' | 'light'
+
+const THEME_KEY = 'theme'
+
+/** Kayitli tema; hic secim yapilmadiysa urunun varsayilani olan karanlik. */
+export function readTheme(): Theme {
+  return readStored(THEME_KEY) === 'light' ? 'light' : 'dark'
+}
+
+export function writeTheme(theme: Theme) {
+  writeStored(THEME_KEY, theme)
+}
+
 export function formatSize(chars: number): string {
   if (chars < 1024) return `${chars} B`
   if (chars < 1024 * 1024) return `${(chars / 1024).toFixed(0)} KB`

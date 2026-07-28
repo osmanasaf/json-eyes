@@ -298,9 +298,9 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
 
 .body { flex: 1; min-height: 0; overflow-y: auto; }
 .row { display: flex; border-bottom: 1px solid var(--border-subtle); cursor: pointer; transition: background .1s; }
-.row.odd { background: rgba(255,255,255,.012); }
+.row.odd { background: var(--row-zebra); }
 .row:hover { background: var(--bg-secondary); }
-.row.selected { background: rgba(188,140,255,.10); box-shadow: inset 2px 0 0 var(--purple); }
+.row.selected { background: var(--purple-wash); box-shadow: inset 2px 0 0 var(--purple); }
 .cell { min-width: 0; padding: 6px 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-right: 1px solid var(--border-subtle); }
 .inline .cell { padding: 5px 9px; font-size: 11.5px; }
 

@@ -172,7 +172,7 @@ watch(() => props.recents.length, (count) => {
 
 .status { display: flex; align-items: flex-start; gap: 8px; padding: 8px 14px; border-top: 1px solid var(--border-subtle); font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.5; }
 .status.ok { color: var(--green); align-items: center; }
-.status.bad { color: var(--red); background: rgba(255,123,114,.06); }
+.status.bad { color: var(--red); background: var(--red-soft); }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; margin-top: 5px; }
 .status.ok .status-dot { margin-top: 0; }
 .status-text { flex: 1; min-width: 0; word-break: break-word; }

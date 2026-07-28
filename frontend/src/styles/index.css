@@ -4,7 +4,14 @@
   padding: 0;
 }
 
-:root {
+/*
+ * Iki tema tek token setiyle yasar: bilesenler asla ham renk yazmaz, hepsi
+ * asagidaki degiskenlerden okur. Tema `:root[data-theme]` ile degisir.
+ */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
   --bg-primary: #0d1117;
   --bg-secondary: #161b22;
   --bg-tertiary: #21262d;
@@ -15,7 +22,6 @@
   --text-secondary: #8b949e;
   --text-muted: #6e7681;
   --accent: #58a6ff;
-  --accent-dim: rgba(88, 166, 255, 0.15);
   --green: #3fb950;
   --orange: #d29922;
   --purple: #bc8cff;
@@ -38,6 +44,31 @@
   --bg-object: rgba(188, 140, 255, 0.12);
   --bg-array: rgba(63, 185, 80, 0.12);
 
+  /* Aksan tonlari: soft = kutu zemini, wash = secili satir, dim = rozet, strong = hover. */
+  --accent-soft: rgba(88, 166, 255, 0.05);
+  --accent-wash: rgba(88, 166, 255, 0.10);
+  --accent-dim: rgba(88, 166, 255, 0.15);
+  --accent-strong: rgba(88, 166, 255, 0.28);
+  --purple-soft: rgba(188, 140, 255, 0.05);
+  --purple-wash: rgba(188, 140, 255, 0.10);
+  --purple-dim: rgba(188, 140, 255, 0.12);
+  --purple-avatar: rgba(188, 140, 255, 0.20);
+  --green-wash: rgba(63, 185, 80, 0.14);
+  --orange-dim: rgba(210, 153, 34, 0.14);
+  --red-soft: rgba(255, 123, 114, 0.06);
+  --red-wash: rgba(255, 123, 114, 0.10);
+  --red-dim: rgba(255, 123, 114, 0.12);
+
+  /* Arama vurgusu ve tablo zebrasi. */
+  --match-soft: rgba(255, 220, 0, 0.04);
+  --match-bg: rgba(255, 220, 0, 0.10);
+  --match-strong: rgba(255, 220, 0, 0.18);
+  --match-ring: rgba(255, 220, 0, 0.45);
+  --mark-bg: rgba(255, 220, 0, 0.30);
+  --mark-text: #ffd700;
+  --row-zebra: rgba(255, 255, 255, 0.012);
+  --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.45);
+
   /* Kabuk olculeri; tasarimin sabit degerleri tek yerden yonetilir. */
   --header-h: 56px;
   --crumbs-h: 38px;
@@ -49,8 +80,66 @@
   --row-pad-y: 6px;
 }
 
-html {
-  color-scheme: dark;
+/*
+ * Aydinlik tema (tasarimin Tur 2 paleti). Acik zeminde ayni alfa degerleri
+ * kayboldugu icin ton zeminleri biraz daha koyu tutuluyor.
+ */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg-primary: #ffffff;
+  --bg-secondary: #f6f8fa;
+  --bg-tertiary: #eaeef2;
+  --bg-hover: #d8dee4;
+  --border: #d0d7de;
+  --border-subtle: #eaeef2;
+  --text-primary: #1f2328;
+  --text-secondary: #656d76;
+  --text-muted: #8c959f;
+  --accent: #0969da;
+  --green: #1a7f37;
+  --orange: #9a6700;
+  --purple: #8250df;
+  --red: #cf222e;
+  --pink: #953800;
+  --cyan: #0550ae;
+  --color-null: #6e7781;
+  --color-bool: #0550ae;
+  --color-number: #953800;
+  --color-string: #0a3069;
+  --color-key: #cf222e;
+  --color-bracket: #1f2328;
+  --color-index: #656d76;
+
+  --bg-string: rgba(10, 48, 105, 0.08);
+  --bg-number: rgba(149, 56, 0, 0.10);
+  --bg-bool: rgba(5, 80, 174, 0.08);
+  --bg-null: rgba(110, 119, 129, 0.10);
+  --bg-object: rgba(130, 80, 223, 0.10);
+  --bg-array: rgba(26, 127, 55, 0.10);
+
+  --accent-soft: rgba(9, 105, 218, 0.05);
+  --accent-wash: rgba(9, 105, 218, 0.09);
+  --accent-dim: rgba(9, 105, 218, 0.12);
+  --accent-strong: rgba(9, 105, 218, 0.22);
+  --purple-soft: rgba(130, 80, 223, 0.05);
+  --purple-wash: rgba(130, 80, 223, 0.10);
+  --purple-dim: rgba(130, 80, 223, 0.12);
+  --purple-avatar: rgba(130, 80, 223, 0.18);
+  --green-wash: rgba(26, 127, 55, 0.12);
+  --orange-dim: rgba(154, 103, 0, 0.14);
+  --red-soft: rgba(207, 34, 46, 0.06);
+  --red-wash: rgba(207, 34, 46, 0.09);
+  --red-dim: rgba(207, 34, 46, 0.11);
+
+  --match-soft: rgba(212, 167, 44, 0.10);
+  --match-bg: rgba(212, 167, 44, 0.22);
+  --match-strong: rgba(212, 167, 44, 0.38);
+  --match-ring: rgba(154, 103, 0, 0.55);
+  --mark-bg: rgba(212, 167, 44, 0.35);
+  --mark-text: #7a5300;
+  --row-zebra: rgba(27, 31, 36, 0.025);
+  --shadow-popover: 0 8px 24px rgba(31, 35, 40, 0.15);
 }
 
 body {
@@ -97,8 +186,8 @@ input, textarea {
 }
 
 mark {
-  background: rgba(255, 220, 0, 0.3);
-  color: #ffd700;
+  background: var(--mark-bg);
+  color: var(--mark-text);
   border-radius: 2px;
   padding: 0 1px;
 }

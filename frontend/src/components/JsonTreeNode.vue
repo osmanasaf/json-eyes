@@ -355,13 +355,13 @@ function primitiveDisplay(value: JsonValue): string {
 
 <style scoped>
 .node { position: relative; }
-.node.matched > .row { background: rgba(255,220,0,.08); border-radius: 4px; }
-.node.active > .row { background: rgba(255,220,0,.18); box-shadow: inset 0 0 0 1px rgba(255,220,0,.45); border-radius: 4px; }
+.node.matched > .row { background: var(--match-soft); border-radius: 4px; }
+.node.active > .row { background: var(--match-strong); box-shadow: inset 0 0 0 1px var(--match-ring); border-radius: 4px; }
 .node.focused > .row { background: var(--accent-dim); box-shadow: inset 0 0 0 1px var(--accent); border-radius: 4px; }
 
 .ref-btn { font-size: 10px; color: var(--accent); background: var(--accent-dim); padding: 1px 7px; border-radius: 10px; margin-left: 8px; white-space: nowrap; flex-shrink: 0; }
-.ref-btn:hover, .ref-btn.open { background: rgba(88,166,255,.28); }
-.ref-preview { margin: 2px 0 6px; padding: 6px 10px; border-left: 2px solid var(--accent); background: rgba(88,166,255,.05); border-radius: 0 6px 6px 0; }
+.ref-btn:hover, .ref-btn.open { background: var(--accent-strong); }
+.ref-preview { margin: 2px 0 6px; padding: 6px 10px; border-left: 2px solid var(--accent); background: var(--accent-soft); border-radius: 0 6px 6px 0; }
 .ref-head { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
 .ref-path { font-size: 10px; color: var(--text-muted); word-break: break-all; }
 .ref-goto { font-size: 10px; color: var(--accent); padding: 1px 8px; border-radius: 4px; border: 1px solid var(--border); white-space: nowrap; }
@@ -389,11 +389,11 @@ function primitiveDisplay(value: JsonValue): string {
 .val-null { color: var(--color-null); font-style: italic; }
 .children { position: relative; }
 .more-btn { font-size: 11px; color: var(--accent); background: var(--accent-dim); padding: 2px 10px; border-radius: 5px; }
-.more-btn:hover { background: rgba(88,166,255,.25); }
+.more-btn:hover { background: var(--accent-strong); }
 .comment-btn { opacity: 0; display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 7px; border-radius: 11px; font-size: 10px; color: var(--text-muted); margin-left: 6px; flex-shrink: 0; }
 .comment-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 /* Yorumu olan satirlarda rozet her zaman gorunur. */
-.comment-btn.has, .comment-btn.open { opacity: 1; color: var(--purple); background: rgba(188,140,255,.12); }
+.comment-btn.has, .comment-btn.open { opacity: 1; color: var(--purple); background: var(--purple-dim); }
 .row:hover .comment-btn { opacity: 1; }
 .comment-count { font-weight: 600; }
 .thread-wrap { max-width: 620px; }

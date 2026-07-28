@@ -54,6 +54,14 @@ alanı ve "Son açılanlar" görünür.
 **Klavye**: `Ctrl+K` / `Ctrl+F` görünüm filtresine odaklanır, `Enter` / `Shift+Enter`
 eşleşmeler arasında gezer, `J` / `K` satır seçimini kaydırır, `Esc` aramayı temizler.
 
+**Logo** ana sayfaya (boş durum) döner. Üzerinde çalışılan JSON önce "Son açılanlar"a
+yazılır, tek tıkla geri alınır.
+
+**Tema**: üst bardaki ☀ / ☾ düğmesi karanlık ve aydınlık tema arasında geçer, seçim
+tarayıcıda saklanır. Her iki tema aynı token setini kullanır
+([styles/index.css](frontend/src/styles/index.css)); bileşenlerde ham renk yoktur,
+yeni bir tema eklemek `:root[data-theme='...']` bloğu yazmaktan ibarettir.
+
 ## Özellikler
 
 - **Tree**: JSON sözdizimi görünümü, yerinde aç/kapa, alan başına XSD tooltip'i
@@ -64,6 +72,8 @@ eşleşmeler arasında gezer, `J` / `K` satır seçimini kaydırır, `Esc` arama
 - **Dizi tabloları**: bağlam şeridindeki **İç içe / Tablo** anahtarı nesne dizilerini
   satır içinde gerçek bir tabloya çevirir; kolonlar dizideki skaler anahtarların
   birleşiminden üretilir, iç içe alanlar tablonun altında "gizlendi" olarak belirtilir.
+  Nesne dizisi olan her satırın yanında yeşil `⊞ tablo` rozeti çıkar — Tablo modunun
+  hangi satırlarda açılabildiği böyle görünür.
   "tam ekran" ile aynı dizi **Tablo** modunda tüm ekrana açılır: kolon başlığına
   tıklayarak sıralama (asc ⇄ desc), kolon başına `contains` filtresi (AND ile birleşir),
   CSV indirme ve altta kayıt / toplam / sıralama / seçili şeridi.

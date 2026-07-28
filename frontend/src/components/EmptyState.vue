@@ -60,7 +60,7 @@ function onDrop(event: DragEvent) {
 .empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px; padding: 40px; overflow-y: auto; }
 
 .dropzone { width: 520px; max-width: 100%; border: 1px dashed var(--border); border-radius: 14px; padding: 48px 40px; display: flex; flex-direction: column; align-items: center; gap: 14px; background: var(--bg-secondary); transition: border-color .1s, background .1s; }
-.dropzone.over { border-color: var(--accent); background: rgba(88,166,255,.06); }
+.dropzone.over { border-color: var(--accent); background: var(--accent-soft); }
 .drop-title { font-size: 17px; font-weight: 600; }
 .drop-note { font-size: 13px; color: var(--text-secondary); text-align: center; max-width: 320px; text-wrap: pretty; }
 .drop-actions { display: flex; gap: 10px; margin-top: 6px; }
