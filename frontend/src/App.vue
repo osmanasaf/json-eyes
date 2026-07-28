@@ -51,6 +51,9 @@ const filterMatches = ref(false)
 const activeIndex = ref(0)
 const editorVisible = ref(true)
 const iataVisible = ref(true)
+// Kullanici paneli elle actiysa/kapattiysa genislik degisimi bu karari ezmez.
+const editorPinned = ref(false)
+const iataPinned = ref(false)
 const recents = ref<RecentFile[]>(readRecents())
 
 const shareUrl = ref<string | null>(null)
@@ -357,7 +360,6 @@ function forkShared() {
   sharedTitle.value = null
   sharedAt.value = null
   shareUrl.value = null
-  editorVisible.value = true
   const url = new URL(window.location.href)
   url.searchParams.delete('s')
   window.history.replaceState({}, '', url.pathname + url.search)
@@ -417,12 +419,24 @@ onBeforeUnmount(() => {
 })
 
 /**
- * Dar ekranda once IATA paneli, sonra editor kapanir. Kullanici bunlari alt
- * cubuktan geri acabildigi icin genisleyince otomatik geri getirmiyoruz.
+ * Dar ekranda once IATA paneli (<1280px), sonra editor (<1024px) kapanir;
+ * ekran genisleyince geri gelir. Kullanici alt cubuktan elle bir karar verdiyse
+ * o karar korunur — yoksa panel kullanicinin sirtindan acilip kapanirdi.
  */
 function applyResponsivePanels() {
-  if (window.innerWidth < 1280) iataVisible.value = false
-  if (window.innerWidth < 1024) editorVisible.value = false
+  const width = window.innerWidth
+  if (!iataPinned.value) iataVisible.value = width >= 1280
+  if (!editorPinned.value) editorVisible.value = width >= 1024
+}
+
+function toggleEditor() {
+  editorVisible.value = !editorVisible.value
+  editorPinned.value = true
+}
+
+function toggleIata() {
+  iataVisible.value = !iataVisible.value
+  iataPinned.value = true
 }
 
 function readFile(file: File) {
@@ -782,8 +796,8 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
       <span v-if="viewMode === 'grid'" class="stat">{{ gridStats.rendered }}/{{ gridStats.total }} satır render</span>
       <span v-if="annotation?.messageType" class="stat">{{ annotation.messageType }} %{{ matchPercent }}</span>
       <div class="status-spacer" />
-      <button v-if="!isShared" class="status-toggle" :class="{ active: editorVisible }" @click="editorVisible = !editorVisible">editör</button>
-      <button class="status-toggle" :class="{ active: iataVisible }" @click="iataVisible = !iataVisible">IATA</button>
+      <button v-if="!isShared" class="status-toggle" :class="{ active: editorVisible }" @click="toggleEditor">editör</button>
+      <button class="status-toggle" :class="{ active: iataVisible }" @click="toggleIata">IATA</button>
       <span class="stat">Ctrl+K komutlar · Ctrl+F filtre · J/K satır</span>
     </footer>
 
