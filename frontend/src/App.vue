@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, provide, ref, watch } from 'vue'
-import { SELECT_FIELD } from './utils/injection'
+import { COMMENTS, SELECT_FIELD } from './utils/injection'
+import { useComments } from './composables/useComments'
 import type { AnnotateResponse, JsonValue, ViewMode } from './types'
 import { annotateJson, createShare, getShare } from './api'
 import { countNodes, findNodePath, parseJson, toSchemaPath } from './utils/json'
@@ -49,6 +50,7 @@ const shareError = ref<string | null>(null)
 const loadError = ref<string | null>(null)
 
 const shareTitle = ref('')
+const shareCommentsEnabled = ref(true)
 const sharedId = ref<string | null>(null)
 const sharedTitle = ref<string | null>(null)
 const sharedAt = ref<string | null>(null)
@@ -112,6 +114,37 @@ const refIndex = computed(() =>
  */
 const focusRequest = ref<{ path: string; seq: number } | null>(null)
 let focusSeq = 0
+
+// --- Yorumlar ----------------------------------------------------------------
+
+const comments = useComments(sharedId)
+const openThreadPath = ref<string | null>(null)
+
+provide(COMMENTS, {
+  // Yorumlar bir paylasima baglidir; yerel JSON'da yorum yoktur.
+  available: computed(() => isShared.value),
+  enabled: comments.enabled,
+  openPath: openThreadPath,
+  author: comments.author,
+  commentsFor: (path: string) => comments.byPath.value.get(path) ?? [],
+  countFor: (path: string) => comments.byPath.value.get(path)?.length ?? 0,
+  toggle: (path: string) => {
+    openThreadPath.value = openThreadPath.value === path ? null : path
+  },
+  add: (payload) => { void comments.add(payload.path, payload.body, payload.parentId) },
+  remove: (id: number) => { void comments.remove(id) },
+  canDelete: comments.canDelete,
+})
+
+/** Yorum birakilmis alanlar arasinda gezinme. */
+function goToComment(step: number) {
+  const paths = comments.commentedPaths.value
+  if (paths.length === 0) return
+  const current = openThreadPath.value ? paths.indexOf(openThreadPath.value) : -1
+  const next = (current + step + paths.length) % paths.length
+  openThreadPath.value = paths[next]
+  focusOnPath(paths[next])
+}
 
 /** Uzerine gelinen alan; IATA paneli bunun XSD karsiligini gosterir. */
 const selectedNodePath = ref<string | null>(null)
@@ -286,7 +319,7 @@ async function handleShare() {
   shareError.value = null
   shareCopied.value = false
   try {
-    const result = await createShare(parsed.value, shareTitle.value)
+    const result = await createShare(parsed.value, shareTitle.value, shareCommentsEnabled.value)
     shareUrl.value = result.url
     try {
       await navigator.clipboard.writeText(result.url)
@@ -352,12 +385,23 @@ async function handleShare() {
             placeholder="Paylaşım başlığı (isteğe bağlı)"
             @keydown.enter="handleShare"
           />
+          <label v-if="hasData" class="comments-toggle" title="Linke erişen herkes alanlara yorum bırakabilsin">
+            <input v-model="shareCommentsEnabled" type="checkbox" />
+            Yorum
+          </label>
           <button v-if="hasData" class="icon-btn share-btn" :disabled="shareLoading" @click="handleShare">
             {{ shareLoading ? '...' : 'Paylaş' }}
           </button>
           <input ref="fileInputRef" type="file" accept=".json,application/json" style="display:none" @change="handleFile" />
         </template>
-        <button v-else class="icon-btn fork-btn" @click="forkShared">Kopyasını al ve düzenle</button>
+        <template v-else>
+          <span v-if="comments.total.value > 0" class="comment-nav">
+            <button class="nav-btn" title="Önceki yorum" @click="goToComment(-1)">↑</button>
+            <span class="nav-label">{{ comments.total.value }} yorum</span>
+            <button class="nav-btn" title="Sonraki yorum" @click="goToComment(1)">↓</button>
+          </span>
+          <button class="icon-btn fork-btn" @click="forkShared">Kopyasını al ve düzenle</button>
+        </template>
       </div>
     </header>
 
@@ -513,6 +557,13 @@ async function handleShare() {
 .share-btn { color: var(--accent); }
 .share-title-input { width: 190px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 12px; padding: 5px 9px; outline: none; }
 .share-title-input:focus { border-color: var(--accent); }
+.comments-toggle { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); cursor: pointer; white-space: nowrap; }
+.comments-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+.comment-nav { display: flex; align-items: center; gap: 4px; background: rgba(188,140,255,.12); border-radius: 20px; padding: 2px 8px; }
+.nav-label { font-size: 11px; color: var(--purple); white-space: nowrap; }
+.nav-btn { color: var(--purple); font-size: 11px; width: 18px; height: 18px; border-radius: 4px; }
+.nav-btn:hover { background: rgba(188,140,255,.2); }
 .fork-btn { color: var(--accent); border: 1px solid var(--border); }
 
 .shared-badge { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); background: var(--bg-tertiary); padding: 3px 9px; border-radius: 20px; border: 1px solid var(--border); white-space: nowrap; }

@@ -1,4 +1,11 @@
-import type { AnnotateResponse, JsonValue, ShareCreateResponse, ShareResponse } from './types'
+import type {
+  AnnotateResponse,
+  CommentCreateResponse,
+  CommentListResponse,
+  JsonValue,
+  ShareCreateResponse,
+  ShareResponse,
+} from './types'
 
 const API_BASE = '/api'
 
@@ -35,13 +42,40 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     throw new Error(await errorMessage(response))
   }
+  // DELETE 204 doner; bos govdeyi JSON olarak ayristirmaya calisma.
+  if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
 
-export function createShare(json: JsonValue, title?: string): Promise<ShareCreateResponse> {
+export function createShare(
+  json: JsonValue,
+  title?: string,
+  commentsEnabled = true,
+): Promise<ShareCreateResponse> {
   return request<ShareCreateResponse>('/shares', {
     method: 'POST',
-    body: JSON.stringify({ json, title: title?.trim() || null }),
+    body: JSON.stringify({ json, title: title?.trim() || null, commentsEnabled }),
+  })
+}
+
+export function listComments(shareId: string): Promise<CommentListResponse> {
+  return request<CommentListResponse>(`/shares/${encodeURIComponent(shareId)}/comments`)
+}
+
+export function createComment(
+  shareId: string,
+  input: { path: string; author: string; body: string; parentId?: number | null },
+): Promise<CommentCreateResponse> {
+  return request<CommentCreateResponse>(`/shares/${encodeURIComponent(shareId)}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ ...input, parentId: input.parentId ?? null }),
+  })
+}
+
+export function deleteComment(shareId: string, commentId: number, editToken: string): Promise<void> {
+  return request<void>(`/shares/${encodeURIComponent(shareId)}/comments/${commentId}`, {
+    method: 'DELETE',
+    headers: { 'X-Edit-Token': editToken },
   })
 }
 

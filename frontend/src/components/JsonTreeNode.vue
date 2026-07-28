@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, inject, nextTick, ref, watch } from 'vue'
-import { SELECT_FIELD } from '../utils/injection'
+import { COMMENTS, SELECT_FIELD } from '../utils/injection'
 import type { FieldDoc, JsonArray, JsonObject, JsonValue } from '../types'
 import { getType, highlightParts } from '../utils/json'
 import { childPath, type SearchIndex } from '../utils/search'
 import { effectiveFieldName, isRefField, resolveRef, type RefIndex, type RefTarget } from '../utils/references'
 import InfoBubble from './InfoBubble.vue'
 import FieldDocCard from './FieldDocCard.vue'
+import CommentThread from './CommentThread.vue'
 import JsonTreeNode from './JsonTreeNode.vue'
 
 const props = defineProps<{
@@ -32,6 +33,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{ focusPath: [path: string] }>()
 const selectField = inject(SELECT_FIELD, null)
+const comments = inject(COMMENTS, null)
 
 const type = computed(() => getType(props.value))
 const isExpandable = computed(() => type.value === 'object' || type.value === 'array')
@@ -173,6 +175,14 @@ watch(() => props.focusRequest, async (request) => {
   rowRef.value?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 }, { immediate: true })
 
+// --- Yorumlar ----------------------------------------------------------------
+
+const commentsAvailable = computed(
+  () => comments?.available.value === true && !props.insidePreview && props.keyName !== undefined,
+)
+const commentCount = computed(() => comments?.countFor(currentPath.value) ?? 0)
+const threadOpen = computed(() => comments?.openPath.value === currentPath.value)
+
 function toggle() {
   if (isExpandable.value) expanded.value = !expanded.value
 }
@@ -239,7 +249,29 @@ function primitiveDisplay(value: JsonValue): string {
         @click.stop="togglePreview"
       >↳ referans</button>
 
+      <button
+        v-if="commentsAvailable"
+        class="comment-btn"
+        :class="{ has: commentCount > 0, open: threadOpen }"
+        :title="commentCount > 0 ? `${commentCount} yorum` : 'Yorum ekle'"
+        @click.stop="comments?.toggle(currentPath)"
+      >💬<span v-if="commentCount > 0" class="comment-count">{{ commentCount }}</span></button>
+
       <button class="copy" title="Kopyala" @click.stop="copyValue">{{ copied ? '✓' : '⧉' }}</button>
+    </div>
+
+    <div v-if="threadOpen && comments" class="thread-wrap" :style="{ marginLeft: `${(depth + 1) * 20}px` }">
+      <CommentThread
+        :path="currentPath"
+        :comments="comments.commentsFor(currentPath)"
+        :author="comments.author.value"
+        :enabled="comments.enabled.value"
+        :can-delete="comments.canDelete"
+        @add="comments.add($event)"
+        @remove="comments.remove($event)"
+        @update:author="comments.author.value = $event"
+        @close="comments.toggle(currentPath)"
+      />
     </div>
 
     <!-- Referansin isaret ettigi nesne, satirin altinda yerinde acilir. -->
@@ -358,6 +390,14 @@ function primitiveDisplay(value: JsonValue): string {
 .children { position: relative; }
 .more-btn { font-size: 11px; color: var(--accent); background: var(--accent-dim); padding: 2px 10px; border-radius: 5px; }
 .more-btn:hover { background: rgba(88,166,255,.25); }
+.comment-btn { opacity: 0; display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 7px; border-radius: 11px; font-size: 10px; color: var(--text-muted); margin-left: 6px; flex-shrink: 0; }
+.comment-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+/* Yorumu olan satirlarda rozet her zaman gorunur. */
+.comment-btn.has, .comment-btn.open { opacity: 1; color: var(--purple); background: rgba(188,140,255,.12); }
+.row:hover .comment-btn { opacity: 1; }
+.comment-count { font-weight: 600; }
+.thread-wrap { max-width: 620px; }
+
 .copy { opacity: 0; width: 22px; height: 22px; border-radius: 4px; color: var(--text-muted); margin-left: 6px; font-size: 11px; }
 .copy:hover { background: var(--bg-hover); color: var(--text-primary); }
 </style>

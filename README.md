@@ -57,6 +57,11 @@ Vite dev sunucusu `/api` isteklerini `http://localhost:8080` adresine proxy eder
   Paylaş kontrolleri gizlenir. Değişiklik yapmak isteyen kullanıcı "Kopyasını al ve
   düzenle" ile yerel bir kopya üzerinde çalışır; orijinal paylaşım etkilenmez.
   Paylaşıma isteğe bağlı bir başlık verilebilir; bağlantıyı açan kişi başlığı görür.
+- **Alan bazlı yorumlar**: paylaşılan JSON'da her alanın yanında 💬 düğmesi çıkar;
+  GitHub'daki satır yorumları gibi, alanın altında yanıtlanabilir bir zincir açılır.
+  Yorum JSON yoluna sabitlenir — paylaşılan JSON değişmediği için bağ kalıcıdır.
+  İsim tarayıcıda saklanır (giriş yok); yorumu bırakan kişi kendi yorumunu silebilir.
+  Paylaşırken "Yorum" kutusuyla yorumlar kapatılabilir.
 - **Büyük JSON**: çok elemanlı düğümler sayfa sayfa gösterilir ("N öğe daha göster");
   arama eşleşmesi sayfa sınırının ötesindeyse otomatik olarak açılır.
 - **IATA**: JSON mesaj tipi otomatik tespit edilir; her alan için XSD'deki **tip adı**
@@ -78,12 +83,17 @@ Vite dev sunucusu `/api` isteklerini `http://localhost:8080` adresine proxy eder
 | `jsonsarp.public-base-url` | `http://localhost:5173` | Paylaşım linklerinin taban adresi. **Deploy ederken mutlaka değiştirin.** |
 | `jsonsarp.share.max-bytes` | `2097152` (2 MB) | Tek paylaşımda saklanabilecek en büyük JSON. Aşılırsa HTTP 413. |
 | `spring.h2.console.enabled` | `false` | Kapalı tutun; açıkken paylaşımlar veritabanından değiştirilebilir. |
+| `jsonsarp.comments.max-per-share` | `500` | Bir paylaşımdaki toplam yorum sınırı. |
+| `jsonsarp.comments.max-per-minute` | `20` | Dakikalık yorum sınırı (basit spam koruması). |
 
 ## API
 
 | Endpoint | Açıklama |
 |----------|----------|
-| `POST /api/shares` | `{ "json": {...}, "title": "..." }` → `{ "id", "url" }` (başlık isteğe bağlı) |
+| `POST /api/shares` | `{ "json": {...}, "title": "...", "commentsEnabled": true }` → `{ "id", "url" }` |
+| `GET /api/shares/{id}/comments` | `{ "enabled", "comments": [...] }` |
+| `POST /api/shares/{id}/comments` | `{ path, author, body, parentId? }` → yorum + `editToken` |
+| `DELETE /api/shares/{id}/comments/{commentId}` | `X-Edit-Token` başlığı gerekir |
 | `GET /api/shares/{id}` | Paylaşılan JSON (yalnızca okuma; güncelleme/silme endpoint'i yoktur) |
 | `POST /api/iata/annotate` | `{ "json": {...} }` → mesaj tipi, güven oranı, alan açıklamaları (`schemaLoaded` false ise sunucuda XSD yoktur) |
 | `GET /api/iata/messages` | Desteklenen mesaj tipleri (48 IATA mesajı) |

@@ -55,7 +55,8 @@ public class ShareService {
         }
 
         String id = generateUniqueId();
-        repository.save(new JsonShare(id, content, normalizeTitle(request.title())));
+        boolean commentsEnabled = request.commentsEnabled() == null || request.commentsEnabled();
+        repository.save(new JsonShare(id, content, normalizeTitle(request.title()), commentsEnabled));
         return new ShareCreateResponse(id, publicBaseUrl + "/?s=" + id);
     }
 
@@ -70,6 +71,7 @@ public class ShareService {
             return new ShareResponse(
                     entity.getId(),
                     entity.getTitle(),
+                    entity.isCommentsEnabled(),
                     objectMapper.readTree(entity.getContent()),
                     entity.getCreatedAt()
             );

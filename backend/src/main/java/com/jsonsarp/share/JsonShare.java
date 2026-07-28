@@ -20,6 +20,12 @@ public class JsonShare {
     @Column(length = 120)
     private String title;
 
+    /**
+     * Wrapper tip: bu sutun eklenmeden once olusturulmus paylasimlarda null kalir ve
+     * onlarda yorum acik kabul edilir.
+     */
+    private Boolean commentsEnabled;
+
     @Lob
     @Column(nullable = false, columnDefinition = "CLOB")
     private String content;
@@ -30,10 +36,11 @@ public class JsonShare {
     protected JsonShare() {
     }
 
-    public JsonShare(String id, String content, String title) {
+    public JsonShare(String id, String content, String title, boolean commentsEnabled) {
         this.id = id;
         this.content = content;
         this.title = title;
+        this.commentsEnabled = commentsEnabled;
     }
 
     @PrePersist
@@ -49,6 +56,10 @@ public class JsonShare {
 
     public String getTitle() {
         return title;
+    }
+
+    public boolean isCommentsEnabled() {
+        return commentsEnabled == null || commentsEnabled;
     }
 
     public String getContent() {

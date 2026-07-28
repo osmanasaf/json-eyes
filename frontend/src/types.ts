@@ -38,6 +38,28 @@ export interface ShareCreateResponse {
 export interface ShareResponse {
   id: string
   title: string | null
+  commentsEnabled: boolean
   json: JsonValue
   createdAt: string
+}
+
+export interface Comment {
+  id: number
+  /** Yorumun bagli oldugu dugum yolu. */
+  path: string
+  author: string
+  body: string
+  parentId: number | null
+  createdAt: string
+}
+
+export interface CommentListResponse {
+  enabled: boolean
+  comments: Comment[]
+}
+
+export interface CommentCreateResponse {
+  comment: Comment
+  /** Yalnizca olusturma aninda doner; silme yetkisi icin saklanir. */
+  editToken: string
 }

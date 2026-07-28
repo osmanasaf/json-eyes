@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, inject, ref, watch } from 'vue'
-import { SELECT_FIELD } from '../utils/injection'
+import { COMMENTS, SELECT_FIELD } from '../utils/injection'
 import type { FieldDoc, JsonArray, JsonObject, JsonValue } from '../types'
 import { getType } from '../utils/json'
 import { childPath, matchesDeep } from '../utils/search'
 import { effectiveFieldName, isRefField, resolveRef, type RefIndex, type RefTarget } from '../utils/references'
 import InfoBubble from './InfoBubble.vue'
 import FieldDocCard from './FieldDocCard.vue'
+import CommentThread from './CommentThread.vue'
 import GridRow from './GridRow.vue'
 
 const props = defineProps<{
@@ -27,6 +28,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{ toggle: [path: string]; focusPath: [path: string] }>()
 const selectField = inject(SELECT_FIELD, null)
+const comments = inject(COMMENTS, null)
+
+const commentsAvailable = computed(
+  () => comments?.available.value === true && !props.insidePreview,
+)
+const commentCount = computed(() => comments?.countFor(props.path) ?? 0)
+const threadOpen = computed(() => comments?.openPath.value === props.path)
 
 const ROW_PAGE_SIZE = 100
 
@@ -152,6 +160,32 @@ function displayValue(value: JsonValue): string {
           @click="previewOpen = !previewOpen"
         >↳ referans</button>
       </template>
+
+      <button
+        v-if="commentsAvailable"
+        class="comment-btn"
+        :class="{ has: commentCount > 0, open: threadOpen }"
+        :title="commentCount > 0 ? `${commentCount} yorum` : 'Yorum ekle'"
+        @click="comments?.toggle(path)"
+      >💬<span v-if="commentCount > 0" class="comment-count">{{ commentCount }}</span></button>
+    </td>
+  </tr>
+
+  <tr v-if="threadOpen && comments" class="tr thread-row">
+    <td class="td thread-cell" colspan="3">
+      <div :style="{ marginLeft: `${(depth + 1) * 18}px` }">
+        <CommentThread
+          :path="path"
+          :comments="comments.commentsFor(path)"
+          :author="comments.author.value"
+          :enabled="comments.enabled.value"
+          :can-delete="comments.canDelete"
+          @add="comments.add($event)"
+          @remove="comments.remove($event)"
+          @update:author="comments.author.value = $event"
+          @close="comments.toggle(path)"
+        />
+      </div>
     </td>
   </tr>
 
@@ -257,6 +291,14 @@ function displayValue(value: JsonValue): string {
 .ref-goto { font-size: 10px; color: var(--accent); padding: 1px 8px; border-radius: 4px; border: 1px solid var(--border); white-space: nowrap; }
 .ref-goto:hover { background: var(--accent-dim); }
 .inner-table { width: 100%; border-collapse: collapse; }
+
+.comment-btn { opacity: 0; display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 7px; border-radius: 10px; font-size: 10px; color: var(--text-muted); margin-left: 8px; }
+.comment-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.comment-btn.has, .comment-btn.open { opacity: 1; color: var(--purple); background: rgba(188,140,255,.12); }
+.tr:hover .comment-btn { opacity: 1; }
+.comment-count { font-weight: 600; }
+.thread-row:hover { background: transparent; }
+.thread-cell { padding: 4px 12px; }
 
 .more-btn { font-size: 11px; color: var(--accent); background: var(--accent-dim); padding: 3px 10px; border-radius: 5px; }
 .more-btn:hover { background: rgba(88,166,255,.25); }
