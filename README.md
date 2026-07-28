@@ -216,6 +216,11 @@ Yeni kaynak: **Private Repository (with GitHub App)** → depoyu seç → Build 
 veritabanı orada durur; volume bağlanmazsa her yeni dağıtımda paylaşımlar ve
 yorumlar silinir.
 
+Veritabanını sıfırlamak gerekirse volume'ü silmeyin (kalıcı depolama ayarını da
+götürür). Bunun yerine `SPRING_DATASOURCE_URL` ile yeni bir dosya adı verin:
+`jdbc:h2:file:./data/<yeni-ad>;DB_CLOSE_DELAY=-1`. Uygulama boş bir veritabanıyla
+açılır, eski dosya diskte durur ve istendiğinde geri dönülebilir.
+
 **Health Check Path** (isteğe bağlı): `/api/iata/messages` — 200 dönüyorsa XSD
 indeksi de yüklenmiş demektir.
 
