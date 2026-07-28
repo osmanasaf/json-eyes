@@ -52,6 +52,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,6 +79,15 @@ public class XsdSchemaService {
     private final Map<String, TypeInfo> types = new HashMap<>();
     private XmlSchemaCollection schemaCollection;
 
+    /**
+     * Normalize eleman adi -> o adi tasiyan tip sayisi.
+     *
+     * <p>Eslestirmede bir ad eslesmesinin agirligini belirler: `ID`, `TypeCode`,
+     * `DescText` onlarca tipte gectigi icin neredeyse bilgi tasimaz; `PTC`,
+     * `FareBasisCode` bir avuc tipte gecer ve teshis edicidir.
+     */
+    private final Map<String, Integer> elementNameFrequency = new HashMap<>();
+
     @Value("${jsonsarp.xsd.path:}")
     private String xsdPath;
 
@@ -96,8 +106,31 @@ public class XsdSchemaService {
             return;
         }
         indexMessages();
+        indexElementFrequencies();
         log.info("{} XSD dosyasi yuklendi, {} mesaj ve {} tip indekslendi",
                 loaded, messages.size(), types.size());
+    }
+
+    /** Her eleman adinin kac ayri tipte gectigini sayar; eslestirme agirliklari buradan gelir. */
+    private void indexElementFrequencies() {
+        for (TypeInfo type : types.values()) {
+            Set<String> seen = new HashSet<>();
+            for (String childName : type.children().keySet()) {
+                if (seen.add(SchemaNames.normalize(childName))) {
+                    elementNameFrequency.merge(SchemaNames.normalize(childName), 1, Integer::sum);
+                }
+            }
+        }
+    }
+
+    /** Indekslenen kompleks tip sayisi; ad agirliklarinin paydasi. */
+    public int indexedTypeCount() {
+        return types.size();
+    }
+
+    /** Verilen adin kac tipte gectigi; hic gecmiyorsa 0. */
+    public int typesContainingElement(String normalizedName) {
+        return elementNameFrequency.getOrDefault(normalizedName, 0);
     }
 
     public boolean isSchemaLoaded() {
@@ -422,7 +455,8 @@ public class XsdSchemaService {
                 typeDisplayName(element, type),
                 childKey,
                 extractDocumentation(element),
-                false));
+                false,
+                element.getMaxOccurs() > 1));
     }
 
     private void collectAttributes(List<XmlSchemaAttributeOrGroupRef> attributes, Map<String, ElementInfo> children) {
@@ -457,7 +491,8 @@ public class XsdSchemaService {
                 typeName != null ? typeName.getLocalPart() : null,
                 null,
                 extractDocumentation(attribute),
-                true));
+                true,
+                false));
     }
 
     private String typeDisplayName(XmlSchemaElement element, XmlSchemaType type) {

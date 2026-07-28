@@ -107,11 +107,60 @@ yeni bir tema eklemek `:root[data-theme='...']` bloğu yazmaktan ibarettir.
   (ör. `ID_Type`) ve açıklama gösterilir. Eşleştirme yol tabanlıdır: NDC'de `DescText`,
   `TypeCode`, `RefID` gibi adlar onlarca tipte farklı anlam taşıdığı için açıklama
   alanın bulunduğu bağlamdan alınır.
-- **Alan açıklaması**: XSD karşılığı olan alanların yanında `ⓘ`, olmayanların yanında
-  turuncu `●` çıkar; `ⓘ` üzerine gelince açıklama balonu açılır, tıklayınca sabitlenir
-  (metin seçilebilir). Sağdaki IATA paneli **seçili** alanın (grid'de tıklanan satırın)
-  tipini ve açıklamasını, altta da **şemada karşılığı olmayan alanların listesini**
-  gösterir; listeden bir alana tıklayınca görüntüleyicide o alana atlanır.
+- **Alan açıklaması**: XSD karşılığı kesin olan alanların yanında `ⓘ`, yapıdan
+  çıkarılanların yanında camgöbeği `≈`, karşılığı bulunamayanların yanında turuncu `●`
+  çıkar. İşaretin üzerine gelince açıklama balonu açılır, tıklayınca sabitlenir.
+  Sağdaki IATA paneli **seçili** alanın tipini ve açıklamasını, altta da **şemada
+  karşılığı olmayan alanların listesini** gösterir; listeden bir alana tıklayınca
+  görüntüleyicide o alana atlanır.
+- **Panel şeritleri**: editör ve IATA panelleri kendi başlıklarındaki `‹` / `›` ile
+  kapanır; kapalıyken kenarda dikey yazılı bir şerit kalır, tıklayınca geri açılır.
+
+## Alan eşleştirme
+
+Gerçek JSON'larda kapsayıcı adları standarttan sapar (`PaxList` → `passengerList`,
+`segments`, `travelers`) ama veriyi taşıyan yaprak adları (`PaxID`, `PTC`, `CurCode`)
+standart kalır. Eşleştirme bunun üzerine kurulu: **kap adından değil içindekilerden
+tanınır.** Elle bakım gerektiren eş anlamlı sözlüğü yoktur — üretimde hangi adların
+geleceği önceden bilinemez.
+
+Katmanlar sırayla denenir ([ElementMatcher.java](backend/src/main/java/com/jsonsarp/iata/ElementMatcher.java)):
+
+| # | Katman | Örnek |
+|---|--------|-------|
+| 1 | Ad birebir | `Order` → `Order` |
+| 2 | Biçimsel normalizasyon: harf, ayraç, çoğul, `List`/`Collection` eki | `segments`, `SegmentList`, `pax_list` |
+| 3 | `<X>ID` konvansiyonu — içinde `PaxID` olan nesne `Pax`'tır (2 seviye derine bakar) | `passengerList.traveler[].PaxID` → `PaxList.Pax` |
+| 4 | Nadirlik ağırlıklı çocuk/yaprak örtüşmesi — `PTC` teşhis edici, `ID` değil | tamamen yeniden adlandırılmış kaplar |
+| 5 | Kardinalite ve şekil uyumu (`maxOccurs` ↔ dizi) | tekil elemana çok elemanlı dizi gelirse aday zayıflar |
+
+Karar güvenliği: bir aday eşiği geçmiyorsa **veya** ikinciyi belirgin farkla geçmiyorsa
+eşleştirme yapılmaz — kararsız kalmak, kendinden emin yanlış açıklama göstermekten
+iyidir. Kabul edilen tahminler `matchKind: INFERRED` ile işaretlenir, arayüzde `≈` ile
+ayrılır ve dayanağı (`içindeki PaxID alanından`) kullanıcıya gösterilir.
+
+Ad tutmasa bile **alt ağaç terk edilmez**: bilinmeyen bir sarmalayıcının
+(`{"data": {…}}`) altındaki torunlar aynı tiple eşleşmeye devam eder.
+
+### Nasıl ölçülüyor
+
+Gerçek müşteri JSON'u olmadan doğrulamak için XSD'nin kendisi yer gerçeği olarak
+kullanılır: şemadan JSON iskeleti üretilir, **kapsayıcı** adları kasıtlı bozulur ve
+yaprakların ne kadarının hâlâ açıklandığına bakılır
+([ElementMatcherTest](backend/src/test/java/com/jsonsarp/iata/ElementMatcherTest.java)).
+
+| Mutasyon | Kurtarma |
+|----------|----------|
+| `PAXLIST` (büyük harf) | %100 |
+| `paxlists` (çoğul) | %100 |
+| `pax_list` (snake_case) | %100 |
+| `PaxListCollection` (ek) | %100 |
+| `bolum7` (tamamen alakasız) | %63 |
+
+Son satır yapısal katmanın gerçek gücü: hiçbir biçimsel ipucu yokken bile alanların
+üçte ikisi kurtarılıyor. Testler ayrıca **yanlış eşleştirmeye** karşı da koruyor:
+adlar doğruyken hiç tahmin üretilmemeli ve şemayla ilgisiz bir nesne zorla
+eşleştirilmemeli.
 
 ## Yapılandırma
 

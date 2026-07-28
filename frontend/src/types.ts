@@ -10,12 +10,23 @@ export interface ParseResult {
   error: string | null
 }
 
+/**
+ * Alanin XSD karsiligina nasil baglandigi. `INFERRED` olanlar ad tutmadigi icin
+ * yapidan cikarilmistir; aciklama yanlis olabilecegi icin UI'da ayri gosterilir.
+ */
+export type MatchKind = 'EXACT' | 'INFERRED'
+
 export interface FieldDoc {
   path: string
   name: string
   /** Alanin XSD tip adi (or. ID_Type); null olabilir. */
   type: string | null
   documentation: string
+  matchKind: MatchKind
+  /** Tahmini eslesmenin puani (0-1); kesin eslesmede 1. */
+  confidence: number
+  /** Tahminin dayanagi, kullaniciya gosterilir; kesin eslesmede null. */
+  evidence: string | null
 }
 
 export interface AnnotateResponse {

@@ -268,7 +268,12 @@ defineExpose({ moveSelection, expandAll, collapseAll })
                 <span v-else class="caret-ph" />
                 <span class="field">{{ rows[vrow.index].field }}</span>
                 <InfoBubble v-if="rows[vrow.index].doc">
-                  <template #trigger><span class="mark has-doc">ⓘ</span></template>
+                  <template #trigger>
+                    <span
+                      class="mark"
+                      :class="rows[vrow.index].doc!.matchKind === 'INFERRED' ? 'guess-doc' : 'has-doc'"
+                    >{{ rows[vrow.index].doc!.matchKind === 'INFERRED' ? '≈' : 'ⓘ' }}</span>
+                  </template>
                   <FieldDocCard :field="rows[vrow.index].doc!" />
                 </InfoBubble>
                 <!-- Kok mesaj dugumunun XSD yolu bos oldugu icin isaretlenmez. -->
@@ -407,6 +412,9 @@ defineExpose({ moveSelection, expandAll, collapseAll })
 .mark { margin-left: 6px; font-size: 9px; opacity: .75; flex-shrink: 0; }
 .mark.has-doc { color: var(--accent); cursor: pointer; }
 .mark.has-doc:hover { opacity: 1; }
+/* Tahmini eslesme: semada karsiligi var ama ad tutmadi, yapidan cikarildi. */
+.mark.guess-doc { color: var(--cyan); cursor: pointer; font-size: 11px; }
+.mark.guess-doc:hover { opacity: 1; }
 .mark.no-doc { color: var(--orange); }
 
 .type-badge { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }

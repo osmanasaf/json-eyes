@@ -10,7 +10,7 @@ const props = defineProps<{
   selectedPath?: string | null
 }>()
 
-const emit = defineEmits<{ focusPath: [path: string] }>()
+const emit = defineEmits<{ focusPath: [path: string]; collapse: [] }>()
 
 const UNMATCHED_PAGE = 30
 const listOpen = ref(false)
@@ -57,6 +57,7 @@ const visibleUnmatched = computed(() =>
       <span class="panel-title">IATA</span>
       <span v-if="loading" class="panel-loading">analiz…</span>
       <span v-else-if="matchPercent !== null" class="panel-score" :class="matchLevel">%{{ matchPercent }}</span>
+      <button class="panel-collapse" title="IATA panelini gizle" @click="emit('collapse')">›</button>
     </div>
 
     <div v-if="error" class="panel-note bad">{{ error }}</div>
@@ -76,9 +77,16 @@ const visibleUnmatched = computed(() =>
           <code class="field-name">{{ selectedName }}</code>
           <div class="tags">
             <span v-if="selectedField?.type" class="tag type">{{ selectedField.type }}</span>
-            <span v-if="selectedField" class="tag ok">şemada var</span>
+            <span v-if="selectedField?.matchKind === 'INFERRED'" class="tag guess">
+              ≈ tahmini %{{ Math.round(selectedField.confidence * 100) }}
+            </span>
+            <span v-else-if="selectedField" class="tag ok">şemada var</span>
             <span v-else class="tag warn">şemada yok</span>
           </div>
+          <p v-if="selectedField?.matchKind === 'INFERRED' && selectedField.evidence" class="evidence">
+            Alan adı şemadakiyle tutmuyor; {{ selectedField.evidence }} çıkarıldı. Açıklamayı
+            doğrulamadan kesin bilgi saymayın.
+          </p>
           <p v-if="selectedField?.documentation" class="description">{{ selectedField.documentation }}</p>
           <p v-else class="description muted">
             Bu alan IATA {{ annotation.messageType }} şemasında bulunamadı; adı özel bir uzantı olabilir.
@@ -91,7 +99,8 @@ const visibleUnmatched = computed(() =>
 
       <div class="legend">
         <p class="legend-line">
-          <span class="mark accent">ⓘ</span> şemada var · <span class="mark warn">●</span> şemada yok
+          <span class="mark accent">ⓘ</span> şemada var · <span class="mark guess">≈</span> tahmini ·
+          <span class="mark warn">●</span> şemada yok
         </p>
         <button v-if="unmatched.length > 0" class="legend-action" @click="listOpen = !listOpen">
           <span class="warn-count">{{ annotation.unmatchedCount }} alan</span> karşılıksız —
@@ -130,8 +139,10 @@ const visibleUnmatched = computed(() =>
 <style scoped>
 .iata-panel { width: var(--iata-w); flex-shrink: 0; border-left: 1px solid var(--border); background: var(--bg-secondary); display: flex; flex-direction: column; min-height: 0; }
 
-.panel-head { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; }
-.panel-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); }
+.panel-head { display: flex; align-items: center; gap: 8px; padding: 11px 14px; border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; }
+.panel-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); margin-right: auto; }
+.panel-collapse { font-size: 15px; line-height: 1; color: var(--text-muted); width: 20px; height: 20px; border-radius: 5px; }
+.panel-collapse:hover { color: var(--accent); background: var(--bg-tertiary); }
 .panel-loading { font-size: 10.5px; color: var(--accent); }
 .panel-score { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; border-radius: 10px; padding: 2px 8px; }
 .panel-score.high { color: var(--green); background: var(--bg-array); }
@@ -148,12 +159,15 @@ const visibleUnmatched = computed(() =>
 .tag.type { color: var(--cyan); background: var(--bg-bool); }
 .tag.ok { color: var(--green); background: var(--bg-array); }
 .tag.warn { color: var(--orange); background: var(--orange-dim); }
+.tag.guess { color: var(--cyan); background: var(--bg-bool); }
+.evidence { font-size: 11px; color: var(--cyan); line-height: 1.45; margin-bottom: 7px; text-wrap: pretty; }
 .description { font-size: 12px; color: var(--text-secondary); line-height: 1.5; text-wrap: pretty; }
 .description.muted { color: var(--text-muted); }
 
 .legend { margin-top: auto; padding: 11px 14px; border-top: 1px solid var(--border-subtle); flex-shrink: 0; }
 .legend-line { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
 .mark.accent { color: var(--accent); }
+.mark.guess { color: var(--cyan); }
 .mark.warn { color: var(--orange); }
 .legend-action { display: block; margin-top: 3px; font-size: 11px; color: var(--text-muted); text-align: left; }
 .legend-action:hover { color: var(--text-primary); }

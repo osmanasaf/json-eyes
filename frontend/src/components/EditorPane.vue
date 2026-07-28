@@ -22,6 +22,7 @@ const emit = defineEmits<{
   repair: []
   openRecent: [file: RecentFile]
   drop: [event: DragEvent]
+  collapse: []
 }>()
 
 type Tab = 'input' | 'history'
@@ -92,6 +93,7 @@ watch(() => props.recents.length, (count) => {
       <button class="tab-action" :disabled="!hasData" title="Tek satıra indir" @click="emit('minify')">⤡</button>
       <button class="tab-action" title="Örnek JSON yükle" @click="emit('sample')">◇</button>
       <button class="tab-action danger" title="Temizle" @click="emit('clear')">×</button>
+      <button class="tab-action collapse" title="Editörü gizle" @click="emit('collapse')">‹</button>
     </div>
 
     <div v-if="tab === 'input'" class="code-area">
@@ -155,6 +157,8 @@ watch(() => props.recents.length, (count) => {
 .tab-action:hover:not(:disabled) { color: var(--text-primary); background: var(--bg-tertiary); }
 .tab-action:disabled { opacity: .3; cursor: not-allowed; }
 .tab-action.danger:hover { color: var(--red); }
+.tab-action.collapse { margin-left: 4px; border-left: 1px solid var(--border-subtle); border-radius: 0 5px 5px 0; font-size: 15px; }
+.tab-action.collapse:hover { color: var(--accent); }
 
 .code-area { flex: 1; min-height: 0; display: flex; background: var(--bg-primary); padding: 8px 0; }
 .gutter { width: 34px; flex-shrink: 0; overflow: hidden; padding-left: 12px; }

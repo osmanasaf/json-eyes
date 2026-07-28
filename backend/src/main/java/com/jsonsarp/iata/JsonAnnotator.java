@@ -13,20 +13,33 @@ import java.util.Set;
 /**
  * JSON agacinda yururken XSD tip agacinda da paralel ilerler; her alanin aciklamasi
  * bulundugu baglamin tipinden gelir.
+ *
+ * <p>Ad tutmadiginda {@link ElementMatcher} devreye girer ve alan yapisindan
+ * cikarilmaya calisilir; o da bulamazsa dal terk edilmez, ayni tiple devam edilir.
+ * Boylece bilinmeyen bir sarmalayici (`{"data": {...}}`) altindaki torunlar
+ * aciklamasiz kalmaz.
  */
 @Service
 public class JsonAnnotator {
 
     private final XsdSchemaService schemaService;
     private final MessageTypeDetector detector;
+    private final ElementMatcher matcher;
 
-    public JsonAnnotator(XsdSchemaService schemaService, MessageTypeDetector detector) {
+    public JsonAnnotator(XsdSchemaService schemaService, MessageTypeDetector detector, ElementMatcher matcher) {
         this.schemaService = schemaService;
         this.detector = detector;
+        this.matcher = matcher;
     }
 
     /** Yanitta tasinacak en fazla eslesmeyen alan yolu. */
     private static final int MAX_UNMATCHED_PATHS = 200;
+
+    /**
+     * Bilinmeyen bir sarmalayicidan sonra ayni tiple kac seviye daha denenecegi.
+     * Sinirsiz olsaydi tamamen alakasiz derin agaclarda bosuna is yapardik.
+     */
+    private static final int MAX_UNANCHORED_DEPTH = 2;
 
     public AnnotateResponse annotate(JsonNode json) {
         boolean schemaLoaded = schemaService.isSchemaLoaded();
@@ -41,8 +54,8 @@ public class JsonAnnotator {
                     detection.messageType(), detection.confidence(), schemaLoaded, 0, List.of(), List.of());
         }
 
-        Walk walk = new Walk();
-        walk.visit(detection.body(), "", message.rootTypeKey());
+        Walk walk = new Walk(ElementMatcher.collectIdValues(detection.body()));
+        walk.visit(detection.body(), "", message.rootTypeKey(), 0);
         List<String> unmatchedPaths = walk.unmatched.stream().sorted().limit(MAX_UNMATCHED_PATHS).toList();
         return new AnnotateResponse(
                 detection.messageType(),
@@ -58,8 +71,14 @@ public class JsonAnnotator {
         private final List<FieldDoc> fields = new ArrayList<>();
         private final Set<String> emitted = new HashSet<>();
         private final Set<String> unmatched = new HashSet<>();
+        /** Belgedeki butun ID degerleri; yeniden adlandirilmis referans alanlarini cozer. */
+        private final Map<String, String> idValues;
 
-        void visit(JsonNode node, String path, String typeKey) {
+        Walk(Map<String, String> idValues) {
+            this.idValues = idValues;
+        }
+
+        void visit(JsonNode node, String path, String typeKey, int unanchored) {
             if (node == null) {
                 return;
             }
@@ -68,7 +87,7 @@ public class JsonAnnotator {
                 // Dizinin butun elemanlari ayni tiptedir; heterojen dizilerde sonraki
                 // elemanlarda gecen alanlarin da aciklamasi cikssin diye hepsi gezilir.
                 for (JsonNode item : node) {
-                    visit(item, path, typeKey);
+                    visit(item, path, typeKey, unanchored);
                 }
                 return;
             }
@@ -77,40 +96,70 @@ public class JsonAnnotator {
                 return;
             }
 
-            TypeInfo type = schemaService.getType(typeKey);
-            Map<String, ElementInfo> children = type == null ? Map.of() : type.children();
-
             Iterator<Map.Entry<String, JsonNode>> it = node.fields();
             while (it.hasNext()) {
                 Map.Entry<String, JsonNode> entry = it.next();
                 String key = entry.getKey();
+                JsonNode value = entry.getValue();
                 String childPath = path.isEmpty() ? key : path + "." + key;
 
-                ElementInfo info = children.get(normalizeKey(key));
-                if (info == null) {
-                    unmatched.add(childPath);
-                    // Tip zinciri koptu; alt dallarda dogru aciklama uretemeyiz.
+                ElementMatcher.Match match = matcher.match(typeKey, key, value);
+                if (match != null) {
+                    emit(childPath, match);
+                    visit(value, childPath, match.element().typeKey(), 0);
                     continue;
                 }
 
-                emit(childPath, info);
-                visit(entry.getValue(), childPath, info.typeKey());
+                unmatched.add(childPath);
+                emitReference(childPath, key, value);
+
+                // Ad tutmadi ama dal terk edilmiyor: bilinmeyen sarmalayicilarin
+                // altindaki torunlar ayni tiple hala eslesebilir.
+                if (unanchored < MAX_UNANCHORED_DEPTH) {
+                    visit(value, childPath, typeKey, unanchored + 1);
+                }
             }
         }
 
-        private void emit(String path, ElementInfo info) {
+        /**
+         * Semada karsiligi olmayan skaler bir alan, belgedeki bir ID degerini tasiyorsa
+         * yeniden adlandirilmis bir referans alanidir (`PaxRefID` -> `passengerRef`).
+         */
+        private void emitReference(String path, String key, JsonNode value) {
+            if (!value.isValueNode() || !SchemaNames.isRefField(key)) {
+                return;
+            }
+            String owner = idValues.get(value.asText());
+            if (owner == null || !emitted.add(path)) {
+                return;
+            }
+            fields.add(new FieldDoc(
+                    path,
+                    key,
+                    null,
+                    "Şemada karşılığı bulunamadı, ancak değeri belgedeki bir " + owner
+                            + " kaydının kimliğiyle eşleşiyor; bu alan bir " + owner + " referansı gibi görünüyor.",
+                    MatchKind.INFERRED,
+                    0.7,
+                    "referans değeri " + owner + "ID ile eşleşti"));
+        }
+
+        private void emit(String path, ElementMatcher.Match match) {
+            ElementInfo info = match.element();
             if (info.documentation() == null || info.documentation().isBlank()) {
                 return;
             }
             if (!emitted.add(path)) {
                 return;
             }
-            fields.add(new FieldDoc(path, info.name(), info.typeName(), info.documentation().trim()));
+            fields.add(new FieldDoc(
+                    path,
+                    info.name(),
+                    info.typeName(),
+                    info.documentation().trim(),
+                    match.kind(),
+                    match.score(),
+                    match.evidence()));
         }
-    }
-
-    /** Bazi uretimler XML attribute'larini JSON'a '@' onekiyle tasir. */
-    private static String normalizeKey(String key) {
-        return key.startsWith("@") ? key.substring(1) : key;
     }
 }

@@ -746,7 +746,17 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
         @repair="handleRepair"
         @open-recent="openRecent"
         @drop="handleDrop"
+        @collapse="toggleEditor"
       />
+
+      <!-- Kapali panelleri geri acan kenar seritleri; kucuk bir dugmeden cok
+           daha gorunur ve panelin nerede oldugunu da gosterir. -->
+      <button
+        v-if="!editorVisible && !isShared"
+        class="rail left"
+        title="Editörü aç"
+        @click="toggleEditor"
+      ><span class="rail-glyph">›</span><span class="rail-label">Girdi</span></button>
 
       <!-- Orta: goruntuleyici -->
       <section class="viewer">
@@ -818,6 +828,13 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
       </section>
 
       <!-- Sag: IATA paneli -->
+      <button
+        v-if="!iataVisible && hasData"
+        class="rail right"
+        title="IATA panelini aç"
+        @click="toggleIata"
+      ><span class="rail-glyph">‹</span><span class="rail-label">IATA</span></button>
+
       <IataPanel
         v-if="iataVisible && hasData"
         :annotation="annotation"
@@ -825,6 +842,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
         :error="annotationError"
         :selected-path="selectedSchemaPath"
         @focus-path="focusUnmatched"
+        @collapse="toggleIata"
       />
     </div>
 
@@ -834,8 +852,6 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
       <span v-if="viewMode === 'grid'" class="stat">{{ gridStats.rendered }}/{{ gridStats.total }} satır render</span>
       <span v-if="annotation?.messageType" class="stat">{{ annotation.messageType }} %{{ matchPercent }}</span>
       <div class="status-spacer" />
-      <button v-if="!isShared" class="status-toggle" :class="{ active: editorVisible }" @click="toggleEditor">editör</button>
-      <button class="status-toggle" :class="{ active: iataVisible }" @click="toggleIata">IATA</button>
       <span class="stat">Ctrl+K komutlar · Ctrl+F filtre · J/K satır</span>
     </footer>
 
@@ -951,9 +967,14 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 .status-bar { display: flex; align-items: center; gap: 16px; height: var(--status-h); padding: 0 16px; background: var(--bg-secondary); border-top: 1px solid var(--border); flex-shrink: 0; }
 .stat { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
 .status-spacer { flex: 1; }
-.status-toggle { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); border: 1px solid transparent; border-radius: 5px; padding: 1px 7px; }
-.status-toggle:hover { color: var(--text-primary); }
-.status-toggle.active { color: var(--accent); border-color: var(--border); }
+
+/* Kapali panelin kenar seridi: dikey yazili, tiklanabilir ince bir sutun. */
+.rail { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 10px; width: 26px; flex-shrink: 0; padding-top: 10px; background: var(--bg-secondary); color: var(--text-muted); }
+.rail.left { border-right: 1px solid var(--border); }
+.rail.right { border-left: 1px solid var(--border); }
+.rail:hover { color: var(--accent); background: var(--bg-tertiary); }
+.rail-glyph { font-size: 14px; line-height: 1; }
+.rail-label { font-size: 10.5px; font-weight: 600; letter-spacing: .5px; writing-mode: vertical-rl; text-orientation: mixed; }
 
 /* Dar ekranlarda once IATA paneli, sonra editor yer birakir. */
 @media (max-width: 1280px) {

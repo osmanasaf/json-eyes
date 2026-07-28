@@ -22,7 +22,10 @@ class JsonAnnotatorTest {
         XsdSchemaService schemaService = new XsdSchemaService();
         ReflectionTestUtils.setField(schemaService, "xsdPath", "");
         schemaService.loadSchemas();
-        annotator = new JsonAnnotator(schemaService, new MessageTypeDetector(schemaService));
+        annotator = new JsonAnnotator(
+                schemaService,
+                new MessageTypeDetector(schemaService),
+                new ElementMatcher(schemaService));
     }
 
     @Test
