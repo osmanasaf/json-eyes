@@ -14,7 +14,7 @@ const props = defineProps<{
   variant: 'inline' | 'full'
 }>()
 
-const emit = defineEmits<{ focusPath: [path: string]; expand: [path: string] }>()
+const emit = defineEmits<{ focusPath: [path: string]; expand: [path: string]; close: [] }>()
 
 /** Tablo yalnizca skaler alanlari gosterir; ic ice nesneler satir sayisini bozardi. */
 const columns = computed(() => {
@@ -178,6 +178,7 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
 <template>
   <div class="array-table" :class="variant">
     <div v-if="variant === 'full'" class="strip">
+      <button class="strip-btn back" title="Grid görünümüne dön" @click="emit('close')">← Geri</button>
       <code class="strip-path">{{ path.split('.').slice(1).join('.') }}[]</code>
       <span class="count-pill">{{ items.length }} kayıt</span>
       <span v-if="activeFilterSummary" class="strip-filters">{{ activeFilterSummary }}</span>
@@ -282,6 +283,8 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
 .strip-btn.clear:disabled { opacity: .4; cursor: not-allowed; }
 .strip-btn.csv { color: var(--accent); }
 .strip-btn.csv:hover { background: var(--accent-dim); }
+.strip-btn.back { color: var(--text-secondary); }
+.strip-btn.back:hover { color: var(--accent); border-color: var(--accent); }
 
 .head { display: flex; background: var(--bg-secondary); border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .head-col { min-width: 0; border-right: 1px solid var(--border-subtle); }

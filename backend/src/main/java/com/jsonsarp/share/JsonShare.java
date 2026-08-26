@@ -34,9 +34,16 @@ public class JsonShare {
      * ozeldi ve baska bir veritabanina gecisi kilitliyordu. `@Lob String` de
      * PostgreSQL'de metni ayri bir "buyuk nesne" tablosuna tasiyor. LONGVARCHAR
      * soyut tipi ise her surucude dogru karsiligi buluyor (H2 clob, PostgreSQL text).
+     *
+     * <p>`length` acikca verilmezse Hibernate H2 icin ~32.600 karakterlik bir
+     * varsayilan sinirla `CHARACTER VARYING` uretiyor; bu, `jsonsarp.share.max-bytes`
+     * ile hicbir ilgisi olmayan sessiz bir 500 hatasina yol aciyordu (32 KB'i asan
+     * her paylasim, uygulamanin kendi boyut kontrolunden gecse bile veritabanina
+     * yazilamadan patliyordu). PostgreSQL'de LONGVARCHAR zaten `text` uretiyor ve
+     * `length` yok sayiliyor; deger yalnizca H2'yi genis tutmak icin var.
      */
     @JdbcTypeCode(SqlTypes.LONGVARCHAR)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 33_554_432)
     private String content;
 
     @Column(nullable = false)

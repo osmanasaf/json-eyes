@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { RecentFile } from '../utils/storage'
 import { formatRelative, formatSize } from '../utils/storage'
 
@@ -66,12 +66,47 @@ function syncScroll(event: Event) {
   viewportHeight.value = target.clientHeight
 }
 
+/**
+ * Buyuk bir metni tarayicinin kendi yapistirma davranisina birakirsak (native
+ * paste), Chromium `input` olayini islerken saniyeler suren bir donmaya yol
+ * aciyor — bu, uygulama kodundan bagimsiz, dogrudan textarea'nin kendi ic
+ * isleyisinden kaynaklaniyor (bkz. commit mesaji). Bu esigin ustundeki
+ * yapistirmalarda varsayilan davranisi engelleyip metni doğrudan Vue
+ * uzerinden uyguluyoruz; bu yol yalnizca ~1-2 saniye suruyor. Esigin
+ * altindaki yapistirmalarda tarayicinin geri-alinabilir native davranisi
+ * korunuyor.
+ */
+const LARGE_PASTE_THRESHOLD = 200_000
+
+function handlePaste(event: ClipboardEvent) {
+  const pasted = event.clipboardData?.getData('text')
+  if (pasted === undefined || pasted.length < LARGE_PASTE_THRESHOLD) return
+  event.preventDefault()
+  const ta = codeEl.value
+  const start = ta?.selectionStart ?? text.value.length
+  const end = ta?.selectionEnd ?? text.value.length
+  text.value = text.value.slice(0, start) + pasted + text.value.slice(end)
+  const caret = start + pasted.length
+  void nextTick(() => ta?.setSelectionRange(caret, caret))
+}
+
 function measureViewport() {
   if (codeEl.value) viewportHeight.value = codeEl.value.clientHeight
 }
 
-onMounted(measureViewport)
-watch(() => props.modelValue, measureViewport)
+// Viewport yuksekligi yalnizca kutunun boyutu degisince degisir (panel acilip
+// kapanmasi, pencere yeniden boyutlanmasi) — icerik degisince degil. Onceden
+// bir `watch(() => props.modelValue, measureViewport)` vardi; bu, buyuk bir
+// JSON yapistirildiginda her seferinde clientHeight okuyarak tarayiciyi devasa
+// textarea'nin tamamini senkron olarak yeniden duzenlemeye (forced reflow)
+// zorluyor, birkac saniyelik donmalara yol aciyordu.
+let resizeObserver: ResizeObserver | null = null
+onMounted(() => {
+  measureViewport()
+  resizeObserver = new ResizeObserver(measureViewport)
+  if (codeEl.value) resizeObserver.observe(codeEl.value)
+})
+onBeforeUnmount(() => resizeObserver?.disconnect())
 
 watch(() => props.recents.length, (count) => {
   if (count === 0 && tab.value === 'history') tab.value = 'input'
@@ -115,6 +150,7 @@ watch(() => props.recents.length, (count) => {
         spellcheck="false"
         placeholder="JSON verisini buraya yapıştırın veya dosya sürükleyin…"
         @scroll="syncScroll"
+        @paste="handlePaste"
       />
     </div>
 

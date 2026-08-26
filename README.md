@@ -172,7 +172,7 @@ eşleştirilmemeli.
 | Ayar | Varsayılan | Açıklama |
 |------|-----------|----------|
 | `jsonsarp.public-base-url` | `http://localhost:5173` | Paylaşım linklerinin taban adresi. **Deploy ederken mutlaka değiştirin.** |
-| `jsonsarp.share.max-bytes` | `2097152` (2 MB) | Tek paylaşımda saklanabilecek en büyük JSON. Aşılırsa HTTP 413. |
+| `jsonsarp.share.max-bytes` | `8388608` (8 MB) | Tek paylaşımda saklanabilecek en büyük JSON. Aşılırsa HTTP 413. |
 | `jsonsarp.share.retention-days` | `60` | Paylaşımların saklama süresi. Bu süreden eski paylaşımlar ve yorumları günlük çalışan bir görevle silinir; `0` verilirse temizlik kapanır. |
 | `spring.h2.console.enabled` | `false` | Kapalı tutun; açıkken paylaşımlar veritabanından değiştirilebilir. |
 | `jsonsarp.comments.max-per-share` | `500` | Bir paylaşımdaki toplam yorum sınırı. |
