@@ -790,6 +790,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
             :path="tablePath!"
             variant="full"
             @focus-path="focusOnPath"
+            @close="viewMode = 'grid'"
           />
 
           <div v-else-if="viewMode === 'tree'" class="tree-scroll">
