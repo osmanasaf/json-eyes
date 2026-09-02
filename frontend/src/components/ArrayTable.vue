@@ -30,12 +30,18 @@ const columns = computed(() => {
   return [...seen].map(([name, kind]) => ({ name, kind }))
 })
 
-/** Tabloya sigmayan ic ice alanlar; kullaniciya kirpma sessizce yapilmaz. */
+/**
+ * Tabloya hic girmeyen (butun satirlarda ic ice olan) alanlar; kullaniciya
+ * kirpma sessizce yapilmaz. Bazi satirlarda skaler olup kolona giren
+ * karma alanlar burada sayilmaz — onlar zaten hucrede kisa bir ozetle
+ * gorunuyor (bkz. cellText).
+ */
 const nestedKeys = computed(() => {
+  const columnNames = new Set(columns.value.map(c => c.name))
   const keys = new Set<string>()
   for (const item of props.items) {
     for (const [key, value] of Object.entries(item)) {
-      if (value !== null && typeof value === 'object') keys.add(key)
+      if (value !== null && typeof value === 'object' && !columnNames.has(key)) keys.add(key)
     }
   }
   return [...keys]
@@ -57,10 +63,25 @@ function toggleSort(col: string) {
   else sort.value = { col, dir: 'asc' }
 }
 
+/**
+ * Bir kolon cogunlukla skaler olsa da tek bir satirda ic ice bir nesne/dizi
+ * gelebilir (heterojen kayitlar) — kolon yine de olusur, cunku diger satirlarda
+ * deger skalerdir. Boyle bir hucrede `String(value)` "[object Object]"
+ * yazdiriyordu; onun yerine kisa, okunabilir bir ozet gosteriyoruz.
+ */
 function cellText(value: JsonValue | undefined): string {
   if (value === undefined) return ''
   if (value === null) return 'null'
+  if (Array.isArray(value)) return `[${value.length} öğe]`
+  if (typeof value === 'object') return `{${Object.keys(value).length} alan}`
   return String(value)
+}
+
+/** Ic ice hucrelerde tam icerigi tooltip olarak gosterir. */
+function cellTitle(value: JsonValue | undefined): string | undefined {
+  if (value === null || typeof value !== 'object') return undefined
+  const json = JSON.stringify(value)
+  return json.length > 300 ? `${json.slice(0, 300)}…` : json
 }
 
 /** Satirlar orijinal indeksleriyle tasinir; secim ve yol bu indekse baglidir. */
@@ -138,6 +159,7 @@ function flexOf(name: string, kind: 'number' | 'text'): number {
 
 function colorOf(name: string, value: JsonValue | undefined): string {
   if (value === undefined || value === null) return 'var(--color-null)'
+  if (typeof value === 'object') return 'var(--text-muted)'
   if (typeof value === 'number') return 'var(--color-number)'
   if (typeof value === 'boolean') return 'var(--color-bool)'
   if (/Status(Code)?$/i.test(name)) {
@@ -227,7 +249,9 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
             flex: flexOf(col.name, col.kind),
             color: colorOf(col.name, row.item[col.name]),
             textAlign: col.kind === 'number' ? 'right' : 'left',
+            fontStyle: typeof row.item[col.name] === 'object' && row.item[col.name] !== null ? 'italic' : 'normal',
           }"
+          :title="cellTitle(row.item[col.name])"
         >{{ cellText(row.item[col.name]) }}</div>
       </div>
 
