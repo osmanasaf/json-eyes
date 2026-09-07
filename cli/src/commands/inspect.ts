@@ -5,7 +5,7 @@ import { collectFieldValues } from '../../../frontend/src/utils/related'
 import { buildSearchIndex } from '../../../frontend/src/utils/search'
 import { tryRepair } from '../../../frontend/src/utils/repair'
 import { flagBool, flagNumber, flagString, type ParsedArgs } from '../args'
-import { loadJson, readInput } from '../input'
+import { loadJson, readInput, wantsXml } from '../input'
 import { UserError, clip, color, info, out, table } from '../output'
 
 /**
@@ -16,9 +16,9 @@ import { UserError, clip, color, info, out, table } from '../output'
 
 const ROOT_KEY = 'json'
 
-export const VALUES_FLAGS = ['json', 'limit', 'fix']
-export const FIND_FLAGS = ['json', 'limit', 'values', 'fix']
-export const GET_FLAGS = ['raw', 'minify', 'fix']
+export const VALUES_FLAGS = ['json', 'limit', 'fix', 'xml']
+export const FIND_FLAGS = ['json', 'limit', 'values', 'fix', 'xml']
+export const GET_FLAGS = ['raw', 'minify', 'fix', 'xml']
 export const FIX_FLAGS = ['out', 'o', 'minify']
 
 /**
@@ -123,7 +123,7 @@ function valueAt(data: JsonValue, path: string): JsonValue | undefined {
 /** `jse values <dosya> <yol>` — alanin belge genelindeki dagilimi. */
 export async function valuesCommand(args: ParsedArgs): Promise<number> {
   const { text, name } = await readInput(args.positional[0])
-  const loaded = loadJson(text, name, flagBool(args, 'fix'))
+  const loaded = loadJson(text, name, flagBool(args, 'fix'), wantsXml(args, name))
   const rawPath = args.positional[1]
   if (!rawPath) {
     throw new UserError('Alan yolu verilmedi.', 'Örnek: jse values siparis.json Response.Order.StatusCode')
@@ -171,7 +171,7 @@ function bar(share: number): string {
 /** `jse find <dosya> <terim>` — yapiya duyarli arama: eslesen yollar. */
 export async function findCommand(args: ParsedArgs): Promise<number> {
   const { text, name } = await readInput(args.positional[0])
-  const loaded = loadJson(text, name, flagBool(args, 'fix'))
+  const loaded = loadJson(text, name, flagBool(args, 'fix'), wantsXml(args, name))
   const term = args.positional[1]
   if (!term) {
     throw new UserError('Arama terimi verilmedi.', 'Örnek: jse find siparis.json CANCELLED')
@@ -220,7 +220,7 @@ export async function findCommand(args: ParsedArgs): Promise<number> {
 /** `jse get <dosya> <yol>` — tek bir degeri yazar; boru hattinda kullanmak icin. */
 export async function getCommand(args: ParsedArgs): Promise<number> {
   const { text, name } = await readInput(args.positional[0])
-  const loaded = loadJson(text, name, flagBool(args, 'fix'))
+  const loaded = loadJson(text, name, flagBool(args, 'fix'), wantsXml(args, name))
   const rawPath = args.positional[1]
   if (!rawPath) {
     throw new UserError('Yol verilmedi.', 'Örnek: jse get siparis.json Response.Order.0.OrderID')

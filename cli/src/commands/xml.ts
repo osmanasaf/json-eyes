@@ -9,9 +9,10 @@ export const XML_FLAGS = ['out', 'o', 'minify', 'numbers', 'keep-prefixes', 'qui
 /**
  * `jse xml2json <dosya|->` — XML'i JSON'a cevirip yazar.
  *
- * `share`, `values`, `find`, `get` komutlari XML girdisini kendiliginden
- * cevirir; bu komut cevrilmis JSON'un kendisini isteyenler icin (dosyaya
- * yazmak, baska bir araca boru hattiyla vermek).
+ * Cevirinin ana adresi burasi. `share`, `values`, `find`, `get` komutlari da
+ * XML kabul eder ama yalnizca acikca istendiginde (`.xml` uzantisi ya da
+ * `--xml`); girdinin icerigine bakip tahmin yapan bir arac, yanlis
+ * tahmininde kullanicinin anlamadigi bir sonuc uretir.
  */
 export async function xmlCommand(args: ParsedArgs): Promise<number> {
   const { text, name } = await readInput(args.positional[0])

@@ -53,12 +53,23 @@ export interface LoadedJson {
   fromXml: boolean
 }
 
+/** Girdi XML olarak islenecek mi: `--xml` bayragi ya da `.xml` uzantisi. */
+export function wantsXml(args: { flags: Map<string, string | true> }, name: string): boolean {
+  return args.flags.get('xml') !== undefined || /\.xml$/i.test(name)
+}
+
 /**
  * Metni JSON'a cevirir. Bozuksa hata satirini soyler; `--fix` verilmisse
  * onarim (yorum, fazla virgul, tek tirnak) denenir — web arayuzundeki
  * "Otomatik düzelt ve dene" ile ayni kod.
+ *
+ * XML cevirimi yalnizca `xml` acikca istendiginde yapilir (`--xml` ya da `.xml`
+ * uzantisi). Onceden girdinin icerigine bakilip "bu XML'e benziyor" diye karar
+ * veriliyordu; bir aracin girdisini kendi basina yorumlamasi, yanlis
+ * yorumladiginda kullanicinin anlamadigi bir sonuc uretir. Uzanti ve bayrak
+ * kullanicinin acik tercihi — icerik degil.
  */
-export function loadJson(text: string, name: string, allowFix: boolean): LoadedJson {
+export function loadJson(text: string, name: string, allowFix: boolean, xml = false): LoadedJson {
   const first = parseJson(text)
   if (first.data !== null) return { data: first.data, text, name, repaired: false, fromXml: false }
 
@@ -66,12 +77,7 @@ export function loadJson(text: string, name: string, allowFix: boolean): LoadedJ
     throw new UserError(`${name} boş.`)
   }
 
-  /**
-   * XML girdisi butun komutlarda kabul edilir: NDC yanitlari sik sik XML geliyor
-   * ve elindeki dosyayi once baska bir araca sokmasi gereken bir CLI ise yaramaz.
-   * Cevirim web arayuzuyle ayni kodla yapiliyor, sonuc birebir ayni.
-   */
-  if (looksLikeXml(text)) {
+  if (xml) {
     try {
       const converted = xmlToJson(text)
       info(`${color.blue('XML çevrildi')} ${name} → kök <${converted.root}> · ${converted.notes.join(' · ')}`)
@@ -103,8 +109,9 @@ export function loadJson(text: string, name: string, allowFix: boolean): LoadedJ
 
   const detail = describeParseError(first.error, text)
   const where = detail.line !== null ? ` (satır ${detail.line}${detail.column !== null ? `, sütun ${detail.column}` : ''})` : ''
-  throw new UserError(
-    `${name} geçerli JSON değil${where}: ${first.error}`,
-    allowFix ? undefined : 'Otomatik onarımı denemek için --fix ekleyin.',
-  )
+  // Metin XML'e benziyorsa kendi basina cevirmiyoruz ama yolu soyluyoruz.
+  const hint = looksLikeXml(text)
+    ? 'Bu girdi XML gibi görünüyor: --xml ekleyin ya da jse xml2json kullanın.'
+    : allowFix ? undefined : 'Otomatik onarımı denemek için --fix ekleyin.'
+  throw new UserError(`${name} geçerli JSON değil${where}: ${first.error}`, hint)
 }

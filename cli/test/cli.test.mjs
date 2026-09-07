@@ -323,6 +323,26 @@ test('inceleme komutlari da XML girdisini kabul eder', async () => {
   assert.equal(got.stdout.trim(), 'ORD1')
 })
 
+test('XML icerigi kendiliginden cevrilmez; --xml ile cevrilir', async () => {
+  // Uzantisi .json olan bir dosyanin icine XML koyuyoruz: arac icerige bakip
+  // karar vermemeli, kullaniciya yolu soylemeli.
+  const gizliXml = join(workDir, 'gizli.json')
+  writeFileSync(gizliXml, XML)
+
+  const guessed = await run(['values', gizliXml, 'StatusCode'])
+  assert.equal(guessed.code, 2)
+  assert.match(guessed.stderr, /XML gibi görünüyor/)
+  assert.match(guessed.stderr, /--xml/)
+
+  const asked = await run(['values', gizliXml, 'StatusCode', '--xml'])
+  assert.equal(asked.code, 0)
+  assert.match(asked.stdout, /OPEN\s+1/)
+
+  // Boru hattinda uzanti yok; bayrak tek yol.
+  const piped = await run(['get', '-', 'Order.0.OrderID', '--raw', '--xml'], { input: XML })
+  assert.equal(piped.stdout.trim(), 'ORD1')
+})
+
 test('bozuk XML satir numarasiyla hata verir', async () => {
   const result = await run(['xml2json', brokenXmlPath])
   assert.equal(result.code, 2)

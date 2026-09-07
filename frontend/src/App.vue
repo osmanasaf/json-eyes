@@ -2,14 +2,12 @@
 import { computed, onMounted, onBeforeUnmount, provide, ref, shallowRef, watch } from 'vue'
 import { COMMENTS, SELECT_FIELD } from './utils/injection'
 import { useComments } from './composables/useComments'
-import type { AnnotateResponse, JsonObject, JsonValue, ViewMode } from './types'
+import type { AnnotateResponse, JsonValue, ViewMode } from './types'
 import { annotateJson, createShare, getShare } from './api'
 import { countNodes, describeParseError, findNodePath, parseJson, toSchemaPath } from './utils/json'
 import { buildSearchIndex, EMPTY_SEARCH } from './utils/search'
 import { buildRefIndex, EMPTY_REF_INDEX } from './utils/references'
-import { isObjectArray } from './utils/flatten'
 import { tryRepair } from './utils/repair'
-import { looksLikeXml, xmlToJson, XmlParseError } from './utils/xml'
 import { collectFieldValues } from './utils/related'
 import { buildTextIndex, lineOfOffset, EMPTY_TEXT_INDEX, type JsonTextIndex } from './utils/textIndex'
 import { pushRecent, readRecents, readTheme, writeTheme, type RecentFile, type Theme } from './utils/storage'
@@ -17,12 +15,11 @@ import JsonTree from './components/JsonTree.vue'
 import JsonGrid from './components/JsonGrid.vue'
 import ColumnView from './components/ColumnView.vue'
 import DiffView from './components/DiffView.vue'
+import XmlPane from './components/XmlPane.vue'
 import IataPanel from './components/IataPanel.vue'
 import FieldValuesPanel from './components/FieldValuesPanel.vue'
 import EditorPane from './components/EditorPane.vue'
 import EmptyState from './components/EmptyState.vue'
-import ArrayTable from './components/ArrayTable.vue'
-import NodeTable from './components/NodeTable.vue'
 
 const SAMPLE_JSON = `{
   "IATA_OrderViewRS": {
@@ -51,7 +48,6 @@ const ROOT_KEY = 'json'
 const rawInput = ref('')
 const fileName = ref<string | null>(null)
 const viewMode = ref<ViewMode>('grid')
-const arrayTableMode = ref(false)
 const searchInput = ref('')
 const searchTerm = ref('')
 const filterMatches = ref(false)
@@ -310,14 +306,8 @@ const crumbs = computed(() => {
   return [{ label: '…', path: items[items.length - 8].path, last: false }, ...items.slice(-7)]
 })
 
-/** Breadcrumb tiklamasi: tablo modunda o seviyeye iner, digerlerinde odaklanir. */
+/** Breadcrumb tiklamasi: o seviyeye odaklanir, grid dalı oraya kadar açar. */
 function goToCrumb(path: string) {
-  if (viewMode.value === 'table') {
-    if (isContainer(valueAt(path))) {
-      openTable(path)
-      return
-    }
-  }
   focusOnPath(path)
 }
 
@@ -336,97 +326,7 @@ async function copySelectedPath() {
   }
 }
 
-/** Bir JSON yolundaki degeri okur; Tablo modu icin gerekli. */
-function valueAt(path: string): JsonValue | undefined {
-  if (parsed.value === null) return undefined
-  let current: JsonValue = parsed.value
-  for (const segment of path.split('.').slice(1)) {
-    if (current === null || typeof current !== 'object') return undefined
-    current = Array.isArray(current)
-      ? (current[Number(segment)] as JsonValue)
-      : (current as JsonObject)[segment]
-    if (current === undefined) return undefined
-  }
-  return current
-}
-
-/**
- * Tablo modu artik tek bir dizi degil, herhangi bir dugum seviyesini gosteriyor:
- * nesne dizileri kayit tablosuna (ArrayTable), diger kapsayicilar tek seviyelik
- * alan tablosuna (NodeTable) dusuyor. Ic ice hucreye tiklamak bir seviye
- * asagi iner, breadcrumb yukari cikarir — tablo icinde gezinme akisi.
- */
-const tablePath = ref<string | null>(null)
-
-/** Secimden yukari dogru en yakin kapsayici; tablo modunun giris noktasi. */
-const tableCandidate = computed(() => {
-  const segments = (selectedNodePath.value ?? '').split('.')
-  for (let i = segments.length; i > 1; i--) {
-    const path = segments.slice(0, i).join('.')
-    const value = valueAt(path)
-    if (value !== undefined && isContainer(value)) return path
-  }
-  return hasData.value ? ROOT_KEY : null
-})
-
-function isContainer(value: JsonValue | undefined): boolean {
-  return value !== undefined && value !== null && typeof value === 'object'
-}
-
-const tableValue = computed(() => {
-  const path = tablePath.value
-  if (!path) return null
-  const value = valueAt(path)
-  return isContainer(value) ? (value as JsonValue) : null
-})
-
-const tableItems = computed(() => {
-  const value = tableValue.value
-  return value !== null && isObjectArray(value) ? value : null
-})
-
-/** Tablo seridindeki seviye bilgisi. */
-const tableLevel = computed(() => {
-  const path = tablePath.value
-  const value = tableValue.value
-  if (!path || value === null) return null
-  const segments = path.split('.').slice(1)
-  const array = Array.isArray(value)
-  return {
-    path,
-    label: segments.length > 0 ? segments.join('.') : ROOT_KEY,
-    kind: array ? 'array' : 'object',
-    count: array ? (value as JsonValue[]).length : Object.keys(value as JsonObject).length,
-    records: isObjectArray(value),
-    parent: segments.length > 0 ? path.slice(0, path.lastIndexOf('.')) : null,
-  }
-})
-
-function openTable(path: string) {
-  tablePath.value = path
-  selectedNodePath.value = path
-  viewMode.value = 'table'
-}
-
-/** Ic ice hucreden bir seviye asagi. Skaler dugumler tabloda gosterilemez. */
-function descendTable(path: string) {
-  if (!isContainer(valueAt(path))) return
-  openTable(path)
-}
-
-/** Bir ust seviyeye; kok seviyesinde durur. */
-function ascendTable() {
-  const parent = tableLevel.value?.parent
-  if (parent) openTable(parent)
-}
-
 function setViewMode(mode: ViewMode) {
-  if (mode === 'table') {
-    const path = tablePath.value ?? tableCandidate.value
-    if (!path) return
-    openTable(path)
-    return
-  }
   viewMode.value = mode
 }
 
@@ -440,8 +340,8 @@ function focusUnmatched(schemaPath: string) {
 }
 
 function focusOnPath(path: string) {
-  // Tablo modundayken hedef satir grid'de; once grid'e donuyoruz.
-  if (viewMode.value === 'table') viewMode.value = 'grid'
+  // Fark ve XML ayri ekranlar; hedef dugum grid'de aciliyor.
+  if (viewMode.value === 'diff' || viewMode.value === 'xml') viewMode.value = 'grid'
   selectedNodePath.value = path
   focusRequest.value = { path, seq: ++focusSeq }
 }
@@ -470,7 +370,7 @@ function goToMatch(step: number) {
   if (matchCount.value === 0) return
   activeIndex.value = (activeIndex.value + step + matchCount.value) % matchCount.value
   const path = searchIndex.value.matches[activeIndex.value]
-  // Tablo modunda odak grid'e dondurur; agac kendi eslesmesini zaten aciyor.
+  // Agac kendi eslesmesini zaten aciyor; grid ve kolon gorunumu odaklanir.
   if (path && (viewMode.value === 'grid' || viewMode.value === 'columns')) focusOnPath(path)
 }
 
@@ -560,12 +460,6 @@ watch(parsed, (json) => {
   annotateTimer = setTimeout(() => runAnnotation(json), 400)
 })
 
-// Veri degisince tabloya kilitlenmis gorunum gecersiz kalabilir.
-watch(parsed, () => {
-  tablePath.value = null
-  if (viewMode.value === 'table') viewMode.value = 'grid'
-})
-
 onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
   const shareId = params.get('s')
@@ -616,12 +510,12 @@ function readFile(file: File) {
   const reader = new FileReader()
   reader.onload = (event) => {
     const text = event.target?.result as string
-    // .xml dosyasi secen kullanicinin niyeti belli: dogrudan cevrilir.
-    if (looksLikeXml(text) && parseJson(text).data === null) {
-      if (convertXml(text, file.name)) {
-        recents.value = pushRecent(file.name.replace(/\.xml$/i, '.json'), rawInput.value)
-        return
-      }
+    // .xml uzantisi kullanicinin acik bir tercihi: XML aracina yonlendiriyoruz.
+    // Icerige bakip "bu XML'e benziyor" diye karar vermiyoruz; cevirimi orada
+    // kullanici baslatir.
+    if (/\.xml$/i.test(file.name)) {
+      openXmlTool(text, file.name)
+      return
     }
     xmlNotice.value = null
     applyInputNow(text)
@@ -699,31 +593,30 @@ function goHome() {
 }
 
 /**
- * XML girdisi. NDC dunyasi XML-first: elinizdeki yanit sik sik XML oluyor ve
- * tum goruntuleyici JSON uzerinde calisiyor. Bu yuzden XML ayri bir gorunum
- * degil, bir *girdi bicimi*: cevrilip normal boru hattina veriliyor (grid,
- * tablo, fark, paylasim, XSD eslestirmesi hepsi calisir).
+ * XML -> JSON ayri bir hizmet (`XmlPane`). Onceden girdi icerigine bakilip
+ * "bu XML'e benziyor" diye karar veriliyordu; girdiden anlam cikarmak
+ * kullaniciyi sasirtabilecegi icin o tahmin kaldirildi. Ceviri yalnizca XML
+ * araci ekraninda, kullanici isteyince oluyor; sonuc normal boru hattina
+ * (grid, kolon, fark, paylasim, XSD eslestirmesi) JSON olarak giriyor.
  */
 const xmlNotice = ref<{ root: string; notes: string[] } | null>(null)
+const xmlSeed = ref('')
+const xmlSeedName = ref<string | null>(null)
 
-/** Girdi JSON degil ama XML'e benziyor mu; hata panelinde dugme buna bakiyor. */
-const inputLooksLikeXml = computed(() => parseError.value !== null && looksLikeXml(rawInput.value))
+function openXmlTool(text = '', name: string | null = null) {
+  xmlSeed.value = text
+  xmlSeedName.value = name
+  viewMode.value = 'xml'
+}
 
-function convertXml(text: string, name: string | null): boolean {
-  try {
-    const result = xmlToJson(text)
-    applyInputNow(JSON.stringify(result.data, null, 2))
-    if (name) fileName.value = name.replace(/\.xml$/i, '.json')
-    xmlNotice.value = { root: result.root, notes: result.notes }
-    loadError.value = null
-    return true
-  } catch (error) {
-    xmlNotice.value = null
-    loadError.value = error instanceof XmlParseError
-      ? `XML ayrıştırılamadı (satır ${error.line}): ${error.message}`
-      : `XML çevrilemedi: ${(error as Error).message}`
-    return false
-  }
+function onXmlLoad(payload: { text: string; name: string | null; root: string; notes: string[] }) {
+  applyInputNow(payload.text)
+  fileName.value = payload.name
+  xmlNotice.value = { root: payload.root, notes: payload.notes }
+  loadError.value = null
+  selectedNodePath.value = null
+  viewMode.value = 'grid'
+  if (payload.name) recents.value = pushRecent(payload.name, payload.text)
 }
 
 /** "Otomatik düzelt ve dene": yorum, fazla virgul ve tek tirnak onarilir. */
@@ -761,7 +654,7 @@ async function handleShare() {
 
 // --- Alt durum cubugu --------------------------------------------------------
 
-const gridStats = ref({ total: 0, rendered: 0 })
+const gridStats = ref({ rows: 0, tables: 0 })
 
 // --- Klavye ------------------------------------------------------------------
 
@@ -817,6 +710,9 @@ function onKeydown(event: KeyboardEvent) {
 // --- Basliktaki dosya adi ----------------------------------------------------
 
 const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'girdi.json' : ''))
+
+/** Baglam seridi ve yan panel yalnizca belgeyi gosteren gorunumlerde anlamli. */
+const docView = computed(() => viewMode.value !== 'diff' && viewMode.value !== 'xml')
 </script>
 
 <template>
@@ -874,13 +770,6 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
           title="Kolon görünümü — her seviye bir sütun, oklarla gezinme"
           @click="setViewMode('columns')"
         >Kolon</button>
-        <button
-          class="mode"
-          :class="{ active: viewMode === 'table' }"
-          :disabled="!hasData"
-          title="Seçili seviyeyi tabloda aç — iç içe hücreler bir alt seviyeye iner"
-          @click="setViewMode('table')"
-        >Tablo</button>
         <span class="mode-sep" />
         <button
           class="mode diff"
@@ -889,6 +778,12 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
           title="Bu JSON'u başka bir JSON ile karşılaştır"
           @click="setViewMode('diff')"
         >Fark</button>
+        <button
+          class="mode tool"
+          :class="{ active: viewMode === 'xml' }"
+          title="XML → JSON aracı: XML yapıştır, JSON olarak yükle veya indir"
+          @click="openXmlTool(xmlSeed, xmlSeedName)"
+        >XML</button>
       </div>
 
       <div v-if="!isShared" class="share-wrap">
@@ -932,7 +827,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
     <div v-if="shareError" class="banner bad">{{ shareError }}<button class="banner-close" @click="shareError = null">×</button></div>
     <div v-if="loadError" class="banner bad">{{ loadError }}<button class="banner-close" @click="loadError = null">×</button></div>
 
-    <div v-if="hasData && viewMode !== 'diff'" class="crumbs-bar">
+    <div v-if="hasData && docView" class="crumbs-bar">
       <nav class="crumbs">
         <template v-for="(crumb, index) in crumbs" :key="index">
           <button
@@ -969,11 +864,6 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
         title="Yalnızca eşleşen alanları ve onlara giden yolu göster"
         @click="filterMatches = !filterMatches"
       >yalnız eşleşen</button>
-
-      <div class="segment" title="Tablo: nesne dizileri (ör. Response.Order) grid içinde satır satır değil, tek bir tabloda gösterilir">
-        <button class="seg-btn" :class="{ 'active-nested': !arrayTableMode }" @click="arrayTableMode = false">İç içe</button>
-        <button class="seg-btn" :class="{ 'active-table': arrayTableMode }" @click="arrayTableMode = true">Tablo</button>
-      </div>
     </div>
 
     <div class="workspace">
@@ -1008,24 +898,31 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 
       <!-- Orta: goruntuleyici -->
       <section class="viewer">
-        <div v-if="sharedLoading" class="center-note">Paylaşılan JSON yükleniyor…</div>
+        <!--
+          XML -> JSON araci: JSON boru hattinin disinda, kendi ekrani. Girdi
+          gecerli olsun olmasin her zaman acilabilir.
+        -->
+        <XmlPane
+          v-if="viewMode === 'xml'"
+          :initial="xmlSeed"
+          :initial-name="xmlSeedName"
+          @update:text="xmlSeed = $event"
+          @load="onXmlLoad"
+          @close="viewMode = hasData ? 'grid' : 'xml'"
+        />
+
+        <div v-else-if="sharedLoading" class="center-note">Paylaşılan JSON yükleniyor…</div>
 
         <div v-else-if="parseError" class="center-note error">
-          <template v-if="inputLooksLikeXml">
-            <h2 class="error-title xml">Bu girdi XML gibi görünüyor</h2>
-            <p class="error-hint">
-              Görüntüleyici JSON üzerinde çalışıyor. XML'i JSON'a çevirince grid, tablo,
-              fark ve paylaşım olduğu gibi kullanılabilir; ad alanı önekleri atılır,
-              öznitelikler <code>@ad</code> olur, değerler metin kalır.
-            </p>
-            <button class="error-action" @click="convertXml(rawInput, fileName)">XML'i JSON'a çevir</button>
-          </template>
-          <template v-else>
-            <h2 class="error-title">JSON ayrıştırılamadı</h2>
-            <code class="error-code">{{ parseError }}</code>
-            <p class="error-hint">Hatalı satır solda işaretlendi. Düzeltince grid kendiliğinden oluşur.</p>
+          <h2 class="error-title">JSON ayrıştırılamadı</h2>
+          <code class="error-code">{{ parseError }}</code>
+          <p class="error-hint">Hatalı satır solda işaretlendi. Düzeltince grid kendiliğinden oluşur.</p>
+          <div class="error-actions">
             <button class="error-action" @click="handleRepair">Otomatik düzelt ve dene</button>
-          </template>
+            <button class="error-action ghost" @click="openXmlTool(rawInput, fileName)">
+              Elinizdeki XML mi? XML → JSON aracını açın
+            </button>
+          </div>
         </div>
 
         <EmptyState
@@ -1057,51 +954,6 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
             @close="viewMode = 'grid'"
           />
 
-          <!-- Tablo modu: seviye seridi + o seviyenin tablosu -->
-          <template v-else-if="viewMode === 'table' && tableLevel">
-            <div class="level-bar">
-              <button class="level-btn" title="Grid görünümüne dön" @click="viewMode = 'grid'">← Grid</button>
-              <button
-                class="level-btn"
-                :disabled="!tableLevel.parent"
-                title="Bir üst seviye"
-                @click="ascendTable"
-              >↑ üst</button>
-              <nav class="level-path">
-                <template v-for="(crumb, index) in crumbs" :key="index">
-                  <button
-                    class="level-crumb"
-                    :class="{ last: crumb.last }"
-                    @click="goToCrumb(crumb.path)"
-                  >{{ crumb.label }}</button>
-                  <span v-if="!crumb.last" class="level-sep">›</span>
-                </template>
-              </nav>
-              <span class="level-pill" :class="tableLevel.kind">
-                {{ tableLevel.count.toLocaleString('tr-TR') }}
-                {{ tableLevel.kind === 'array' ? 'öğe' : 'alan' }}
-              </span>
-              <span v-if="tableLevel.records" class="level-pill records">kayıt tablosu</span>
-            </div>
-
-            <ArrayTable
-              v-if="tableItems"
-              :items="tableItems"
-              :path="tablePath!"
-              variant="full"
-              @focus-path="focusOnPath"
-              @descend="descendTable"
-              @close="viewMode = 'grid'"
-            />
-            <NodeTable
-              v-else
-              :value="(tableValue as JsonObject)"
-              :path="tablePath!"
-              @descend="descendTable"
-              @focus-path="focusOnPath"
-            />
-          </template>
-
           <ColumnView
             v-if="viewMode === 'columns'"
             ref="columnRef"
@@ -1111,7 +963,6 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
             :doc-lookup="docLookup"
             :search-term="searchTerm"
             @focus-path="focusOnPath"
-            @open-table="openTable"
           />
 
           <div v-else-if="viewMode === 'tree'" class="tree-scroll">
@@ -1137,14 +988,12 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
             :search-term="searchTerm"
             :doc-lookup="docLookup"
             :filter-matches="filterMatches"
-            :array-table-mode="arrayTableMode"
             :ref-index="refIndex"
             :search="searchIndex"
             :focus-request="focusRequest"
             :selected-path="selectedNodePath"
             :schema-known="schemaKnown"
             @focus-path="focusOnPath"
-            @expand-table="openTable"
             @stats="gridStats = $event"
           />
         </template>
@@ -1152,13 +1001,13 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 
       <!-- Sag: IATA paneli -->
       <button
-        v-if="!iataVisible && hasData && viewMode !== 'diff'"
+        v-if="!iataVisible && hasData && docView"
         class="rail right"
         title="IATA panelini aç"
         @click="toggleIata"
       ><span class="rail-glyph">‹</span><span class="rail-label">IATA</span></button>
 
-      <div v-if="iataVisible && hasData && viewMode !== 'diff'" class="side-col">
+      <div v-if="iataVisible && hasData && docView" class="side-col">
         <IataPanel
           :annotation="annotation"
           :loading="annotationLoading"
@@ -1182,7 +1031,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
     <footer class="status-bar">
       <span v-if="hasData" class="stat">{{ nodeCount.toLocaleString('tr-TR') }} node</span>
       <span v-if="hasData" class="stat">ayrıştırma {{ Math.round(parseState.ms) }} ms</span>
-      <span v-if="viewMode === 'grid'" class="stat">{{ gridStats.rendered }}/{{ gridStats.total }} satır render</span>
+      <span v-if="viewMode === 'grid'" class="stat">{{ gridStats.rows }} satır · {{ gridStats.tables }} tablo açık</span>
       <span v-if="syncLineLabel" class="stat accent">⌁ {{ syncLineLabel }}</span>
       <span v-if="annotation?.messageType" class="stat">{{ annotation.messageType }} %{{ matchPercent }}</span>
       <div class="status-spacer" />
@@ -1237,6 +1086,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 .mode:disabled { opacity: .35; cursor: not-allowed; }
 .mode-sep { width: 1px; align-self: stretch; background: var(--border); margin: 2px 3px; }
 .mode.diff.active { background: var(--accent-dim); color: var(--accent); }
+.mode.tool.active { background: var(--bg-object); color: var(--purple); }
 
 .share-wrap { position: relative; flex-shrink: 0; }
 .share-btn { font-size: 12.5px; font-weight: 600; color: var(--bg-primary); background: var(--accent); border-radius: 7px; padding: 6px 13px; }
@@ -1286,26 +1136,6 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 .only-matches.active { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 .only-matches:disabled { opacity: .4; cursor: not-allowed; }
 
-.segment { display: flex; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 7px; padding: 2px; gap: 2px; flex-shrink: 0; }
-.seg-btn { padding: 3px 9px; border-radius: 5px; font-size: 11.5px; color: var(--text-muted); }
-.seg-btn.active-nested { color: var(--text-primary); background: var(--bg-tertiary); }
-.seg-btn.active-table { color: var(--green); background: var(--green-wash); }
-
-/* --- Tablo modu seviye seridi --------------------------------------------- */
-.level-bar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; overflow: hidden; }
-.level-btn { font-size: 11.5px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; white-space: nowrap; }
-.level-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
-.level-btn:disabled { opacity: .35; cursor: not-allowed; }
-.level-path { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; }
-.level-crumb { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; border-radius: 4px; padding: 2px 5px; }
-.level-crumb:hover { color: var(--accent); background: var(--accent-dim); }
-.level-crumb.last { color: var(--text-primary); background: var(--bg-tertiary); }
-.level-sep { color: var(--border); font-size: 11px; }
-.level-pill { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; border-radius: 20px; padding: 2px 9px; white-space: nowrap; flex-shrink: 0; }
-.level-pill.array { color: var(--green); background: var(--bg-array); }
-.level-pill.object { color: var(--purple); background: var(--bg-object); }
-.level-pill.records { color: var(--accent); background: var(--accent-dim); }
-
 /* --- Calisma alani --------------------------------------------------------- */
 .workspace { display: flex; flex: 1; min-height: 0; }
 .viewer { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg-primary); }
@@ -1313,11 +1143,13 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 
 .center-note { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 40px; font-size: 13px; color: var(--text-muted); }
 .error-title { font-size: 17px; font-weight: 600; color: var(--red); }
-.error-title.xml { color: var(--accent); }
+.error-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .error-code { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--text-secondary); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; max-width: 560px; text-align: center; word-break: break-word; }
 .error-hint { font-size: 13px; color: var(--text-muted); max-width: 360px; text-align: center; text-wrap: pretty; }
 .error-action { margin-top: 4px; font-size: 13px; color: var(--accent); background: var(--accent-dim); border-radius: 8px; padding: 8px 18px; }
 .error-action:hover { background: var(--accent-strong); }
+.error-action.ghost { color: var(--text-secondary); background: transparent; border: 1px solid var(--border); font-size: 12px; padding: 7px 14px; }
+.error-action.ghost:hover { color: var(--accent); border-color: var(--accent); }
 
 /* --- Alt durum cubugu ------------------------------------------------------ */
 .status-bar { display: flex; align-items: center; gap: 16px; height: var(--status-h); padding: 0 16px; background: var(--bg-secondary); border-top: 1px solid var(--border); flex-shrink: 0; }

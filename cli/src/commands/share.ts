@@ -3,10 +3,10 @@ import { countNodes } from '../../../frontend/src/utils/json'
 import { createShare } from '../api'
 import { flagBool, flagString, type ParsedArgs } from '../args'
 import { insecureNotice, resolveApi, shareUrl } from '../config'
-import { loadJson, readInput } from '../input'
+import { loadJson, readInput, wantsXml } from '../input'
 import { UserError, color, info, out, warn } from '../output'
 
-export const SHARE_FLAGS = ['title', 't', 'api', 'web', 'no-comments', 'open', 'json', 'quiet', 'q', 'fix']
+export const SHARE_FLAGS = ['title', 't', 'api', 'web', 'no-comments', 'open', 'json', 'quiet', 'q', 'fix', 'xml']
 
 /**
  * `jse share <dosya>` — CLI'nin ana isi: JSON'u backend'e yazip salt okunur
@@ -20,7 +20,7 @@ export async function shareCommand(args: ParsedArgs): Promise<number> {
   const quiet = flagBool(args, 'quiet', 'q')
   const asJson = flagBool(args, 'json')
   const { text, name } = await readInput(args.positional[0])
-  const loaded = loadJson(text, name, flagBool(args, 'fix'))
+  const loaded = loadJson(text, name, flagBool(args, 'fix'), wantsXml(args, name))
 
   const resolved = resolveApi(flagString(args, 'api'))
   const web = flagString(args, 'web') ?? resolved.web

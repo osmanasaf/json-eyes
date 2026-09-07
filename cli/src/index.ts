@@ -38,19 +38,22 @@ ${color.bold('PAYLAŞIM')}
                          --open         linki tarayıcıda aç
                          --json         {id,url} olarak yaz
                          --fix          bozuk JSON'u onarmayı dene
+                         --xml          girdiyi XML olarak çevir
   fetch <id|link>        paylaşılan JSON'u indirir (--out dosya, --minify, --meta)
 
 ${color.bold('İNCELEME')} (yerel, backend gerekmez)
-  values <dosya> <yol>   alanın belge genelindeki dağılımı (--json, --limit)
+  values <dosya> <yol>   alanın belge genelindeki dağılımı (--json, --limit, --xml)
   find <dosya> <terim>   terimi taşıyan yolları listeler (--values, --limit, --json)
-  get <dosya> <yol>      yoldaki değeri yazar (--raw, --minify)
+  get <dosya> <yol>      yoldaki değeri yazar (--raw, --minify, --xml)
   fix <dosya>            yorum/fazla virgül/tek tırnak onarır (--out, --minify)
   xml2json <dosya|->     XML'i JSON'a çevirir (--out, --minify, --numbers, --keep-prefixes)
 
 ${color.bold('XML')}
-  Tüm komutlar XML girdisini kendiliğinden çevirir: jse share siparis.xml
-  doğrudan paylaşım linki verir. Ad alanı önekleri atılır, öznitelikler "@ad"
-  olur, değerler metin kalır (kod alanlarındaki baştaki sıfır bozulmasın).
+  Çeviri açıkça istenir: .xml uzantılı dosya ya da --xml bayrağı.
+    jse share siparis.xml            uzantı yeter, link döner
+    cat s.xml | jse values --xml - StatusCode
+  Girdinin içeriğine bakıp tahmin yapılmaz. Ad alanı önekleri atılır,
+  öznitelikler "@ad" olur, değerler metin kalır (baştaki sıfır bozulmasın).
 
 ${color.bold('YAPILANDIRMA')}
   config show            geçerli adresleri ve dosya yolunu gösterir

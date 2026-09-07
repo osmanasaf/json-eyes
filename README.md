@@ -57,7 +57,7 @@ Ayrıntılar ve tüm komutlar: [cli/README.md](cli/README.md) · paket: [npmjs.c
 ## Arayüz
 
 Tek bir kabuk: 56px üst bar (dosya adı + geçerlilik rozeti, komut çubuğu, mod anahtarı,
-Paylaş), 38px bağlam şeridi (breadcrumb, yolu kopyala, görünüm filtresi, İç içe/Tablo),
+Paylaş), 38px bağlam şeridi (breadcrumb, yolu kopyala, görünüm filtresi),
 solda 292px editör, ortada görüntüleyici, sağda 240px IATA paneli, altta 30px durum
 çubuğu. Boş durumda editör, bağlam şeridi ve IATA paneli gizlenir; yalnızca bırakma
 alanı ve "Son açılanlar" görünür.
@@ -76,18 +76,27 @@ yeni bir tema eklemek `:root[data-theme='...']` bloğu yazmaktan ibarettir.
 ## Özellikler
 
 - **Tree**: JSON sözdizimi görünümü, yerinde aç/kapa, alan başına XSD tooltip'i
-- **Grid**: hiyerarşik tablo — Alan / Tip / Değer sütunları, satırlar yerinde açılıp
-  kapanır (drill-down ve breadcrumb yok), "tümünü aç / kapat" düğmeleri.
-  Ağaç düz bir satır listesine çevrilip sanallaştırılır: yalnızca görünür satırlar
-  render edilir, alt durum çubuğu render edilen satır sayısını gösterir.
-- **Dizi tabloları**: bağlam şeridindeki **İç içe / Tablo** anahtarı nesne dizilerini
-  satır içinde gerçek bir tabloya çevirir; kolonlar dizideki skaler anahtarların
-  birleşiminden üretilir, iç içe alanlar tablonun altında "gizlendi" olarak belirtilir.
-  Nesne dizisi olan her satırın yanında yeşil `⊞ tablo` rozeti çıkar — Tablo modunun
-  hangi satırlarda açılabildiği böyle görünür.
-  "tam ekran" ile aynı dizi **Tablo** modunda tüm ekrana açılır: kolon başlığına
-  tıklayarak sıralama (asc ⇄ desc), kolon başına `contains` filtresi (AND ile birleşir),
-  CSV indirme ve altta kayıt / toplam / sıralama / seçili şeridi.
+- **Grid**: **iç içe tablolar**. Tablo biçimi düğümün şeklinden gelir:
+  nesne → `anahtar | değer`, **nesne dizisi → kayıt tablosu** (kolonlar öğelerin
+  anahtarlarının birleşimi, `#` indeks kolonu), diğer diziler → `# | değer`.
+  İç içe bir değer tıklanan **hücrenin içinde** açılır: hiçbir tıklama görünümü
+  değiştirmez, bakılan tablo kaybolmaz. (Eskiden grid girintili düz bir satır
+  listesiydi ve nesne dizileri o modele sığmadığı için "Tablo" ayrı bir görünüm
+  olmak zorunda kalmıştı; artık öyle bir mod yok — görünümler **Tree · Grid ·
+  Kolon**.)
+  - Kayıt tablosunda: başlığa tıklayarak sıralama (artan ⇄ azalan ⇄ JSON sırası),
+    kolon başına `contains` filtresi (AND ile birleşir), CSV indirme, satır sayısı /
+    kolon sayısı / seçili sıralama / sayısal kolon toplamı şeridi. Kolon başlığı
+    alanın XSD açıklamasını da taşır ve `4/1200` gibi bir not eksik alanları söyler.
+  - `#` hücresine tıklamak satırın tamamını altta bir tablo olarak açar.
+  - Açılışta ilk üç seviye ve tek alanlı sarmalayıcı zincirler (`IATA_OrderViewRS >
+    Response > Order`) kendiliğinden açılır; kayıt satırları açılmaz (alanları zaten
+    kolon olarak görünüyor). "tümünü aç" 800 tabloda durur ve bunu söyler — iç içe
+    tablolar gerçek DOM üretiyor.
+  - Her tablo kendi penceresini yönetir: 200 satır çizilir, "daha fazla göster"
+    büyütür. Alt durum çubuğu çizilen satır ve açık tablo sayısını gösterir.
+  - 40'tan fazla farklı anahtarı olan dizilerde en seyrek dolan kolonlar gizlenir ve
+    kaç kolonun gizlendiği şeritte yazılır — sessizce alan düşürmek yok.
 - **Otomatik düzeltme**: geçersiz JSON'da "Otomatik düzelt ve dene" yorum satırlarını,
   sondaki fazla virgülleri ve tek tırnaklı metinleri onarır; onarım da ayrıştırılamazsa
   metne dokunulmaz.
@@ -130,12 +139,15 @@ yeni bir tema eklemek `:root[data-theme='...']` bloğu yazmaktan ibarettir.
 - **Panel şeritleri**: editör ve IATA panelleri kendi başlıklarındaki `‹` / `›` ile
   kapanır; kapalıyken kenarda dikey yazılı bir şerit kalır, tıklayınca geri açılır.
 
-### XML girdisi
+### XML → JSON aracı
 
-XML ayrı bir görünüm değil, bir **girdi biçimi**: `.xml` dosyası seçtiğinizde (ya da
-sürükleyip bıraktığınızda) kendiliğinden JSON'a çevrilir; yapıştırdığınızda hata
-panelinde "XML'i JSON'a çevir" düğmesi çıkar. Çevrildikten sonra grid, tablo, kolon,
-fark, paylaşım ve XSD eşleştirmesi olduğu gibi çalışır.
+Üst bardaki **XML** düğmesi ayrı bir ekran açar: solda XML, sağda JSON. Girdinin
+içeriğine bakıp "bu XML'e benziyor" diye **tahmin yapılmaz** — çeviriyi kullanıcı
+başlatır. `.xml` uzantılı bir dosya seçmek (uzantı açık bir tercih) doğrudan bu
+aracı açar, dosya kendiliğinden çevrilmez. Sonuç "JSON'u görüntüleyiciye yükle" ile
+normal boru hattına girer (grid, kolon, fark, paylaşım, XSD eşleştirmesi) ya da
+kopyalanır / `.json` olarak indirilir. Seçenekler CLI'daki bayrakların aynısı:
+ad alanı öneklerini koru (`--keep-prefixes`), sayıları çıkar (`--numbers`).
 
 Kurallar: ad alanı önekleri atılır (`iata:Order` → `Order`), öznitelikler `@ad`, metin
 içeriği `#text` olur, tekrarlayan kardeşler diziye düşer ve **değerler metin kalır**
@@ -330,7 +342,7 @@ almak gerekir.
 
 ```bash
 cd backend && mvn test     # XSD indeksleme ve alan eşleştirme (gerçek IATA şemaları)
-cd frontend && npm test    # fark motoru + XML çevirici (19 test)
+cd frontend && npm test    # fark motoru + XML çevirici + grid modeli (36 test)
 cd cli && npm test         # CLI: derlenmiş paket, sahte API sunucusuna karşı
 ```
 
@@ -341,8 +353,8 @@ json-sarp/
 ├── frontend/          Vue 3 + Vite + TypeScript
 │   └── src/
 │       ├── App.vue                 uygulama kabuğu (header, breadcrumb, durum çubuğu)
-│       ├── components/             EditorPane · JsonGrid · ArrayTable · IataPanel · EmptyState
-│       └── utils/flatten.ts        ağacı sanallaştırılabilir düz satır listesine çevirir
+│       ├── components/             EditorPane · JsonGrid + GridTable · XmlPane · IataPanel
+│       └── utils/grid.ts           tablo modeli: şekil, kolonlar, açılış bütçesi, CSV
 ├── backend/           Spring Boot + H2 + XSD indeksleyici
 │   └── src/main/resources/xsd/     IATA 24.4 şemaları (52 dosya)
 ├── cli/               `jse` komut satırı aracı (paylaşım linki + yerel inceleme)

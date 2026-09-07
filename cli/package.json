@@ -39,6 +39,7 @@
     "prepublishOnly": "npm run build && npm run typecheck && npm test",
     "dev": "npm run build && node dist/jse.mjs",
     "typecheck": "tsc --noEmit",
+    "pretest": "npm run build",
     "test": "node --test test/cli.test.mjs"
   },
   "devDependencies": {

@@ -97,24 +97,30 @@ Hassas veri paylaşıyorsanız backend'i kendi alan adınıza taşıyıp (`https
 
 | Komut | İş |
 |---|---|
-| `share <dosya\|->` | JSON'u paylaşır, linki basar. `--title`, `--no-comments`, `--web`, `--open`, `--json`, `--fix`, `-q` |
+| `share <dosya\|->` | JSON'u paylaşır, linki basar. `--title`, `--no-comments`, `--web`, `--open`, `--json`, `--fix`, `--xml`, `-q` |
 | `fetch <id\|link>` | Paylaşılan JSON'u indirir. `--out`, `--minify`, `--meta` |
-| `values <dosya> <yol>` | Alanın belge genelindeki dağılımı. `--json`, `--limit` |
+| `values <dosya> <yol>` | Alanın belge genelindeki dağılımı. `--json`, `--limit`, `--xml` |
 | `find <dosya> <terim>` | Terimi taşıyan yolları listeler. `--values`, `--limit`, `--json` |
-| `get <dosya> <yol>` | Yoldaki değeri yazar. `--raw`, `--minify` |
+| `get <dosya> <yol>` | Yoldaki değeri yazar. `--raw`, `--minify`, `--xml` |
 | `fix <dosya>` | Yorum / fazla virgül / tek tırnak onarır. `--out`, `--minify` |
 | `xml2json <dosya\|->` | XML'i JSON'a çevirir. `--out`, `--minify`, `--numbers`, `--keep-prefixes` |
 | `config show\|set` | Adresleri gösterir ve kaydeder |
 
 ### XML girdisi
 
-Bütün komutlar XML kabul eder — NDC yanıtları sık sık XML gelir:
+Çeviri **açıkça istenir**: `.xml` uzantısı ya da `--xml` bayrağı. Girdinin içeriğine
+bakıp "bu XML'e benziyor" diye tahmin yapılmaz — yanlış tahmin eden bir araç,
+kullanıcının anlamadığı bir sonuç üretir. Uzantı ve bayrak kullanıcının açık tercihi.
 
 ```bash
-jse share siparis.xml --title "OrderViewRS"   # çevirip paylaşır, linki basar
-jse values siparis.xml StatusCode             # çevirip dağılımı verir
-jse xml2json siparis.xml -o siparis.json      # yalnızca çevirir
+jse xml2json siparis.xml -o siparis.json         # çevirinin ana adresi
+jse share siparis.xml --title "OrderViewRS"      # uzantı yeter: çevirip paylaşır
+jse values siparis.xml StatusCode                # aynı şekilde
+cat siparis.xml | jse share --xml -              # boru hattında bayrak gerekir
 ```
+
+JSON beklenen bir yerde XML gelirse komut durur ve yolu söyler:
+`Bu girdi XML gibi görünüyor: --xml ekleyin ya da jse xml2json kullanın.`
 
 Çevirim kuralları (web arayüzüyle **aynı kod**, dolayısıyla aynı sonuç):
 
@@ -169,7 +175,7 @@ PENDING     300  ██████████████
 ```bash
 npm run build      # esbuild ile tek dosya (~34 KB); npm install bunu kendisi çağırır
 npm run typecheck
-npm test           # CLI'yi derlenmiş haliyle, sahte bir API sunucusuna karşı koşar
+npm test           # önce derler (pretest), sonra derlenmiş paketi sahte bir API'ye karşı koşar
 ```
 
 Yayınlama (paket sahibi için):

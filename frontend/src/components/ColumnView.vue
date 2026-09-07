@@ -24,7 +24,7 @@ const props = defineProps<{
   searchTerm?: string
 }>()
 
-const emit = defineEmits<{ focusPath: [path: string]; openTable: [path: string] }>()
+const emit = defineEmits<{ focusPath: [path: string] }>()
 
 const selectField = inject(SELECT_FIELD, null)
 
@@ -291,7 +291,7 @@ function matches(text: string): boolean {
               hit: matches(entry.key) || (!entry.container && matches(String(entry.value))),
             }"
             @click="select(col.depth, entry.key)"
-            @dblclick="entry.container ? emit('openTable', pathOf(col.depth, entry.key)) : emit('focusPath', pathOf(col.depth, entry.key))"
+            @dblclick="emit('focusPath', pathOf(col.depth, entry.key))"
           >
             <span class="entry-key">{{ entry.key }}</span>
             <InfoBubble v-if="docLookup?.(pathOf(col.depth, entry.key))" @click.stop>
