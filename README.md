@@ -45,12 +45,14 @@ Vite dev sunucusu `/api` isteklerini `http://localhost:8080` adresine proxy eder
 
 ### Komut satırı
 
+[![npm](https://img.shields.io/npm/v/json-eyes?color=0b7285&label=json-eyes)](https://www.npmjs.com/package/json-eyes)
+
 ```bash
 npm install -g json-eyes                  # ya da: npx json-eyes …
 jse share siparis.json                    # JSON ver, paylaşım linki al
 ```
 
-Ayrıntılar ve tüm komutlar: [cli/README.md](cli/README.md)
+Ayrıntılar ve tüm komutlar: [cli/README.md](cli/README.md) · paket: [npmjs.com/package/json-eyes](https://www.npmjs.com/package/json-eyes)
 
 ## Arayüz
 

@@ -1,5 +1,9 @@
 # jse — JSON Eyes CLI
 
+[![npm](https://img.shields.io/npm/v/json-eyes?color=0b7285&label=npm)](https://www.npmjs.com/package/json-eyes)
+[![node](https://img.shields.io/node/v/json-eyes?color=0b7285)](https://www.npmjs.com/package/json-eyes)
+[![lisans](https://img.shields.io/npm/l/json-eyes?color=0b7285)](https://github.com/osmanasaf/json-eyes/blob/master/LICENSE)
+
 Terminalden JSON paylaşma ve inceleme aracı. Ana işi tek satırlık: **JSON ver, salt
 okunur paylaşım linki al.**
 
@@ -22,6 +26,8 @@ curl -s https://api.ornek.com/order | jse share -  # doğrudan API çıktısın�
 npm install -g json-eyes     # jse komutu PATH'e girer
 jse help
 ```
+
+Paket: [npmjs.com/package/json-eyes](https://www.npmjs.com/package/json-eyes)
 
 Tek seferlik kullanım için kurmadan da çalışır:
 
