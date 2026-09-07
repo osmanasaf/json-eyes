@@ -18,16 +18,35 @@ curl -s https://api.ornek.com/order | jse share -  # doğrudan API çıktısın�
 
 ## Kurulum
 
-Node 18+ gerekir.
+npm'de yayınlanmadı; kaynaktan kurulur. Node 18+ gerekir.
 
 ```bash
-cd cli
-npm install
-npm run build          # dist/jse.mjs üretir
-npm link               # `jse` komutu PATH'e girer (istege bagli)
+git clone https://github.com/osmanasaf/json-eyes.git
+cd json-eyes/cli
+npm install        # dist/jse.mjs otomatik derlenir (prepare)
+npm link           # `jse` komutu PATH'e girer
 
-node dist/jse.mjs help # link olmadan da calisir
+jse help
 ```
+
+Depo zaten sizdeyse ilk satırı atlayın. `npm link` sudo isterse ya da global kurulum
+istemiyorsanız üç alternatif:
+
+```bash
+# 1) doğrudan çağırın
+node ~/json-eyes/cli/dist/jse.mjs share veri.json
+
+# 2) kabuk takma adı (~/.zshrc veya ~/.bashrc)
+alias jse='node ~/json-eyes/cli/dist/jse.mjs'
+
+# 3) paket olarak global kurulum
+cd json-eyes/cli && npm pack && npm install -g ./json-eyes-cli-0.1.0.tgz
+```
+
+Kaldırmak için: `npm unlink -g json-eyes-cli` (ya da `npm uninstall -g json-eyes-cli`).
+
+Depoyu güncelledikten sonra `cd cli && npm install` derlemeyi yeniler; `npm link` ile
+kurduysanız `jse` doğrudan yeni sürümü çalıştırır (symlink olduğu için).
 
 ## Backend adresi
 
@@ -101,7 +120,7 @@ PENDING     300  ██████████████
 ## Geliştirme
 
 ```bash
-npm run build      # esbuild ile tek dosya (~31 KB)
+npm run build      # esbuild ile tek dosya (~31 KB); npm install bunu kendisi çağırır
 npm run typecheck
 npm test           # CLI'yi derlenmiş haliyle, sahte bir API sunucusuna karşı koşar
 ```

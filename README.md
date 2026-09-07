@@ -46,8 +46,8 @@ Vite dev sunucusu `/api` isteklerini `http://localhost:8080` adresine proxy eder
 ### Komut satırı
 
 ```bash
-cd cli && npm install && npm run build
-node dist/jse.mjs share siparis.json      # JSON ver, paylaşım linki al
+cd cli && npm install && npm link         # `jse` komutu PATH'e girer
+jse share siparis.json                    # JSON ver, paylaşım linki al
 ```
 
 Ayrıntılar ve tüm komutlar: [cli/README.md](cli/README.md)
