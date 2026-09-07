@@ -103,7 +103,33 @@ Hassas veri paylaşıyorsanız backend'i kendi alan adınıza taşıyıp (`https
 | `find <dosya> <terim>` | Terimi taşıyan yolları listeler. `--values`, `--limit`, `--json` |
 | `get <dosya> <yol>` | Yoldaki değeri yazar. `--raw`, `--minify` |
 | `fix <dosya>` | Yorum / fazla virgül / tek tırnak onarır. `--out`, `--minify` |
+| `xml2json <dosya\|->` | XML'i JSON'a çevirir. `--out`, `--minify`, `--numbers`, `--keep-prefixes` |
 | `config show\|set` | Adresleri gösterir ve kaydeder |
+
+### XML girdisi
+
+Bütün komutlar XML kabul eder — NDC yanıtları sık sık XML gelir:
+
+```bash
+jse share siparis.xml --title "OrderViewRS"   # çevirip paylaşır, linki basar
+jse values siparis.xml StatusCode             # çevirip dağılımı verir
+jse xml2json siparis.xml -o siparis.json      # yalnızca çevirir
+```
+
+Çevirim kuralları (web arayüzüyle **aynı kod**, dolayısıyla aynı sonuç):
+
+- Ad alanı önekleri atılır (`iata:Order` → `Order`) ve `xmlns` bildirimleri düşer:
+  XSD indeksi yerel adlarla kurulu, alan eşleştirmesi ancak böyle tutar.
+  `--keep-prefixes` ile korunur.
+- Öznitelikler `@ad`, metin içeriği `#text` olur. Özniteliği ve çocuğu olmayan
+  eleman doğrudan değere iner (`<CurCode>EUR</CurCode>` → `"CurCode": "EUR"`).
+- Tekrarlayan kardeşler diziye düşer. **Tek öğeli listeler dizi olmaz** — tek
+  `<Order>` gelen bir yanıtta `Order` bir nesnedir, tüketen taraf bunu bilmeli.
+- **Değerler metin kalır.** `0123` sayıya çevrilse baştaki sıfır giderdi; uçuş
+  numarası, havayolu ve bilet kodları bu yüzden bozulur. Sayı istiyorsanız
+  `--numbers` (o modda bile baştaki sıfırlı değerler metin kalır).
+- CDATA, yorum, `<!DOCTYPE>`, XML bildirimi ve varlıklar (`&amp;`, `&#65;`)
+  desteklenir. Bozuk XML satır numarasıyla hata verir.
 
 ### Yol yazımı
 

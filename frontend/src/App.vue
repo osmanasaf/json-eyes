@@ -9,6 +9,7 @@ import { buildSearchIndex, EMPTY_SEARCH } from './utils/search'
 import { buildRefIndex, EMPTY_REF_INDEX } from './utils/references'
 import { isObjectArray } from './utils/flatten'
 import { tryRepair } from './utils/repair'
+import { looksLikeXml, xmlToJson, XmlParseError } from './utils/xml'
 import { collectFieldValues } from './utils/related'
 import { buildTextIndex, lineOfOffset, EMPTY_TEXT_INDEX, type JsonTextIndex } from './utils/textIndex'
 import { pushRecent, readRecents, readTheme, writeTheme, type RecentFile, type Theme } from './utils/storage'
@@ -615,6 +616,14 @@ function readFile(file: File) {
   const reader = new FileReader()
   reader.onload = (event) => {
     const text = event.target?.result as string
+    // .xml dosyasi secen kullanicinin niyeti belli: dogrudan cevrilir.
+    if (looksLikeXml(text) && parseJson(text).data === null) {
+      if (convertXml(text, file.name)) {
+        recents.value = pushRecent(file.name.replace(/\.xml$/i, '.json'), rawInput.value)
+        return
+      }
+    }
+    xmlNotice.value = null
     applyInputNow(text)
     fileName.value = file.name
     recents.value = pushRecent(file.name, text)
@@ -659,6 +668,7 @@ function handleMinify() {
 }
 
 function handleClear() {
+  xmlNotice.value = null
   applyInputNow('')
   clearSearch()
   shareUrl.value = null
@@ -686,6 +696,34 @@ function goHome() {
     recents.value = pushRecent(fileName.value ?? 'yapıştırılan.json', rawInput.value)
   }
   handleClear()
+}
+
+/**
+ * XML girdisi. NDC dunyasi XML-first: elinizdeki yanit sik sik XML oluyor ve
+ * tum goruntuleyici JSON uzerinde calisiyor. Bu yuzden XML ayri bir gorunum
+ * degil, bir *girdi bicimi*: cevrilip normal boru hattina veriliyor (grid,
+ * tablo, fark, paylasim, XSD eslestirmesi hepsi calisir).
+ */
+const xmlNotice = ref<{ root: string; notes: string[] } | null>(null)
+
+/** Girdi JSON degil ama XML'e benziyor mu; hata panelinde dugme buna bakiyor. */
+const inputLooksLikeXml = computed(() => parseError.value !== null && looksLikeXml(rawInput.value))
+
+function convertXml(text: string, name: string | null): boolean {
+  try {
+    const result = xmlToJson(text)
+    applyInputNow(JSON.stringify(result.data, null, 2))
+    if (name) fileName.value = name.replace(/\.xml$/i, '.json')
+    xmlNotice.value = { root: result.root, notes: result.notes }
+    loadError.value = null
+    return true
+  } catch (error) {
+    xmlNotice.value = null
+    loadError.value = error instanceof XmlParseError
+      ? `XML ayrıştırılamadı (satır ${error.line}): ${error.message}`
+      : `XML çevrilemedi: ${(error as Error).message}`
+    return false
+  }
 }
 
 /** "Otomatik düzelt ve dene": yorum, fazla virgul ve tek tirnak onarilir. */
@@ -885,6 +923,12 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
       <span v-if="sharedAtLabel" class="banner-note">Paylaşım: {{ sharedAtLabel }}</span>
       <button class="banner-action" @click="forkShared">Kopyasını al ve düzenle</button>
     </div>
+    <div v-if="xmlNotice" class="banner accent">
+      <strong class="banner-strong">XML çevrildi</strong>
+      kök: <code class="banner-link">{{ xmlNotice.root }}</code>
+      <span class="banner-note">{{ xmlNotice.notes.join(' · ') }}</span>
+      <button class="banner-close" @click="xmlNotice = null">×</button>
+    </div>
     <div v-if="shareError" class="banner bad">{{ shareError }}<button class="banner-close" @click="shareError = null">×</button></div>
     <div v-if="loadError" class="banner bad">{{ loadError }}<button class="banner-close" @click="loadError = null">×</button></div>
 
@@ -967,10 +1011,21 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
         <div v-if="sharedLoading" class="center-note">Paylaşılan JSON yükleniyor…</div>
 
         <div v-else-if="parseError" class="center-note error">
-          <h2 class="error-title">JSON ayrıştırılamadı</h2>
-          <code class="error-code">{{ parseError }}</code>
-          <p class="error-hint">Hatalı satır solda işaretlendi. Düzeltince grid kendiliğinden oluşur.</p>
-          <button class="error-action" @click="handleRepair">Otomatik düzelt ve dene</button>
+          <template v-if="inputLooksLikeXml">
+            <h2 class="error-title xml">Bu girdi XML gibi görünüyor</h2>
+            <p class="error-hint">
+              Görüntüleyici JSON üzerinde çalışıyor. XML'i JSON'a çevirince grid, tablo,
+              fark ve paylaşım olduğu gibi kullanılabilir; ad alanı önekleri atılır,
+              öznitelikler <code>@ad</code> olur, değerler metin kalır.
+            </p>
+            <button class="error-action" @click="convertXml(rawInput, fileName)">XML'i JSON'a çevir</button>
+          </template>
+          <template v-else>
+            <h2 class="error-title">JSON ayrıştırılamadı</h2>
+            <code class="error-code">{{ parseError }}</code>
+            <p class="error-hint">Hatalı satır solda işaretlendi. Düzeltince grid kendiliğinden oluşur.</p>
+            <button class="error-action" @click="handleRepair">Otomatik düzelt ve dene</button>
+          </template>
         </div>
 
         <EmptyState
@@ -1137,7 +1192,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
       </span>
     </footer>
 
-    <input ref="fileInputRef" type="file" accept=".json,application/json" hidden @change="handleFile" />
+    <input ref="fileInputRef" type="file" accept=".json,.xml,application/json,text/xml,application/xml" hidden @change="handleFile" />
   </div>
 </template>
 
@@ -1258,6 +1313,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 
 .center-note { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 40px; font-size: 13px; color: var(--text-muted); }
 .error-title { font-size: 17px; font-weight: 600; color: var(--red); }
+.error-title.xml { color: var(--accent); }
 .error-code { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--text-secondary); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; max-width: 560px; text-align: center; word-break: break-word; }
 .error-hint { font-size: 13px; color: var(--text-muted); max-width: 360px; text-align: center; text-wrap: pretty; }
 .error-action { margin-top: 4px; font-size: 13px; color: var(--accent); background: var(--accent-dim); border-radius: 8px; padding: 8px 18px; }

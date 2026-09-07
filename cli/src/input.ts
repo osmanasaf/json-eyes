@@ -2,6 +2,7 @@ import { readFileSync, statSync } from 'node:fs'
 import type { JsonValue } from '../../frontend/src/types'
 import { describeParseError, parseJson } from '../../frontend/src/utils/json'
 import { tryRepair } from '../../frontend/src/utils/repair'
+import { looksLikeXml, xmlToJson, XmlParseError } from '../../frontend/src/utils/xml'
 import { UserError, color, info } from './output'
 
 /**
@@ -48,6 +49,8 @@ export interface LoadedJson {
   name: string
   /** Otomatik onarim uygulandi mi. */
   repaired: boolean
+  /** XML'den cevrildi mi. */
+  fromXml: boolean
 }
 
 /**
@@ -57,10 +60,34 @@ export interface LoadedJson {
  */
 export function loadJson(text: string, name: string, allowFix: boolean): LoadedJson {
   const first = parseJson(text)
-  if (first.data !== null) return { data: first.data, text, name, repaired: false }
+  if (first.data !== null) return { data: first.data, text, name, repaired: false, fromXml: false }
 
   if (!first.error) {
     throw new UserError(`${name} boş.`)
+  }
+
+  /**
+   * XML girdisi butun komutlarda kabul edilir: NDC yanitlari sik sik XML geliyor
+   * ve elindeki dosyayi once baska bir araca sokmasi gereken bir CLI ise yaramaz.
+   * Cevirim web arayuzuyle ayni kodla yapiliyor, sonuc birebir ayni.
+   */
+  if (looksLikeXml(text)) {
+    try {
+      const converted = xmlToJson(text)
+      info(`${color.blue('XML çevrildi')} ${name} → kök <${converted.root}> · ${converted.notes.join(' · ')}`)
+      return {
+        data: converted.data,
+        text: JSON.stringify(converted.data, null, 2),
+        name,
+        repaired: false,
+        fromXml: true,
+      }
+    } catch (error) {
+      if (error instanceof XmlParseError) {
+        throw new UserError(`${name}: XML ayrıştırılamadı (satır ${error.line}): ${error.message}`)
+      }
+      throw new UserError(`${name}: XML çevrilemedi: ${(error as Error).message}`)
+    }
   }
 
   if (allowFix) {
@@ -69,7 +96,7 @@ export function loadJson(text: string, name: string, allowFix: boolean): LoadedJ
       const second = parseJson(repaired)
       if (second.data !== null) {
         info(`${color.yellow('düzeltildi')} ${name}: yorum/fazla virgül/tek tırnak onarıldı.`)
-        return { data: second.data, text: repaired, name, repaired: true }
+        return { data: second.data, text: repaired, name, repaired: true, fromXml: false }
       }
     }
   }

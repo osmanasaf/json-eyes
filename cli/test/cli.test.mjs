@@ -42,6 +42,20 @@ writeFileSync(samplePath, JSON.stringify(SAMPLE, null, 2))
 const brokenPath = join(workDir, 'bozuk.json')
 writeFileSync(brokenPath, '{\n  // yorum\n  "a": 1,\n}\n')
 
+const XML = `<?xml version="1.0" encoding="UTF-8"?>
+<iata:IATA_OrderViewRS xmlns:iata="http://iata.org/ndc" Version="21.3">
+  <Response>
+    <Order><OrderID>ORD1</OrderID><StatusCode>OPEN</StatusCode><FlightNumber>0123</FlightNumber></Order>
+    <Order><OrderID>ORD2</OrderID><StatusCode>CLOSED</StatusCode><FlightNumber>0456</FlightNumber></Order>
+    <Warning Code="100">Kısmi &amp; uyarı</Warning>
+  </Response>
+</iata:IATA_OrderViewRS>`
+const xmlPath = join(workDir, 'ornek.xml')
+writeFileSync(xmlPath, XML)
+
+const brokenXmlPath = join(workDir, 'bozuk.xml')
+writeFileSync(brokenXmlPath, '<a><b>x</c></a>')
+
 /**
  * CLI'yi cocuk surec olarak kosar. stdin her durumda kapatiliyor: acik
  * birakildiginda boru hattindan okuyan komutlar sonsuza kadar bekler
@@ -249,6 +263,71 @@ test('fazladan arguman sessizce yutulmaz', async () => {
 
   const ok = await run(['values', samplePath, 'StatusCode'])
   assert.equal(ok.code, 0)
+})
+
+test('xml2json: XML JSON\'a cevrilir, oznitelik ve kod alanlari korunur', async () => {
+  const result = await run(['xml2json', xmlPath])
+  assert.equal(result.code, 0)
+  const data = JSON.parse(result.stdout)
+  assert.deepEqual(data, {
+    IATA_OrderViewRS: {
+      '@Version': '21.3',
+      Response: {
+        Order: [
+          { OrderID: 'ORD1', StatusCode: 'OPEN', FlightNumber: '0123' },
+          { OrderID: 'ORD2', StatusCode: 'CLOSED', FlightNumber: '0456' },
+        ],
+        // Oznitelikli eleman: metin #text'e iner.
+        Warning: { '@Code': '100', '#text': 'Kısmi & uyarı' },
+      },
+    },
+  })
+  // Cevirim notlari stderr'e; stdout yalnizca JSON tasir.
+  assert.match(result.stderr, /kök <IATA_OrderViewRS>/)
+})
+
+test('xml2json: --numbers acikca istenmedikce sayi cikarimi yapilmaz', async () => {
+  const asText = JSON.parse((await run(['xml2json', xmlPath, '-q'])).stdout)
+  assert.equal(asText.IATA_OrderViewRS['@Version'], '21.3')
+
+  const asNumber = JSON.parse((await run(['xml2json', xmlPath, '--numbers', '-q'])).stdout)
+  assert.equal(asNumber.IATA_OrderViewRS['@Version'], 21.3)
+  // Bastaki sifir sayiya cevrilmemeli: kod alanlari bozulmasin.
+  assert.equal(asNumber.IATA_OrderViewRS.Response.Order[0].FlightNumber, '0123')
+})
+
+test('xml2json: --keep-prefixes ad alani oneklerini korur', async () => {
+  const kept = JSON.parse((await run(['xml2json', xmlPath, '--keep-prefixes', '-q'])).stdout)
+  assert.ok(Object.prototype.hasOwnProperty.call(kept, 'iata:IATA_OrderViewRS'))
+})
+
+test('share: XML dosyasi verilince cevrilip paylasilir', async () => {
+  await withMockApi(async (api, received) => {
+    const result = await run(['share', xmlPath, '--api', api])
+    assert.equal(result.code, 0)
+    assert.equal(result.stdout.trim(), 'http://localhost:5173/?s=testID12')
+    assert.match(result.stderr, /XML çevrildi/)
+    // Sunucuya giden govde cevrilmis JSON olmali.
+    assert.equal(received[0].json.IATA_OrderViewRS.Response.Order.length, 2)
+    assert.equal(received[0].json.IATA_OrderViewRS.Response.Order[0].OrderID, 'ORD1')
+  })
+})
+
+test('inceleme komutlari da XML girdisini kabul eder', async () => {
+  const values = await run(['values', xmlPath, 'StatusCode'])
+  assert.equal(values.code, 0)
+  assert.match(values.stdout, /OPEN\s+1/)
+  assert.match(values.stdout, /CLOSED\s+1/)
+
+  const got = await run(['get', xmlPath, 'Order.0.OrderID', '--raw'])
+  assert.equal(got.stdout.trim(), 'ORD1')
+})
+
+test('bozuk XML satir numarasiyla hata verir', async () => {
+  const result = await run(['xml2json', brokenXmlPath])
+  assert.equal(result.code, 2)
+  assert.match(result.stderr, /XML ayrıştırılamadı \(satır 1\)/)
+  assert.equal(result.stdout, '')
 })
 
 test('yardim ve surum', async () => {

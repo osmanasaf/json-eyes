@@ -130,6 +130,19 @@ yeni bir tema eklemek `:root[data-theme='...']` bloğu yazmaktan ibarettir.
 - **Panel şeritleri**: editör ve IATA panelleri kendi başlıklarındaki `‹` / `›` ile
   kapanır; kapalıyken kenarda dikey yazılı bir şerit kalır, tıklayınca geri açılır.
 
+### XML girdisi
+
+XML ayrı bir görünüm değil, bir **girdi biçimi**: `.xml` dosyası seçtiğinizde (ya da
+sürükleyip bıraktığınızda) kendiliğinden JSON'a çevrilir; yapıştırdığınızda hata
+panelinde "XML'i JSON'a çevir" düğmesi çıkar. Çevrildikten sonra grid, tablo, kolon,
+fark, paylaşım ve XSD eşleştirmesi olduğu gibi çalışır.
+
+Kurallar: ad alanı önekleri atılır (`iata:Order` → `Order`), öznitelikler `@ad`, metin
+içeriği `#text` olur, tekrarlayan kardeşler diziye düşer ve **değerler metin kalır**
+(`0123` sayıya çevrilse baştaki sıfır giderdi — uçuş/bilet kodları bozulur). Ne
+yapıldığı üstteki bantta tek tek yazılır. Aynı çevirici CLI'de de kullanılır
+(`jse share siparis.xml`), dolayısıyla iki tarafta birebir aynı JSON çıkar.
+
 ### Fark görünümü
 
 `Fark` düğmesi mevcut JSON'u ikinci bir JSON ile karşılaştırır (dosya, sürükle-bırak,
@@ -317,7 +330,7 @@ almak gerekir.
 
 ```bash
 cd backend && mvn test     # XSD indeksleme ve alan eşleştirme (gerçek IATA şemaları)
-cd frontend && npm test    # fark motoru: kimlik eşleştirme, taşıma tespiti, LCS
+cd frontend && npm test    # fark motoru + XML çevirici (19 test)
 cd cli && npm test         # CLI: derlenmiş paket, sahte API sunucusuna karşı
 ```
 

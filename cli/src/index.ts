@@ -8,6 +8,7 @@ import {
   valuesCommand, VALUES_FLAGS,
 } from './commands/inspect'
 import { shareCommand, SHARE_FLAGS } from './commands/share'
+import { xmlCommand, XML_FLAGS } from './commands/xml'
 import { UserError, color, info, out, printError } from './output'
 
 const VERSION = '0.1.0'
@@ -44,6 +45,12 @@ ${color.bold('İNCELEME')} (yerel, backend gerekmez)
   find <dosya> <terim>   terimi taşıyan yolları listeler (--values, --limit, --json)
   get <dosya> <yol>      yoldaki değeri yazar (--raw, --minify)
   fix <dosya>            yorum/fazla virgül/tek tırnak onarır (--out, --minify)
+  xml2json <dosya|->     XML'i JSON'a çevirir (--out, --minify, --numbers, --keep-prefixes)
+
+${color.bold('XML')}
+  Tüm komutlar XML girdisini kendiliğinden çevirir: jse share siparis.xml
+  doğrudan paylaşım linki verir. Ad alanı önekleri atılır, öznitelikler "@ad"
+  olur, değerler metin kalır (kod alanlarındaki baştaki sıfır bozulmasın).
 
 ${color.bold('YAPILANDIRMA')}
   config show            geçerli adresleri ve dosya yolunu gösterir
@@ -61,6 +68,8 @@ ${color.bold('ÖRNEKLER')}
   jse values siparis.json Response.Order.StatusCode
   jse find siparis.json PAX42 --values
   jse fetch https://json-eyes.vercel.app/?s=4bK9zQ1x --out kopya.json
+  jse share siparis.xml --title "OrderViewRS (XML)"
+  jse xml2json siparis.xml -o siparis.json
 `
 
 async function configCommand(args: ParsedArgs): Promise<number> {
@@ -104,6 +113,7 @@ const COMMANDS: Record<string, Command> = {
   find: { run: findCommand, flags: FIND_FLAGS, maxPositional: 2, usage: 'jse find <dosya> <terim>' },
   get: { run: getCommand, flags: GET_FLAGS, maxPositional: 2, usage: 'jse get <dosya> <yol>' },
   fix: { run: fixCommand, flags: FIX_FLAGS, maxPositional: 1, usage: 'jse fix <dosya>' },
+  xml2json: { run: xmlCommand, flags: XML_FLAGS, maxPositional: 1, usage: 'jse xml2json <dosya|->' },
   config: { run: configCommand, flags: ['api'], maxPositional: 3, usage: 'jse config show | jse config set <api|web> <adres>' },
 }
 
