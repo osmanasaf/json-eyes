@@ -10,8 +10,14 @@ import {
 import { shareCommand, xmlShareCommand, SHARE_FLAGS, XML_SHARE_FLAGS } from './commands/share'
 import { xmlCommand, XML_FLAGS } from './commands/xml'
 import { UserError, color, info, out, printError } from './output'
+import { version as VERSION } from '../package.json'
 
-const VERSION = '0.1.0'
+/*
+ * Surum elle yazilmiyordu ve `npm version` yalnizca package.json'i degistirdigi
+ * icin `jse --version` yayindan sonra yalan soyluyordu (0.2.0 paketi 0.1.0
+ * diyordu). Artik tek kaynak package.json; esbuild derlerken degeri pakete
+ * gomuyor, dolayisiyla calisma aninda dosya okuma da yok.
+ */
 
 /**
  * Boru hatti erken kapandiginda (`jse find … | head -3`) Node ham bir EPIPE

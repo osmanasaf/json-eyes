@@ -10,12 +10,14 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist', 'jse.mjs')
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+const CLI = join(ROOT, 'dist', 'jse.mjs')
+const PKG = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 const workDir = mkdtempSync(join(tmpdir(), 'jse-test-'))
 
 const SAMPLE = {
@@ -420,7 +422,9 @@ test('yardim ve surum', async () => {
   assert.match(help.stdout, /PAYLAŞIM/)
 
   const version = await run(['--version'])
-  assert.match(version.stdout.trim(), /^\d+\.\d+\.\d+$/)
+  // Surum package.json ile ayni olmali: elle yazilan bir sabit `npm version`
+  // sonrasi geride kaliyordu ve yayinlanan paket yanlis surum soyluyordu.
+  assert.equal(version.stdout.trim(), PKG.version)
 })
 
 test('varsayilan adres uretim backend\'i ve duz HTTP uyarisi cikiyor', async () => {
