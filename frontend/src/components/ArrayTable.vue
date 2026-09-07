@@ -15,7 +15,13 @@ const props = defineProps<{
   variant: 'inline' | 'full'
 }>()
 
-const emit = defineEmits<{ focusPath: [path: string]; expand: [path: string]; close: [] }>()
+const emit = defineEmits<{
+  focusPath: [path: string]
+  /** Ic ice hucreye tiklandi: o dugumun kendi seviyesi tabloda acilsin. */
+  descend: [path: string]
+  expand: [path: string]
+  close: []
+}>()
 
 // Secim, gorunum degistirmeden baglam seridine ve IATA paneline yansisin.
 const selectField = inject(SELECT_FIELD, null)
@@ -167,6 +173,18 @@ function openInGrid(path: string) {
   emit('focusPath', path)
 }
 
+/**
+ * Ic ice hucre tiklamasi bir alt seviyeye iner (tablo icinde gezinme). Satirin
+ * kendisine tiklamak satir detayini acar; ikisi ayri hareket.
+ */
+function onCellClick(row: { index: number; item: JsonObject }, name: string, event: MouseEvent) {
+  const value = row.item[name]
+  if (!isNested(value)) return
+  event.stopPropagation()
+  selectField?.(`${props.path}.${row.index}.${name}`)
+  emit('descend', `${props.path}.${row.index}.${name}`)
+}
+
 /** Secili satirin tum alanlari: ic ice olanlar tam JSON, uzun metinler tam haliyle. */
 const DETAIL_CHARS = 20_000
 
@@ -250,9 +268,8 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
 <template>
   <div class="array-table" :class="variant">
     <div v-if="variant === 'full'" class="strip">
-      <button class="strip-btn back" title="Grid görünümüne dön" @click="emit('close')">← Geri</button>
-      <code class="strip-path">{{ path.split('.').slice(1).join('.') }}[]</code>
-      <span class="count-pill">{{ items.length }} kayıt</span>
+      <span class="count-pill">{{ items.length.toLocaleString('tr-TR') }} kayıt</span>
+      <span class="strip-hint">iç içe hücre: bir seviye aşağı · satır: detay</span>
       <span v-if="activeFilterSummary" class="strip-filters">{{ activeFilterSummary }}</span>
       <div class="spacer" />
       <button class="strip-btn clear" :disabled="!activeFilterSummary" @click="clearFilters">Filtreleri temizle</button>
@@ -297,7 +314,10 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
             :key="col.name"
             class="cell"
             :class="{ nested: isNested(row.item[col.name]) }"
-            :title="searchText(row.item[col.name]).slice(0, 400)"
+            :title="isNested(row.item[col.name])
+              ? `${col.name} — içine gir\n${searchText(row.item[col.name]).slice(0, 300)}`
+              : searchText(row.item[col.name]).slice(0, 400)"
+            @click="onCellClick(row, col.name, $event)"
             :style="{
               flex: flexOf(col.name, col.kind),
               color: colorOf(col.name, row.item[col.name]),
@@ -327,6 +347,11 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
                 <span class="detail-type">{{ field.type }}</span>
                 <button
                   v-if="field.nested"
+                  class="detail-goto"
+                  title="Bu alanı tabloda aç"
+                  @click.stop="emit('descend', field.path)"
+                >⊞</button>
+                <button
                   class="detail-goto"
                   title="Bu alanı grid'de aç"
                   @click.stop="openInGrid(field.path)"
@@ -385,7 +410,7 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
 .spacer { flex: 1; }
 
 .strip { display: flex; align-items: center; gap: 10px; padding: 9px 14px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; }
-.strip-path { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-primary); }
+.strip-hint { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .count-pill { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--purple); background: var(--bg-object); border-radius: 20px; padding: 2px 9px; }
 .strip-filters { font-size: 11.5px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .strip-btn { font-size: 11.5px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; white-space: nowrap; }

@@ -16,6 +16,7 @@ import IataPanel from './components/IataPanel.vue'
 import EditorPane from './components/EditorPane.vue'
 import EmptyState from './components/EmptyState.vue'
 import ArrayTable from './components/ArrayTable.vue'
+import NodeTable from './components/NodeTable.vue'
 
 const SAMPLE_JSON = `{
   "IATA_OrderViewRS": {
@@ -205,13 +206,32 @@ const selectedSchemaPath = computed(() =>
     : null,
 )
 
-/** Bağlam şeridi; kok etiketi atilir, cok derin yollarda bas kirpilir. */
+/**
+ * Bağlam şeridi. Her parca kendi yolunu tasiyor: tiklanabilir olmasi ust
+ * seviyelere donusun tek yolu (tablo akisinda "geri" tusu bu).
+ */
 const crumbs = computed(() => {
-  const segments = (selectedNodePath.value ?? ROOT_KEY).split('.').slice(1)
-  if (segments.length === 0) return [{ label: ROOT_KEY, last: true }]
-  const trimmed = segments.length > 6 ? ['…', ...segments.slice(-6)] : segments
-  return trimmed.map((label, index) => ({ label, last: index === trimmed.length - 1 }))
+  const full = (selectedNodePath.value ?? ROOT_KEY).split('.')
+  const items = full.map((label, index) => ({
+    label,
+    path: full.slice(0, index + 1).join('.'),
+    last: index === full.length - 1,
+  }))
+  // Kok etiketi ("json") yerine belgeye donen bir parca olarak kalir.
+  if (items.length <= 8) return items
+  return [{ label: '…', path: items[items.length - 8].path, last: false }, ...items.slice(-7)]
 })
+
+/** Breadcrumb tiklamasi: tablo modunda o seviyeye iner, digerlerinde odaklanir. */
+function goToCrumb(path: string) {
+  if (viewMode.value === 'table') {
+    if (isContainer(valueAt(path))) {
+      openTable(path)
+      return
+    }
+  }
+  focusOnPath(path)
+}
 
 const pathCopied = ref(false)
 let copyTimer: ReturnType<typeof setTimeout> | null = null
@@ -242,29 +262,74 @@ function valueAt(path: string): JsonValue | undefined {
   return current
 }
 
-/** Tam ekran Tablo modunda gosterilecek dizi; secimden yukari dogru aranir. */
+/**
+ * Tablo modu artik tek bir dizi degil, herhangi bir dugum seviyesini gosteriyor:
+ * nesne dizileri kayit tablosuna (ArrayTable), diger kapsayicilar tek seviyelik
+ * alan tablosuna (NodeTable) dusuyor. Ic ice hucreye tiklamak bir seviye
+ * asagi iner, breadcrumb yukari cikarir — tablo icinde gezinme akisi.
+ */
 const tablePath = ref<string | null>(null)
 
+/** Secimden yukari dogru en yakin kapsayici; tablo modunun giris noktasi. */
 const tableCandidate = computed(() => {
   const segments = (selectedNodePath.value ?? '').split('.')
   for (let i = segments.length; i > 1; i--) {
     const path = segments.slice(0, i).join('.')
     const value = valueAt(path)
-    if (value !== undefined && isObjectArray(value)) return path
+    if (value !== undefined && isContainer(value)) return path
   }
-  return null
+  return hasData.value ? ROOT_KEY : null
 })
 
-const tableItems = computed(() => {
+function isContainer(value: JsonValue | undefined): boolean {
+  return value !== undefined && value !== null && typeof value === 'object'
+}
+
+const tableValue = computed(() => {
   const path = tablePath.value
   if (!path) return null
   const value = valueAt(path)
-  return value !== undefined && isObjectArray(value) ? value : null
+  return isContainer(value) ? (value as JsonValue) : null
+})
+
+const tableItems = computed(() => {
+  const value = tableValue.value
+  return value !== null && isObjectArray(value) ? value : null
+})
+
+/** Tablo seridindeki seviye bilgisi. */
+const tableLevel = computed(() => {
+  const path = tablePath.value
+  const value = tableValue.value
+  if (!path || value === null) return null
+  const segments = path.split('.').slice(1)
+  const array = Array.isArray(value)
+  return {
+    path,
+    label: segments.length > 0 ? segments.join('.') : ROOT_KEY,
+    kind: array ? 'array' : 'object',
+    count: array ? (value as JsonValue[]).length : Object.keys(value as JsonObject).length,
+    records: isObjectArray(value),
+    parent: segments.length > 0 ? path.slice(0, path.lastIndexOf('.')) : null,
+  }
 })
 
 function openTable(path: string) {
   tablePath.value = path
+  selectedNodePath.value = path
   viewMode.value = 'table'
+}
+
+/** Ic ice hucreden bir seviye asagi. Skaler dugumler tabloda gosterilemez. */
+function descendTable(path: string) {
+  if (!isContainer(valueAt(path))) return
+  openTable(path)
+}
+
+/** Bir ust seviyeye; kok seviyesinde durur. */
+function ascendTable() {
+  const parent = tableLevel.value?.parent
+  if (parent) openTable(parent)
 }
 
 function setViewMode(mode: ViewMode) {
@@ -647,10 +712,8 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
         <button
           class="mode"
           :class="{ active: viewMode === 'table' }"
-          :disabled="!tablePath && !tableCandidate"
-          :title="tablePath || tableCandidate
-            ? 'Seçili nesne dizisini tam ekran tabloda aç'
-            : 'Önce grid\'de bir nesne dizisi seçin — dizi satırlarında ⊞ tablo rozeti çıkar'"
+          :disabled="!hasData"
+          title="Seçili seviyeyi tabloda aç — iç içe hücreler bir alt seviyeye iner"
           @click="setViewMode('table')"
         >Tablo</button>
       </div>
@@ -693,7 +756,12 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
     <div v-if="hasData" class="crumbs-bar">
       <nav class="crumbs">
         <template v-for="(crumb, index) in crumbs" :key="index">
-          <span class="crumb" :class="{ last: crumb.last }">{{ crumb.label }}</span>
+          <button
+            class="crumb"
+            :class="{ last: crumb.last }"
+            :title="`${crumb.path} — bu seviyeye git`"
+            @click="goToCrumb(crumb.path)"
+          >{{ crumb.label }}</button>
           <span v-if="!crumb.last" class="crumb-sep">›</span>
         </template>
       </nav>
@@ -784,16 +852,52 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
           maliyetli olduklari icin yalnizca secildiklerinde kurulur.
         -->
         <template v-else>
-          <ArrayTable
-            v-if="viewMode === 'table' && tableItems"
-            :items="tableItems"
-            :path="tablePath!"
-            variant="full"
-            @focus-path="focusOnPath"
-            @close="viewMode = 'grid'"
-          />
+          <!-- Tablo modu: seviye seridi + o seviyenin tablosu -->
+          <template v-if="viewMode === 'table' && tableLevel">
+            <div class="level-bar">
+              <button class="level-btn" title="Grid görünümüne dön" @click="viewMode = 'grid'">← Grid</button>
+              <button
+                class="level-btn"
+                :disabled="!tableLevel.parent"
+                title="Bir üst seviye"
+                @click="ascendTable"
+              >↑ üst</button>
+              <nav class="level-path">
+                <template v-for="(crumb, index) in crumbs" :key="index">
+                  <button
+                    class="level-crumb"
+                    :class="{ last: crumb.last }"
+                    @click="goToCrumb(crumb.path)"
+                  >{{ crumb.label }}</button>
+                  <span v-if="!crumb.last" class="level-sep">›</span>
+                </template>
+              </nav>
+              <span class="level-pill" :class="tableLevel.kind">
+                {{ tableLevel.count.toLocaleString('tr-TR') }}
+                {{ tableLevel.kind === 'array' ? 'öğe' : 'alan' }}
+              </span>
+              <span v-if="tableLevel.records" class="level-pill records">kayıt tablosu</span>
+            </div>
 
-          <div v-else-if="viewMode === 'tree'" class="tree-scroll">
+            <ArrayTable
+              v-if="tableItems"
+              :items="tableItems"
+              :path="tablePath!"
+              variant="full"
+              @focus-path="focusOnPath"
+              @descend="descendTable"
+              @close="viewMode = 'grid'"
+            />
+            <NodeTable
+              v-else
+              :value="(tableValue as JsonObject)"
+              :path="tablePath!"
+              @descend="descendTable"
+              @focus-path="focusOnPath"
+            />
+          </template>
+
+          <div v-if="viewMode === 'tree'" class="tree-scroll">
             <JsonTree
               :data="parsed!"
               :root-key="ROOT_KEY"
@@ -931,6 +1035,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 .crumbs-bar { display: flex; align-items: center; gap: 8px; height: var(--crumbs-h); padding: 0 16px; background: var(--bg-primary); border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; overflow: hidden; }
 .crumbs { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; }
 .crumb { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; }
+.crumb:hover { color: var(--accent); }
 .crumb.last { color: var(--text-primary); background: var(--bg-tertiary); border-radius: 5px; padding: 2px 7px; }
 .crumb-sep { color: var(--border); font-size: 11px; }
 .copy-path { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; white-space: nowrap; flex-shrink: 0; }
@@ -952,6 +1057,21 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 .seg-btn { padding: 3px 9px; border-radius: 5px; font-size: 11.5px; color: var(--text-muted); }
 .seg-btn.active-nested { color: var(--text-primary); background: var(--bg-tertiary); }
 .seg-btn.active-table { color: var(--green); background: var(--green-wash); }
+
+/* --- Tablo modu seviye seridi --------------------------------------------- */
+.level-bar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; overflow: hidden; }
+.level-btn { font-size: 11.5px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; white-space: nowrap; }
+.level-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.level-btn:disabled { opacity: .35; cursor: not-allowed; }
+.level-path { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; }
+.level-crumb { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; border-radius: 4px; padding: 2px 5px; }
+.level-crumb:hover { color: var(--accent); background: var(--accent-dim); }
+.level-crumb.last { color: var(--text-primary); background: var(--bg-tertiary); }
+.level-sep { color: var(--border); font-size: 11px; }
+.level-pill { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; border-radius: 20px; padding: 2px 9px; white-space: nowrap; flex-shrink: 0; }
+.level-pill.array { color: var(--green); background: var(--bg-array); }
+.level-pill.object { color: var(--purple); background: var(--bg-object); }
+.level-pill.records { color: var(--accent); background: var(--accent-dim); }
 
 /* --- Calisma alani --------------------------------------------------------- */
 .workspace { display: flex; flex: 1; min-height: 0; }
