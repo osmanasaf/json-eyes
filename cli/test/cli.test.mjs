@@ -266,7 +266,11 @@ test('varsayilan adres uretim backend\'i ve duz HTTP uyarisi cikiyor', async () 
   assert.match(show.stdout, /^api\s+http:\/\/\S+\/api\s+\(default\)/m)
 
   // Duz HTTP ile konusuluyorsa kullanici uyarilmali (yerel adresler haric).
-  const warned = await run(['share', samplePath, '--api', 'http://ornek-backend.test/api'])
+  // Adres 127.0.0.2: DNS'e gitmedigi icin baglanti aninda reddediliyor ama
+  // "yerel" listesinde (localhost/127.0.0.1/::1) olmadigi icin uyari cikiyor.
+  // Onceden `ornek-backend.test` kullaniliyordu; Windows'ta DNS arama
+  // sonekleriyle ugrasip testi 12 saniye bekletiyordu.
+  const warned = await run(['share', samplePath, '--api', 'http://127.0.0.2:9/api'])
   assert.match(warned.stderr, /şifresiz/)
 
   const local = await run(['share', samplePath, '--api', 'http://localhost:9/api'])
