@@ -107,3 +107,27 @@ export function shareUrl(serverUrl: string, id: string, web?: string): string {
   if (!web) return serverUrl
   return `${trimSlash(web)}/?s=${id}`
 }
+
+/**
+ * Fark linki: iki paylasim kimligini tek adreste tasiyor. `s` soldaki (eski)
+ * belge — goruntuleyicinin normal paylasim akisi bunu aciyor —, `d` ise
+ * karsilastirilan belge; on yuz `d` gorunce Fark gorunumunu acip ikinci tarafi
+ * kendisi getiriyor.
+ */
+export function diffUrl(base: string, idLeft: string, idRight: string): string {
+  return `${trimSlash(base)}/?s=${idLeft}&d=${idRight}`
+}
+
+/**
+ * Bir paylasim linkinden on yuz tabanini cikarir (sunucunun dondurdugu adres ya
+ * da kullanicinin yapistirdigi link). Fark linkini kurmak icin taban gerekiyor
+ * ve cogu durumda elimizde zaten bir link var — kullaniciya `--web` sormadan.
+ */
+export function webBaseFrom(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.origin}${parsed.pathname.replace(/\/+$/, '')}`
+  } catch {
+    return null
+  }
+}

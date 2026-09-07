@@ -1,5 +1,6 @@
 import { flagString, parseArgs, unknownFlags, type ParsedArgs } from './args'
 import { configPath, normalizeApi, readConfig, resolveApi, writeConfig } from './config'
+import { diffCommand, DIFF_FLAGS } from './commands/diff'
 import { fetchCommand, FETCH_FLAGS } from './commands/fetch'
 import {
   findCommand, FIND_FLAGS,
@@ -47,6 +48,13 @@ ${color.bold('PAYLAŞIM')}
                          --xml          girdiyi XML olarak çevir
   xmlshare <dosya|->     XML'i JSON'a çevirip paylaşır: XML ver, link al
                          share seçenekleri + --numbers, --keep-prefixes
+  diff <a> <b>           iki JSON'u karşılaştırır, fark linkini basar
+                         her iki taraf: dosya, - (stdin) ya da paylaşım linki
+                         --local  hiçbir şey gönderme, farkı terminale yaz
+                         --json   {url, counts, changes}
+                         --exit-code  fark varsa 1 ile çık (CI)
+                         --limit <n>  listelenen değişiklik sayısı (varsayılan 10)
+                         --open, --title, --no-comments, --web, --xml
   fetch <id|link>        paylaşılan JSON'u indirir (--out dosya, --minify, --meta)
 
 ${color.bold('İNCELEME')} (yerel, backend gerekmez)
@@ -81,6 +89,10 @@ ${color.bold('ÖRNEKLER')}
   jse values siparis.json Response.Order.StatusCode
   jse find siparis.json PAX42 --values
   jse fetch https://json-eyes.vercel.app/?s=4bK9zQ1x --out kopya.json
+  jse diff eski.json yeni.json                     fark linki
+  jse diff eski.json 'https://…/?s=4bK9zQ1x'       elindeki link ikinci taraf
+  jse diff a.json b.json --local --limit 40        ag yok, terminalde oku
+  jse diff a.json b.json --exit-code -q > /dev/null || echo "fark var"
   jse xmlshare siparis.xml --title "OrderViewRS (XML)"
   cat siparis.xml | jse xmlshare - -q
   jse xml2json siparis.xml -o siparis.json
@@ -123,6 +135,7 @@ interface Command {
 const COMMANDS: Record<string, Command> = {
   share: { run: shareCommand, flags: SHARE_FLAGS, maxPositional: 1, usage: 'jse share <dosya|->' },
   xmlshare: { run: xmlShareCommand, flags: XML_SHARE_FLAGS, maxPositional: 1, usage: 'jse xmlshare <dosya|->' },
+  diff: { run: diffCommand, flags: DIFF_FLAGS, maxPositional: 2, usage: 'jse diff <a> <b>' },
   fetch: { run: fetchCommand, flags: FETCH_FLAGS, maxPositional: 1, usage: 'jse fetch <id|link>' },
   values: { run: valuesCommand, flags: VALUES_FLAGS, maxPositional: 2, usage: 'jse values <dosya> <yol>' },
   find: { run: findCommand, flags: FIND_FLAGS, maxPositional: 2, usage: 'jse find <dosya> <terim>' },

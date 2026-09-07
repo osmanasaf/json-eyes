@@ -105,6 +105,7 @@ Hassas veri paylaşıyorsanız backend'i kendi alan adınıza taşıyıp (`https
 | `get <dosya> <yol>` | Yoldaki değeri yazar. `--raw`, `--minify`, `--xml` |
 | `fix <dosya>` | Yorum / fazla virgül / tek tırnak onarır. `--out`, `--minify` |
 | `xmlshare <dosya\|->` | **XML ver, paylaşım linki al.** `share` seçenekleri + `--numbers`, `--keep-prefixes` |
+| `diff <a> <b>` | **İki JSON'u karşılaştırır, fark linkini basar.** `--local`, `--json`, `--exit-code`, `--limit`, `--open`, `--title`, `--web`, `--xml` |
 | `xml2json <dosya\|->` | XML'i JSON'a çevirir. `--out`, `--minify`, `--numbers`, `--keep-prefixes` |
 | `config show\|set` | Adresleri gösterir ve kaydeder |
 
@@ -145,6 +146,56 @@ JSON beklenen bir yerde XML gelirse komut durur ve yolu söyler:
 - CDATA, yorum, `<!DOCTYPE>`, XML bildirimi ve varlıklar (`&amp;`, `&#65;`)
   desteklenir. Bozuk XML satır numarasıyla hata verir.
 
+### Fark
+
+`jse diff` iki JSON alır ve **fark linkini** basar: her iki tarafı paylaşıma
+yazar, `?s=A&d=B` adresini döndürür. Linki açan kişi Fark görünümünü hazır
+bulur — ikinci tarafı elle yüklemesi gerekmez.
+
+```bash
+$ jse diff eski.json yeni.json --title "OrderViewRS gece koşusu"
+karşılaştırılıyor eski.json → yeni.json (31 ms)
+11 değişiklik: 3 eklendi · 2 silindi · 5 değişti · 1 taşındı
+  + IATA_OrderViewRS.Response.Order[ORD999999]   11 alan
+  ~ IATA_OrderViewRS.Response.Order[ORD100005].StatusCode   PENDING → CANCELLED
+  ~ IATA_OrderViewRS.Response.Order[ORD100005].TotalPrice.TotalAmount   1018.75 → 9999.99
+http://localhost:5199/?s=CLI00002&d=CLI00003
+fark linki A CLI00002 · B CLI00003 · salt okunur · 60 gün saklanır
+```
+
+Yollarda **indeks değil kimlik** var (`Order[ORD100005]`, `Order.5` değil):
+NDC'de bir kayıt eklenince bütün indeksler kayar, kimlik kaymaz. Diziler
+`OrderID`, `PaxID` gibi alanlardan eşleştirilir; yalnızca yeri değişen kayıtlar
+"taşındı" olarak ayrılır, "değişti" sayılmaz.
+
+Taraflar dosya, `-` (stdin) ya da **paylaşım linki** olabilir. Zaten paylaşımda
+olan taraf yeniden gönderilmez:
+
+```bash
+jse diff eski.json 'https://json-eyes.vercel.app/?s=4bK9zQ1x'   # elinizdeki link ikinci taraf
+curl -s https://api.ornek.com/order | jse diff dun.json -        # taze yanıtı dünküyle karşılaştır
+```
+
+Ağa hiç çıkmadan, yalnızca terminalde:
+
+```bash
+jse diff eski.json yeni.json --local --limit 40
+```
+
+`--local` hiçbir şey göndermez — bağlantı şifresizken (üretim backend'i şu an
+düz HTTP) hassas veriyi karşılaştırmanın tek güvenli yolu bu.
+
+CI'da "bu iki yanıt aynı mı" kontrolü:
+
+```bash
+jse diff beklenen.json gelen.json --local --exit-code -q > /dev/null \
+  || echo "yanıt değişmiş"
+```
+
+Karşılaştırma her zaman **yerelde** yapılır; sunucu yalnızca linki paylaşmak
+için kullanılır. Motor web arayüzüyle aynı kod, dolayısıyla terminalde
+gördüğünüz sayılar linkte gördükleriniz.
+
 ### Yol yazımı
 
 Kökten başlayan tam zinciri yazmak zorunda değilsiniz; kuyruk yeterlidir. Birden fazla
@@ -175,7 +226,7 @@ PENDING     300  ██████████████
 | Kod | Anlamı |
 |---|---|
 | 0 | başarılı |
-| 1 | sonuç yok (`find` eşleşme bulamadı) veya beklenmeyen hata |
+| 1 | sonuç yok (`find` eşleşme bulamadı), `diff --exit-code` ile fark var, ya da beklenmeyen hata |
 | 2 | kullanım hatası: geçersiz JSON, bulunamayan yol, ulaşılamayan backend, bilinmeyen seçenek |
 
 ## Geliştirme

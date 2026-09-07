@@ -110,14 +110,14 @@ async function shareLoaded(args: ParsedArgs, loaded: LoadedJson): Promise<number
   return 0
 }
 
-function formatBytes(bytes: number): string {
+export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 /** Isletim sistemine gore tarayicida acar; basarisiz olursa sessiz kalir. */
-function openInBrowser(url: string): void {
+export function openInBrowser(url: string): void {
   const command = process.platform === 'darwin' ? 'open'
     : process.platform === 'win32' ? 'cmd'
       : 'xdg-open'

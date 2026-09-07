@@ -51,6 +51,7 @@ Vite dev sunucusu `/api` isteklerini `http://localhost:8080` adresine proxy eder
 npm install -g json-eyes                  # ya da: npx json-eyes …
 jse share siparis.json                    # JSON ver, paylaşım linki al
 jse xmlshare siparis.xml                  # XML ver, JSON'a çevirip linki al
+jse diff eski.json yeni.json              # iki JSON ver, fark linkini al
 ```
 
 Ayrıntılar ve tüm komutlar: [cli/README.md](cli/README.md) · paket: [npmjs.com/package/json-eyes](https://www.npmjs.com/package/json-eyes)
@@ -175,6 +176,12 @@ dizilerde metin diff'lerinin LCS'i kullanılır.
 Üstteki dört sayı (eklendi / silindi / değişti / taşındı), ↑↓ ile değişiklikler
 arasında gezinme, "yalnız değişenler" filtresi ve uzun değerlerde A/B yan yana tam
 metin var. 4,3 MB'lık iki NDC yanıtı ~15 ms'de karşılaştırılıyor.
+
+**Fark linki**: `/?s=A&d=B` adresi iki paylaşımı birlikte taşır — açan kişi Fark
+görünümünü hazır bulur, ikinci tarafı elle yüklemesi gerekmez. Terminalden
+`jse diff eski.json yeni.json` tam olarak bu linki üretiyor (karşılaştırmayı
+yerelde yapıp özeti de yazar); aynı motor, dolayısıyla terminaldeki sayılar
+linktekiyle aynı.
 
 ## Alan eşleştirme
 

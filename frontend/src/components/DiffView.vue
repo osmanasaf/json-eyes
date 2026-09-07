@@ -29,6 +29,12 @@ const props = defineProps<{
   currentName: string
   /** Paylasim kimliginden JSON getiren fonksiyon; App'ten geliyor. */
   loadShare: (idOrUrl: string) => Promise<{ json: JsonValue; label: string }>
+  /**
+   * Karsilastirilacak tarafi kendiliginden getir (`?s=A&d=B` adresindeki `d`).
+   * `jse diff` boyle bir link uretiyor: linki acan kisi iki tarafi da elle
+   * yuklemek zorunda kalmasin.
+   */
+  autoShare?: string | null
 }>()
 
 const emit = defineEmits<{ focusPath: [path: string]; close: [] }>()
@@ -98,20 +104,29 @@ function applyPaste() {
   pasteText.value = ''
 }
 
-async function applyShare() {
-  const value = shareInput.value.trim()
-  if (!value) return
+async function loadFromShare(idOrUrl: string): Promise<void> {
   loading.value = true
   otherError.value = null
   try {
-    other.value = await props.loadShare(value)
-    shareInput.value = ''
+    other.value = await props.loadShare(idOrUrl)
   } catch (error) {
     otherError.value = (error as Error).message
   } finally {
     loading.value = false
   }
 }
+
+async function applyShare() {
+  const value = shareInput.value.trim()
+  if (!value) return
+  await loadFromShare(value)
+  if (!otherError.value) shareInput.value = ''
+}
+
+// Fark linkiyle gelindiyse ikinci taraf kendiliginden yuklenir.
+watch(() => props.autoShare, (id) => {
+  if (id) void loadFromShare(id)
+}, { immediate: true })
 
 // --- Karsilastirma -----------------------------------------------------------
 

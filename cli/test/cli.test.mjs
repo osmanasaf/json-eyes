@@ -41,6 +41,30 @@ const SAMPLE = {
 const samplePath = join(workDir, 'ornek.json')
 writeFileSync(samplePath, JSON.stringify(SAMPLE, null, 2))
 
+/**
+ * Ikinci surum: ORD1'in durumu ve tutari degisti, ORD3 silindi, ORD4 eklendi.
+ * Kimlige gore eslestirme sinanabilsin diye kayitlarin sirasi da degisiyor.
+ */
+const SAMPLE_V2 = {
+  IATA_OrderViewRS: {
+    Response: {
+      Order: [
+        { OrderID: 'ORD2', StatusCode: 'CLOSED', TotalPrice: { TotalAmount: 250, CurCode: 'TRY' } },
+        {
+          OrderID: 'ORD1',
+          StatusCode: 'CANCELLED',
+          TotalPrice: { TotalAmount: 0, CurCode: 'EUR' },
+          OrderItem: [{ Price: { BaseAmount: 40, CurCode: 'EUR' } }],
+        },
+        { OrderID: 'ORD4', StatusCode: 'OPEN' },
+      ],
+    },
+  },
+}
+
+const sampleV2Path = join(workDir, 'ornek2.json')
+writeFileSync(sampleV2Path, JSON.stringify(SAMPLE_V2, null, 2))
+
 const brokenPath = join(workDir, 'bozuk.json')
 writeFileSync(brokenPath, '{\n  // yorum\n  "a": 1,\n}\n')
 
@@ -93,15 +117,28 @@ function run(args, options = {}) {
 /** Paylasim ucunu taklit eden sunucu; gelen govdeyi de sinamak icin sakliyor. */
 async function withMockApi(handler) {
   const received = []
+  // Her paylasim ayri kimlik alir: fark linki iki kimlik tasidigi icin
+  // ikisinin karistirilmadigi ancak boyle gorulur.
+  const ids = ['testID12', 'testID34', 'testID56']
   const server = createServer((req, res) => {
     if (req.method === 'POST' && req.url === '/api/shares') {
       let body = ''
       req.on('data', chunk => { body += chunk })
       req.on('end', () => {
+        const id = ids[received.length] ?? `testID${received.length}`
         received.push(JSON.parse(body))
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ id: 'testID12', url: 'http://localhost:5173/?s=testID12' }))
+        res.end(JSON.stringify({ id, url: `http://localhost:5173/?s=${id}` }))
       })
+      return
+    }
+    // Daha once paylasilmis bir belge: fark komutunda taraf olarak verilebiliyor.
+    if (req.method === 'GET' && req.url === '/api/shares/oldID99') {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({
+        id: 'oldID99', title: 'dünkü yanıt', commentsEnabled: true,
+        json: SAMPLE, createdAt: '2026-09-06T10:00:00Z',
+      }))
       return
     }
     if (req.method === 'GET' && req.url === '/api/shares/testID12') {
@@ -413,6 +450,86 @@ test('bozuk XML satir numarasiyla hata verir', async () => {
   const result = await run(['xml2json', brokenXmlPath])
   assert.equal(result.code, 2)
   assert.match(result.stderr, /XML ayrıştırılamadı \(satır 1\)/)
+  assert.equal(result.stdout, '')
+})
+
+test('diff: iki JSON alir, fark linkini basar', async () => {
+  await withMockApi(async (api, received) => {
+    const result = await run(['diff', samplePath, sampleV2Path, '--api', api])
+    assert.equal(result.code, 0)
+    // stdout yalnizca link: `LINK=$(jse diff a.json b.json -q)` calissin.
+    assert.equal(result.stdout.trim(), 'http://localhost:5173/?s=testID12&d=testID34')
+    // Iki taraf da paylasima yazilir, sira korunur (A = ilk arguman).
+    assert.equal(received.length, 2)
+    assert.equal(received[0].json.IATA_OrderViewRS.Response.Order[0].StatusCode, 'OPEN')
+    assert.equal(received[1].json.IATA_OrderViewRS.Response.Order[1].StatusCode, 'CANCELLED')
+    assert.match(received[0].title, /^A: /)
+    assert.match(received[1].title, /^B: /)
+    // Ozet stderr'de: 1 eklendi (ORD4), 1 silindi (ORD3), 2 degisti.
+    assert.match(result.stderr, /değişiklik/)
+    assert.match(result.stderr, /eklendi/)
+    assert.match(result.stderr, /silindi/)
+  })
+})
+
+test('diff: --local hicbir sey gondermez, kimlikli yollari yazar', async () => {
+  await withMockApi(async (api, received) => {
+    const result = await run(['diff', samplePath, sampleV2Path, '--api', api, '--local'])
+    assert.equal(result.code, 0)
+    assert.equal(received.length, 0, 'yerel karşılaştırmada sunucuya istek gitmemeli')
+    // Yol dizi indeksi degil kimlik tasir: indeks iki yanit arasinda kayiyor.
+    assert.match(result.stdout, /Order\[ORD1\]\.StatusCode/)
+    assert.match(result.stdout, /OPEN → CANCELLED/)
+    assert.match(result.stdout, /Order\[ORD4\]/)
+    assert.match(result.stdout, /Order\[ORD3\]/)
+    // Indeksli yol hic gorunmemeli.
+    assert.doesNotMatch(result.stdout, /Order\.\d/)
+  })
+})
+
+test('diff: --exit-code fark varsa 1, yoksa 0 doner', async () => {
+  const different = await run(['diff', samplePath, sampleV2Path, '--local', '--exit-code', '-q'])
+  assert.equal(different.code, 1)
+
+  const same = await run(['diff', samplePath, samplePath, '--local', '--exit-code', '-q'])
+  assert.equal(same.code, 0)
+  assert.equal(same.stdout.trim(), 'fark yok')
+})
+
+test('diff: --json makine okunur cikti verir', async () => {
+  await withMockApi(async (api) => {
+    const result = await run(['diff', samplePath, sampleV2Path, '--api', api, '--json'])
+    const payload = JSON.parse(result.stdout)
+    assert.equal(payload.url, 'http://localhost:5173/?s=testID12&d=testID34')
+    assert.equal(payload.left.id, 'testID12')
+    assert.equal(payload.right.id, 'testID34')
+    assert.equal(payload.counts.added, 1)
+    assert.equal(payload.counts.removed, 1)
+    assert.ok(payload.counts.changed >= 2)
+    const status = payload.changes.find(c => c.path.endsWith('Order[ORD1].StatusCode'))
+    assert.deepEqual([status.kind, status.left, status.right], ['changed', 'OPEN', 'CANCELLED'])
+  })
+})
+
+test('diff: paylasim linki taraf olabilir, yeniden gonderilmez', async () => {
+  await withMockApi(async (api, received) => {
+    // Elindeki link eski surum (A), yerel dosya yeni surum (B).
+    const link = 'http://localhost:5173/?s=oldID99'
+    const result = await run(['diff', link, sampleV2Path, '--api', api])
+    assert.equal(result.code, 0)
+    // Yalnizca yerel dosya gonderilir; linkteki taraf zaten paylasimda.
+    assert.equal(received.length, 1)
+    assert.equal(result.stdout.trim(), 'http://localhost:5173/?s=oldID99&d=testID12')
+    // Paylasimin basligi taraf etiketi olur: "dünkü yanıt" stderr'de gorunur.
+    assert.match(result.stderr, /dünkü yanıt/)
+  })
+})
+
+test('diff: eksik arguman kullanimi soyler', async () => {
+  const result = await run(['diff', samplePath])
+  assert.equal(result.code, 2)
+  assert.match(result.stderr, /İki JSON gerekiyor/)
+  assert.match(result.stderr, /jse diff/)
   assert.equal(result.stdout, '')
 })
 

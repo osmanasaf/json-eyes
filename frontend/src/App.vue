@@ -431,6 +431,13 @@ function forkShared() {
  * Fark gorunumu icin paylasimdan JSON getirir. Kullanicinin elindeki
  * karsilastirma malzemesi genellikle bir paylasim linki oluyor.
  */
+/**
+ * Fark linkiyle acilan ikinci taraf (`?s=A&d=B`). `jse diff` bu adresi
+ * uretiyor: link tek basina iki belgeyi de tasidigi icin acan kisinin elle
+ * dosya yuklemesi gerekmiyor.
+ */
+const diffShareId = ref<string | null>(null)
+
 async function loadShareForDiff(idOrUrl: string): Promise<{ json: JsonValue; label: string }> {
   const match = /[?&]s=([A-Za-z0-9]+)/.exec(idOrUrl)
   const id = match ? match[1] : idOrUrl.trim()
@@ -465,6 +472,12 @@ onMounted(async () => {
   const shareId = params.get('s')
   if (shareId) {
     await loadFromShareId(shareId)
+  }
+  // `d` varsa fark gorunumu acilir; ikinci tarafi DiffView kendisi getirir.
+  const diffId = params.get('d')
+  if (diffId && parsed.value !== null) {
+    diffShareId.value = diffId
+    viewMode.value = 'diff'
   }
   // Yukleme basarisiz olsa da elimizdeki JSON icin aciklamalari getir; watch'in
   // bekleyen cagrisini iptal edip tek seferde calistiriyoruz.
@@ -950,6 +963,7 @@ const docView = computed(() => viewMode.value !== 'diff' && viewMode.value !== '
             :root-key="ROOT_KEY"
             :current-name="displayName"
             :load-share="loadShareForDiff"
+            :auto-share="diffShareId"
             @focus-path="focusOnPath"
             @close="viewMode = 'grid'"
           />
