@@ -17,7 +17,21 @@ export interface CliConfig {
   web?: string
 }
 
-const DEFAULT_API = 'http://localhost:8080/api'
+/**
+ * Uretim backend'i: `frontend/vercel.json`'daki rewrite hedefiyle ayni adres.
+ * Boylece CLI kurulur kurulmaz `jse share` calisir, kullanicinin yapilandirma
+ * yapmasi gerekmez.
+ *
+ * Adres duz HTTP: Coolify'in verdigi `*.sslip.io` alan adinda HTTPS calismiyor
+ * (Let's Encrypt bu ortak alan adina rate limit uyguluyor — bkz. depo README'si,
+ * "Alan adi ve HTTPS"). Bu yuzden paylasilan JSON bu hopta acik metin gidiyor;
+ * CLI bunu her istekte kullaniciya soyluyor (asagidaki `insecureNotice`).
+ * Backend kendi alan adina tasindiginda burasi ve vercel.json birlikte
+ * `https://` yapilmali.
+ */
+const DEFAULT_API = 'http://t78qo9weypgend50er2jx07z.178.104.138.59.sslip.io/api'
+
+const LOCAL_HOSTS = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/
 
 export function configPath(): string {
   const base = process.env.XDG_CONFIG_HOME || join(homedir(), '.config')
@@ -76,6 +90,16 @@ export function normalizeApi(raw: string): string {
     )
   }
   return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`
+}
+
+/**
+ * Duz HTTP ile konusuluyorsa uyari metni. Sessizce sifresiz gondermek, kullanici
+ * "salt okunur link" alirken verisinin yolda acik gittigini bilmemesi demek.
+ * Yerel adresler icin uyarilmiyor (kendi makinesi).
+ */
+export function insecureNotice(api: string): string | null {
+  if (!api.startsWith('http://') || LOCAL_HOSTS.test(api)) return null
+  return `Bağlantı şifresiz (${new URL(api).host}): gönderilen JSON yolda açık metin gider.`
 }
 
 /** Paylasim linkini on yuz tabanina gore yeniden kurar. */

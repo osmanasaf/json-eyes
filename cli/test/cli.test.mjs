@@ -248,6 +248,19 @@ test('yardim ve surum', async () => {
   assert.match(version.stdout.trim(), /^\d+\.\d+\.\d+$/)
 })
 
+test('varsayilan adres uretim backend\'i ve duz HTTP uyarisi cikiyor', async () => {
+  // Yapilandirma ve ortam degiskeni olmadan: gomulu uretim adresi kullanilmali.
+  const show = await run(['config', 'show'], { env: { XDG_CONFIG_HOME: join(workDir, 'bos-config') } })
+  assert.match(show.stdout, /^api\s+http:\/\/\S+\/api\s+\(default\)/m)
+
+  // Duz HTTP ile konusuluyorsa kullanici uyarilmali (yerel adresler haric).
+  const warned = await run(['share', samplePath, '--api', 'http://ornek-backend.test/api'])
+  assert.match(warned.stderr, /şifresiz/)
+
+  const local = await run(['share', samplePath, '--api', 'http://localhost:9/api'])
+  assert.doesNotMatch(local.stderr, /şifresiz/)
+})
+
 test('config: yazip geri okur, env dosyayi ezer', async () => {
   const set = await run(['config', 'set', 'api', 'https://api.ornek.com'])
   assert.equal(set.code, 0)

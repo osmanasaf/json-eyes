@@ -51,7 +51,8 @@ ${color.bold('YAPILANDIRMA')}
   config set web <adres> paylaşım linklerinin ön yüz tabanını kaydeder
 
 ${color.bold('ADRES SIRASI')}
-  --api > JSON_EYES_API > yapılandırma dosyası > http://localhost:8080/api
+  --api > JSON_EYES_API > yapılandırma dosyası > gömülü üretim adresi
+  Kendi kurulumunuz için: jse config set api http://localhost:8080
 
 ${color.bold('ÖRNEKLER')}
   jse share siparis.json --title "OrderViewRS canlı"

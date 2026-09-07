@@ -1,8 +1,8 @@
 import { writeFileSync } from 'node:fs'
 import { extractShareId, getShare } from '../api'
 import { flagBool, flagString, type ParsedArgs } from '../args'
-import { resolveApi } from '../config'
-import { color, info, out } from '../output'
+import { insecureNotice, resolveApi } from '../config'
+import { color, info, out, warn } from '../output'
 import { requireArgument } from './share'
 
 export const FETCH_FLAGS = ['api', 'minify', 'out', 'o', 'meta', 'quiet', 'q']
@@ -15,6 +15,8 @@ export async function fetchCommand(args: ParsedArgs): Promise<number> {
   const target = requireArgument(args.positional[0], 'Paylaşım kimliği veya linki')
   const id = extractShareId(target)
   const resolved = resolveApi(flagString(args, 'api'))
+  const insecure = insecureNotice(resolved.api)
+  if (insecure && !flagBool(args, 'quiet', 'q')) warn(insecure)
   const share = await getShare(resolved.api, id)
 
   if (flagBool(args, 'meta')) {

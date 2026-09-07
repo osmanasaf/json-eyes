@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { countNodes } from '../../../frontend/src/utils/json'
 import { createShare } from '../api'
 import { flagBool, flagString, type ParsedArgs } from '../args'
-import { resolveApi, shareUrl } from '../config'
+import { insecureNotice, resolveApi, shareUrl } from '../config'
 import { loadJson, readInput } from '../input'
 import { UserError, color, info, out, warn } from '../output'
 
@@ -29,6 +29,9 @@ export async function shareCommand(args: ParsedArgs): Promise<number> {
   if (!quiet && !asJson) {
     info(`${color.dim('gönderiliyor')} ${name} · ${formatBytes(bytes)} · ${countNodes(loaded.data).toLocaleString('tr-TR')} node → ${resolved.api}`)
   }
+
+  const insecure = insecureNotice(resolved.api)
+  if (insecure && !quiet && !asJson) warn(insecure)
 
   const title = flagString(args, 'title', 't')
   const response = await createShare(resolved.api, loaded.data, {

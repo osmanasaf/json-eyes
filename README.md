@@ -266,7 +266,9 @@ bu ortak alan adına rate limit uyguluyor, sertifika doğrulaması başarısız 
 Bu yüzden backend şu an düz HTTP üzerinden yayında.
 
 Sonuç: tarayıcı ile Vercel arası HTTPS, **Vercel ile backend arası şifresiz**.
-Paylaşılan JSON içerikleri ve yorumlar bu hopta açık metin gider.
+Paylaşılan JSON içerikleri ve yorumlar bu hopta açık metin gider. CLI (`jse`)
+backend'e doğrudan gittiği için orada tüm yol şifresizdir; araç bunu her paylaşımda
+uyarı olarak yazar.
 
 Kalıcı çözüm: sahip olduğunuz bir alan adına alt alan adı açmak
 (ör. `json-eyes-api.ornek.com` → A kaydı sunucu IP'sine), Coolify'da Domains

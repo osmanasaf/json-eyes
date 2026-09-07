@@ -52,27 +52,40 @@ Kaldırmak için: `npm uninstall -g json-eyes` (kaynaktan kurduysanız `npm unli
 
 ## Backend adresi
 
-Paylaşım komutları backend'e ihtiyaç duyar (`share`, `fetch`). İnceleme komutları
+Paylaşım komutları (`share`, `fetch`) backend'e gider; inceleme komutları
 (`values`, `find`, `get`, `fix`) tamamen yereldir, ağ kullanmaz.
 
+Kurulumdan sonra ayar gerekmez: üretim backend'i gömülü gelir. Kendi kurulumunuza
+yönlendirmek isterseniz:
+
 ```bash
-jse config set api https://api.ornek.com          # bir kez ayarla
-jse config set web https://json-eyes.vercel.app   # linklerin ön yüz tabanı
+jse config set api http://localhost:8080          # yerel backend
+jse config set web https://kendi-adresiniz.com    # linklerin ön yüz tabanı
 jse config show
 ```
 
 Sıra: `--api` > `JSON_EYES_API` > yapılandırma dosyası
-(`~/.config/json-eyes/config.json`) > `http://localhost:8080/api`.
+(`~/.config/json-eyes/config.json`) > gömülü üretim adresi.
 
-`web` ayarı isteğe bağlıdır: verilmezse sunucunun döndürdüğü link kullanılır. Backend
-`jsonsarp.public-base-url` ayarı eksikse sunucu localhost gösteren bir link üretir; CLI
-bu durumu uyarı olarak söyler, `--web` ile düzeltebilirsiniz.
+`web` isteğe bağlıdır: verilmezse sunucunun döndürdüğü link kullanılır. Backend'in
+`jsonsarp.public-base-url` ayarı eksikse sunucu localhost gösteren bir link üretir;
+CLI bunu uyarı olarak söyler, `--web` ile düzeltebilirsiniz.
 
-Yerel backend:
+### Şifresiz bağlantı uyarısı
 
-```bash
-cd backend && mvn spring-boot:run   # http://localhost:8080
+Üretim backend'i şu an düz HTTP üzerinden yayında: Coolify'ın verdiği `*.sslip.io`
+alan adında HTTPS çalışmıyor (Let's Encrypt bu ortak alan adına rate limit
+uyguluyor — ayrıntı: deponun kök README'sindeki "Alan adı ve HTTPS"). Bu yüzden
+`jse share` gönderdiğiniz JSON'u açık metin olarak iletir ve CLI her seferinde
+bunu söyler:
+
 ```
+uyarı Bağlantı şifresiz (…sslip.io): gönderilen JSON yolda açık metin gider.
+```
+
+Hassas veri paylaşıyorsanız backend'i kendi alan adınıza taşıyıp (`https://`)
+`jse config set api https://…` demeniz gerekir. Uyarı yerel adreslerde
+(localhost/127.0.0.1) çıkmaz.
 
 ## Komutlar
 
