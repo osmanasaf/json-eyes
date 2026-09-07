@@ -89,14 +89,22 @@ async function configCommand(args: ParsedArgs): Promise<number> {
   throw new UserError(`Bilinmeyen config komutu: ${action}`, 'Kullanılabilir: show, set')
 }
 
-const COMMANDS: Record<string, { run: (args: ParsedArgs) => Promise<number>; flags: string[] }> = {
-  share: { run: shareCommand, flags: SHARE_FLAGS },
-  fetch: { run: fetchCommand, flags: FETCH_FLAGS },
-  values: { run: valuesCommand, flags: VALUES_FLAGS },
-  find: { run: findCommand, flags: FIND_FLAGS },
-  get: { run: getCommand, flags: GET_FLAGS },
-  fix: { run: fixCommand, flags: FIX_FLAGS },
-  config: { run: configCommand, flags: ['api'] },
+interface Command {
+  run: (args: ParsedArgs) => Promise<number>
+  flags: string[]
+  /** Komutun aldigi en fazla konumsal arguman; fazlasi hata. */
+  maxPositional: number
+  usage: string
+}
+
+const COMMANDS: Record<string, Command> = {
+  share: { run: shareCommand, flags: SHARE_FLAGS, maxPositional: 1, usage: 'jse share <dosya|->' },
+  fetch: { run: fetchCommand, flags: FETCH_FLAGS, maxPositional: 1, usage: 'jse fetch <id|link>' },
+  values: { run: valuesCommand, flags: VALUES_FLAGS, maxPositional: 2, usage: 'jse values <dosya> <yol>' },
+  find: { run: findCommand, flags: FIND_FLAGS, maxPositional: 2, usage: 'jse find <dosya> <terim>' },
+  get: { run: getCommand, flags: GET_FLAGS, maxPositional: 2, usage: 'jse get <dosya> <yol>' },
+  fix: { run: fixCommand, flags: FIX_FLAGS, maxPositional: 1, usage: 'jse fix <dosya>' },
+  config: { run: configCommand, flags: ['api'], maxPositional: 3, usage: 'jse config show | jse config set <api|web> <adres>' },
 }
 
 async function main(): Promise<number> {
@@ -123,6 +131,17 @@ async function main(): Promise<number> {
     throw new UserError(
       `${args.command} komutunda bilinmeyen seçenek: ${unknown.map(name => `--${name}`).join(', ')}`,
       `Bu komutun seçenekleri: ${entry.flags.map(name => `--${name}`).join(', ')}`,
+    )
+  }
+
+  // Fazladan arguman da sessizce yutulmamali: `jse share veri.json StatusCode`
+  // yazan kullanici muhtemelen `jse values` demek istiyor; dosyayi paylasip
+  // ikinci argumani atmak istedigi sey degil.
+  if (args.positional.length > entry.maxPositional) {
+    const extra = args.positional.slice(entry.maxPositional)
+    throw new UserError(
+      `${args.command} komutu ${entry.maxPositional} argüman alır; fazlası: ${extra.join(' ')}`,
+      `Kullanım: ${entry.usage}`,
     )
   }
 

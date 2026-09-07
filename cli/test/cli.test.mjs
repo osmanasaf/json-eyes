@@ -239,6 +239,18 @@ test('bilinmeyen komut ve secenek anlatan hata verir', async () => {
   assert.match(flag.stderr, /bilinmeyen seçenek/)
 })
 
+test('fazladan arguman sessizce yutulmaz', async () => {
+  // Windows oturumunda `jse share veri.json statusCode` yazildiginda ikinci
+  // arguman atiliyordu; kullanici muhtemelen `jse values` demek istiyor.
+  const result = await run(['share', samplePath, 'StatusCode'])
+  assert.equal(result.code, 2)
+  assert.match(result.stderr, /argüman alır/)
+  assert.equal(result.stdout, '')
+
+  const ok = await run(['values', samplePath, 'StatusCode'])
+  assert.equal(ok.code, 0)
+})
+
 test('yardim ve surum', async () => {
   const help = await run(['help'])
   assert.equal(help.code, 0)

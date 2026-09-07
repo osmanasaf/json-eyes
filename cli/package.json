@@ -39,7 +39,7 @@
     "prepublishOnly": "npm run build && npm run typecheck && npm test",
     "dev": "npm run build && node dist/jse.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test 'test/*.test.mjs'"
+    "test": "node --test test/cli.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.5.0",
