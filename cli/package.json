@@ -1,18 +1,42 @@
 {
-  "name": "json-eyes-cli",
+  "name": "json-eyes",
   "version": "0.1.0",
-  "private": true,
-  "description": "JSON Eyes komut satiri araci: JSON'u paylasim linkine cevirir, alan dagilimini ve yollari terminalde gosterir.",
+  "description": "JSON'u salt okunur paylasim linkine ceviren ve terminalde inceleyen CLI (IATA NDC yanitlari icin JSON Eyes araci).",
+  "keywords": [
+    "json",
+    "cli",
+    "share",
+    "json-viewer",
+    "iata",
+    "ndc",
+    "jq",
+    "terminal"
+  ],
+  "license": "MIT",
+  "author": "osmanasaf",
+  "homepage": "https://github.com/osmanasaf/json-eyes/tree/master/cli#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/osmanasaf/json-eyes.git",
+    "directory": "cli"
+  },
+  "bugs": {
+    "url": "https://github.com/osmanasaf/json-eyes/issues"
+  },
   "type": "module",
   "bin": {
-    "jse": "./dist/jse.mjs"
+    "jse": "dist/jse.mjs",
+    "json-eyes": "dist/jse.mjs"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/jse.mjs --banner:js=\"#!/usr/bin/env node\"",
     "prepare": "npm run build",
+    "prepublishOnly": "npm run build && npm run typecheck && npm test",
     "dev": "npm run build && node dist/jse.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test 'test/*.test.mjs'"

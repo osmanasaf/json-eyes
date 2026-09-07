@@ -46,7 +46,7 @@ Vite dev sunucusu `/api` isteklerini `http://localhost:8080` adresine proxy eder
 ### Komut satırı
 
 ```bash
-cd cli && npm install && npm link         # `jse` komutu PATH'e girer
+npm install -g json-eyes                  # ya da: npx json-eyes …
 jse share siparis.json                    # JSON ver, paylaşım linki al
 ```
 
@@ -313,3 +313,7 @@ json-sarp/
 ├── cli/               `jse` komut satırı aracı (paylaşım linki + yerel inceleme)
 └── design_handoff_json_eyes/       uygulanan tasarım referansı (Tur 5)
 ```
+
+## Lisans
+
+MIT — bkz. [LICENSE](LICENSE).

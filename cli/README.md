@@ -18,35 +18,37 @@ curl -s https://api.ornek.com/order | jse share -  # doğrudan API çıktısın�
 
 ## Kurulum
 
-npm'de yayınlanmadı; kaynaktan kurulur. Node 18+ gerekir.
+```bash
+npm install -g json-eyes     # jse komutu PATH'e girer
+jse help
+```
+
+Tek seferlik kullanım için kurmadan da çalışır:
+
+```bash
+npx json-eyes share veri.json
+```
+
+Node 18+ gerekir. Komut adı `jse`; 2015'ten kalma başka bir `jse` paketiyle çakışma
+ihtimaline karşı aynı araç `json-eyes` adıyla da çağrılabilir.
+
+### Kaynaktan
 
 ```bash
 git clone https://github.com/osmanasaf/json-eyes.git
 cd json-eyes/cli
 npm install        # dist/jse.mjs otomatik derlenir (prepare)
 npm link           # `jse` komutu PATH'e girer
-
-jse help
 ```
 
-Depo zaten sizdeyse ilk satırı atlayın. `npm link` sudo isterse ya da global kurulum
-istemiyorsanız üç alternatif:
+Global kurulum istemiyorsanız:
 
 ```bash
-# 1) doğrudan çağırın
 node ~/json-eyes/cli/dist/jse.mjs share veri.json
-
-# 2) kabuk takma adı (~/.zshrc veya ~/.bashrc)
-alias jse='node ~/json-eyes/cli/dist/jse.mjs'
-
-# 3) paket olarak global kurulum
-cd json-eyes/cli && npm pack && npm install -g ./json-eyes-cli-0.1.0.tgz
+alias jse='node ~/json-eyes/cli/dist/jse.mjs'    # ~/.zshrc veya ~/.bashrc
 ```
 
-Kaldırmak için: `npm unlink -g json-eyes-cli` (ya da `npm uninstall -g json-eyes-cli`).
-
-Depoyu güncelledikten sonra `cd cli && npm install` derlemeyi yeniler; `npm link` ile
-kurduysanız `jse` doğrudan yeni sürümü çalıştırır (symlink olduğu için).
+Kaldırmak için: `npm uninstall -g json-eyes` (kaynaktan kurduysanız `npm unlink -g json-eyes`).
 
 ## Backend adresi
 
@@ -120,9 +122,16 @@ PENDING     300  ██████████████
 ## Geliştirme
 
 ```bash
-npm run build      # esbuild ile tek dosya (~31 KB); npm install bunu kendisi çağırır
+npm run build      # esbuild ile tek dosya (~34 KB); npm install bunu kendisi çağırır
 npm run typecheck
 npm test           # CLI'yi derlenmiş haliyle, sahte bir API sunucusuna karşı koşar
+```
+
+Yayınlama (paket sahibi için):
+
+```bash
+npm login
+npm publish        # prepublishOnly: derleme + tip kontrolü + testler geçmeden yayınlanmaz
 ```
 
 Ayrıştırma, arama, alan dağılımı ve JSON onarımı `frontend/src/utils/` altındaki saf
