@@ -7,7 +7,7 @@ import {
   getCommand, GET_FLAGS,
   valuesCommand, VALUES_FLAGS,
 } from './commands/inspect'
-import { shareCommand, SHARE_FLAGS } from './commands/share'
+import { shareCommand, xmlShareCommand, SHARE_FLAGS, XML_SHARE_FLAGS } from './commands/share'
 import { xmlCommand, XML_FLAGS } from './commands/xml'
 import { UserError, color, info, out, printError } from './output'
 
@@ -39,6 +39,8 @@ ${color.bold('PAYLAŞIM')}
                          --json         {id,url} olarak yaz
                          --fix          bozuk JSON'u onarmayı dene
                          --xml          girdiyi XML olarak çevir
+  xmlshare <dosya|->     XML'i JSON'a çevirip paylaşır: XML ver, link al
+                         share seçenekleri + --numbers, --keep-prefixes
   fetch <id|link>        paylaşılan JSON'u indirir (--out dosya, --minify, --meta)
 
 ${color.bold('İNCELEME')} (yerel, backend gerekmez)
@@ -49,8 +51,10 @@ ${color.bold('İNCELEME')} (yerel, backend gerekmez)
   xml2json <dosya|->     XML'i JSON'a çevirir (--out, --minify, --numbers, --keep-prefixes)
 
 ${color.bold('XML')}
-  Çeviri açıkça istenir: .xml uzantılı dosya ya da --xml bayrağı.
-    jse share siparis.xml            uzantı yeter, link döner
+  Çeviri açıkça istenir; üç yolu var:
+    jse xmlshare siparis.xml         XML ver, paylaşım linki al
+    jse xml2json siparis.xml -o s.json
+    jse share siparis.xml            .xml uzantısı yeter
     cat s.xml | jse values --xml - StatusCode
   Girdinin içeriğine bakıp tahmin yapılmaz. Ad alanı önekleri atılır,
   öznitelikler "@ad" olur, değerler metin kalır (baştaki sıfır bozulmasın).
@@ -71,7 +75,8 @@ ${color.bold('ÖRNEKLER')}
   jse values siparis.json Response.Order.StatusCode
   jse find siparis.json PAX42 --values
   jse fetch https://json-eyes.vercel.app/?s=4bK9zQ1x --out kopya.json
-  jse share siparis.xml --title "OrderViewRS (XML)"
+  jse xmlshare siparis.xml --title "OrderViewRS (XML)"
+  cat siparis.xml | jse xmlshare - -q
   jse xml2json siparis.xml -o siparis.json
 `
 
@@ -111,6 +116,7 @@ interface Command {
 
 const COMMANDS: Record<string, Command> = {
   share: { run: shareCommand, flags: SHARE_FLAGS, maxPositional: 1, usage: 'jse share <dosya|->' },
+  xmlshare: { run: xmlShareCommand, flags: XML_SHARE_FLAGS, maxPositional: 1, usage: 'jse xmlshare <dosya|->' },
   fetch: { run: fetchCommand, flags: FETCH_FLAGS, maxPositional: 1, usage: 'jse fetch <id|link>' },
   values: { run: valuesCommand, flags: VALUES_FLAGS, maxPositional: 2, usage: 'jse values <dosya> <yol>' },
   find: { run: findCommand, flags: FIND_FLAGS, maxPositional: 2, usage: 'jse find <dosya> <terim>' },

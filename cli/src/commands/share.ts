@@ -3,10 +3,16 @@ import { countNodes } from '../../../frontend/src/utils/json'
 import { createShare } from '../api'
 import { flagBool, flagString, type ParsedArgs } from '../args'
 import { insecureNotice, resolveApi, shareUrl } from '../config'
-import { loadJson, readInput, wantsXml } from '../input'
+import { convertXmlInput, loadJson, readInput, textLooksLikeXml, wantsXml, type LoadedJson } from '../input'
 import { UserError, color, info, out, warn } from '../output'
 
 export const SHARE_FLAGS = ['title', 't', 'api', 'web', 'no-comments', 'open', 'json', 'quiet', 'q', 'fix', 'xml']
+
+/** `xmlshare`: share'in secenekleri + cevirim secenekleri (--fix'in isi yok). */
+export const XML_SHARE_FLAGS = [
+  'title', 't', 'api', 'web', 'no-comments', 'open', 'json', 'quiet', 'q',
+  'numbers', 'keep-prefixes',
+]
 
 /**
  * `jse share <dosya>` — CLI'nin ana isi: JSON'u backend'e yazip salt okunur
@@ -17,10 +23,55 @@ export const SHARE_FLAGS = ['title', 't', 'api', 'web', 'no-comments', 'open', '
  * gidiyor.
  */
 export async function shareCommand(args: ParsedArgs): Promise<number> {
+  const { text, name } = await readInput(args.positional[0])
+  const loaded = loadJson(text, name, flagBool(args, 'fix'), wantsXml(args, name))
+  return await shareLoaded(args, loaded)
+}
+
+/**
+ * `jse xmlshare <dosya|->` — XML ver, paylasim linki al.
+ *
+ * `jse share x.xml` de ayni isi yapiyor (uzanti acik bir tercih) ama boru
+ * hattinda uzanti yok: `cat x.xml | jse share --xml -` yerine
+ * `cat x.xml | jse xmlshare -`. Niyet komut adinda oldugu icin bayrak
+ * gerekmiyor, cevirim secenekleri (`--numbers`, `--keep-prefixes`) de burada.
+ */
+export async function xmlShareCommand(args: ParsedArgs): Promise<number> {
   const quiet = flagBool(args, 'quiet', 'q')
   const asJson = flagBool(args, 'json')
   const { text, name } = await readInput(args.positional[0])
-  const loaded = loadJson(text, name, flagBool(args, 'fix'), wantsXml(args, name))
+
+  // Komut adi "XML bekliyorum" diyor; JSON gelirse cevirici anlamsiz bir
+  // ayristirma hatasi verirdi. Dogru komutu soylemek daha yardimci.
+  if (!textLooksLikeXml(text)) {
+    throw new UserError(
+      `${name} XML değil.`,
+      'JSON paylaşmak için: jse share ' + (args.positional[0] ?? '<dosya>'),
+    )
+  }
+
+  const converted = convertXmlInput(text, name, {
+    numbers: flagBool(args, 'numbers'),
+    keepPrefixes: flagBool(args, 'keep-prefixes'),
+  })
+  if (!quiet && !asJson) {
+    info(`${color.blue('XML çevrildi')} ${name} → kök <${converted.root}> · ${converted.notes.join(' · ')}`)
+  }
+
+  return await shareLoaded(args, {
+    data: converted.data,
+    text: converted.text,
+    name,
+    repaired: false,
+    fromXml: true,
+  })
+}
+
+/** Paylasim govdesi: her iki komut da ayni cikti, uyari ve secenekleri paylasir. */
+async function shareLoaded(args: ParsedArgs, loaded: LoadedJson): Promise<number> {
+  const quiet = flagBool(args, 'quiet', 'q')
+  const asJson = flagBool(args, 'json')
+  const name = loaded.name
 
   const resolved = resolveApi(flagString(args, 'api'))
   const web = flagString(args, 'web') ?? resolved.web

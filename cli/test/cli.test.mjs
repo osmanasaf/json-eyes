@@ -323,6 +323,59 @@ test('inceleme komutlari da XML girdisini kabul eder', async () => {
   assert.equal(got.stdout.trim(), 'ORD1')
 })
 
+test('xmlshare: XML ver, paylasim linki al', async () => {
+  await withMockApi(async (api, received) => {
+    const result = await run(['xmlshare', xmlPath, '--api', api, '--title', 'OrderViewRS (XML)'])
+    assert.equal(result.code, 0)
+    // stdout yalnizca link: `LINK=$(jse xmlshare x.xml -q)` calissin.
+    assert.equal(result.stdout.trim(), 'http://localhost:5173/?s=testID12')
+    assert.match(result.stderr, /XML çevrildi/)
+    assert.equal(received[0].title, 'OrderViewRS (XML)')
+    assert.equal(received[0].json.IATA_OrderViewRS.Response.Order.length, 2)
+    // Kod alanlari metin kalir: 0123 sayiya cevrilse bastaki sifir giderdi.
+    assert.equal(received[0].json.IATA_OrderViewRS.Response.Order[0].FlightNumber, '0123')
+  })
+})
+
+test('xmlshare: boru hattinda bayrak gerekmez, niyet komut adinda', async () => {
+  await withMockApi(async (api, received) => {
+    const result = await run(['xmlshare', '-', '--api', api, '-q'], { input: XML })
+    assert.equal(result.code, 0)
+    assert.equal(result.stdout.trim(), 'http://localhost:5173/?s=testID12')
+    // -q ile bilgi satirlari da susuyor.
+    assert.equal(result.stderr, '')
+    assert.equal(received[0].json.IATA_OrderViewRS.Response.Order[0].OrderID, 'ORD1')
+  })
+})
+
+test('xmlshare: --numbers ve --keep-prefixes cevirime geciyor', async () => {
+  await withMockApi(async (api, received) => {
+    await run(['xmlshare', xmlPath, '--api', api, '--numbers', '--keep-prefixes', '-q'])
+    const root = received[0].json['iata:IATA_OrderViewRS']
+    assert.ok(root, 'ad alani oneki korunmali')
+    // --numbers acikken bile bastaki sifirli deger metin kalir.
+    assert.equal(root.Response.Order[0].FlightNumber, '0123')
+    assert.equal(root.Response.Warning['@Code'], 100)
+  })
+})
+
+test('xmlshare: JSON verilirse dogru komutu soyler', async () => {
+  const result = await run(['xmlshare', samplePath])
+  assert.equal(result.code, 2)
+  assert.match(result.stderr, /XML değil/)
+  assert.match(result.stderr, /jse share/)
+  assert.equal(result.stdout, '')
+})
+
+test('xmlshare: bozuk XML satir numarasiyla durur, sunucuya gitmez', async () => {
+  await withMockApi(async (api, received) => {
+    const result = await run(['xmlshare', brokenXmlPath, '--api', api])
+    assert.equal(result.code, 2)
+    assert.match(result.stderr, /XML ayrıştırılamadı \(satır 1\)/)
+    assert.equal(received.length, 0)
+  })
+})
+
 test('XML icerigi kendiliginden cevrilmez; --xml ile cevrilir', async () => {
   // Uzantisi .json olan bir dosyanin icine XML koyuyoruz: arac icerige bakip
   // karar vermemeli, kullaniciya yolu soylemeli.

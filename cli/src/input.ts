@@ -2,7 +2,9 @@ import { readFileSync, statSync } from 'node:fs'
 import type { JsonValue } from '../../frontend/src/types'
 import { describeParseError, parseJson } from '../../frontend/src/utils/json'
 import { tryRepair } from '../../frontend/src/utils/repair'
-import { looksLikeXml, xmlToJson, XmlParseError } from '../../frontend/src/utils/xml'
+import {
+  looksLikeXml, xmlToJson, XmlParseError, type XmlToJsonOptions,
+} from '../../frontend/src/utils/xml'
 import { UserError, color, info } from './output'
 
 /**
@@ -53,6 +55,53 @@ export interface LoadedJson {
   fromXml: boolean
 }
 
+export interface XmlConversion {
+  data: JsonValue
+  /** Bicimlenmis JSON metni. */
+  text: string
+  root: string
+  notes: string[]
+}
+
+/**
+ * XML -> JSON. Ayristirma hatasi kullanici hatasina cevriliyor ve *satir
+ * numarasi* soyleniyor: 90 bin satirlik bir NDC yanitinda "XML bozuk"
+ * demek ise yaramaz.
+ *
+ * Cevirinin tek yeri burasi; `xml2json`, `xmlshare` ve `--xml` verilmis
+ * komutlar ayni kodu cagiriyor, dolayisiyla ucu de ayni JSON'u uretiyor
+ * (web arayuzu de ayni cevirici).
+ */
+export function convertXmlInput(
+  text: string,
+  name: string,
+  options: XmlToJsonOptions = {},
+): XmlConversion {
+  try {
+    const converted = xmlToJson(text, options)
+    return {
+      data: converted.data,
+      text: JSON.stringify(converted.data, null, 2),
+      root: converted.root,
+      notes: converted.notes,
+    }
+  } catch (error) {
+    if (error instanceof XmlParseError) {
+      throw new UserError(`${name}: XML ayrıştırılamadı (satır ${error.line}): ${error.message}`)
+    }
+    throw new UserError(`${name}: XML çevrilemedi: ${(error as Error).message}`)
+  }
+}
+
+/**
+ * Girdi XML gibi gorunuyor mu — yalnizca *hata mesajini* yonlendirmek ve
+ * XML bekleyen komutlari korumak icin. Bu bilgiye dayanarak sessizce cevirim
+ * yapilmiyor; karar her zaman kullanicinin (uzanti, bayrak ya da komut adi).
+ */
+export function textLooksLikeXml(text: string): boolean {
+  return looksLikeXml(text)
+}
+
 /** Girdi XML olarak islenecek mi: `--xml` bayragi ya da `.xml` uzantisi. */
 export function wantsXml(args: { flags: Map<string, string | true> }, name: string): boolean {
   return args.flags.get('xml') !== undefined || /\.xml$/i.test(name)
@@ -78,22 +127,9 @@ export function loadJson(text: string, name: string, allowFix: boolean, xml = fa
   }
 
   if (xml) {
-    try {
-      const converted = xmlToJson(text)
-      info(`${color.blue('XML çevrildi')} ${name} → kök <${converted.root}> · ${converted.notes.join(' · ')}`)
-      return {
-        data: converted.data,
-        text: JSON.stringify(converted.data, null, 2),
-        name,
-        repaired: false,
-        fromXml: true,
-      }
-    } catch (error) {
-      if (error instanceof XmlParseError) {
-        throw new UserError(`${name}: XML ayrıştırılamadı (satır ${error.line}): ${error.message}`)
-      }
-      throw new UserError(`${name}: XML çevrilemedi: ${(error as Error).message}`)
-    }
+    const converted = convertXmlInput(text, name)
+    info(`${color.blue('XML çevrildi')} ${name} → kök <${converted.root}> · ${converted.notes.join(' · ')}`)
+    return { data: converted.data, text: converted.text, name, repaired: false, fromXml: true }
   }
 
   if (allowFix) {

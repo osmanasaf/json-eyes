@@ -50,6 +50,7 @@ Vite dev sunucusu `/api` isteklerini `http://localhost:8080` adresine proxy eder
 ```bash
 npm install -g json-eyes                  # ya da: npx json-eyes …
 jse share siparis.json                    # JSON ver, paylaşım linki al
+jse xmlshare siparis.xml                  # XML ver, JSON'a çevirip linki al
 ```
 
 Ayrıntılar ve tüm komutlar: [cli/README.md](cli/README.md) · paket: [npmjs.com/package/json-eyes](https://www.npmjs.com/package/json-eyes)
@@ -148,6 +149,9 @@ aracı açar, dosya kendiliğinden çevrilmez. Sonuç "JSON'u görüntüleyiciye
 normal boru hattına girer (grid, kolon, fark, paylaşım, XSD eşleştirmesi) ya da
 kopyalanır / `.json` olarak indirilir. Seçenekler CLI'daki bayrakların aynısı:
 ad alanı öneklerini koru (`--keep-prefixes`), sayıları çıkar (`--numbers`).
+
+Terminalde aynı iş tek komut: `jse xmlshare siparis.xml` XML'i çevirip paylaşım
+linkini basar (`cat s.xml | jse xmlshare -` boru hattında da çalışır).
 
 Kurallar: ad alanı önekleri atılır (`iata:Order` → `Order`), öznitelikler `@ad`, metin
 içeriği `#text` olur, tekrarlayan kardeşler diziye düşer ve **değerler metin kalır**

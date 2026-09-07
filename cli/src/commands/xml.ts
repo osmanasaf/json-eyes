@@ -1,33 +1,26 @@
 import { writeFileSync } from 'node:fs'
-import { xmlToJson, XmlParseError } from '../../../frontend/src/utils/xml'
 import { flagBool, flagString, type ParsedArgs } from '../args'
-import { readInput } from '../input'
-import { UserError, color, info, out } from './../output'
+import { convertXmlInput, readInput } from '../input'
+import { color, info, out } from './../output'
 
 export const XML_FLAGS = ['out', 'o', 'minify', 'numbers', 'keep-prefixes', 'quiet', 'q']
 
 /**
  * `jse xml2json <dosya|->` — XML'i JSON'a cevirip yazar.
  *
- * Cevirinin ana adresi burasi. `share`, `values`, `find`, `get` komutlari da
- * XML kabul eder ama yalnizca acikca istendiginde (`.xml` uzantisi ya da
- * `--xml`); girdinin icerigine bakip tahmin yapan bir arac, yanlis
- * tahmininde kullanicinin anlamadigi bir sonuc uretir.
+ * Cevrilmis JSON'un kendisini isteyenler icin: dosyaya yazmak, baska bir araca
+ * boru hattiyla vermek. Paylasim linki isteyen `jse xmlshare` kullanir;
+ * `share`, `values`, `find`, `get` da XML kabul eder ama yalnizca acikca
+ * istendiginde (`.xml` uzantisi ya da `--xml`) — girdinin icerigine bakip
+ * tahmin yapan bir arac, yanlis tahmininde kullanicinin anlamadigi bir sonuc
+ * uretir.
  */
 export async function xmlCommand(args: ParsedArgs): Promise<number> {
   const { text, name } = await readInput(args.positional[0])
-  let converted
-  try {
-    converted = xmlToJson(text, {
-      numbers: flagBool(args, 'numbers'),
-      keepPrefixes: flagBool(args, 'keep-prefixes'),
-    })
-  } catch (error) {
-    if (error instanceof XmlParseError) {
-      throw new UserError(`${name}: XML ayrıştırılamadı (satır ${error.line}): ${error.message}`)
-    }
-    throw new UserError(`${name}: XML çevrilemedi: ${(error as Error).message}`)
-  }
+  const converted = convertXmlInput(text, name, {
+    numbers: flagBool(args, 'numbers'),
+    keepPrefixes: flagBool(args, 'keep-prefixes'),
+  })
 
   const output = flagBool(args, 'minify')
     ? JSON.stringify(converted.data)

@@ -18,6 +18,7 @@ Link `stdout`'a, geri kalan her şey `stderr`'e yazılır; boru hattında rahat 
 jse share siparis.json | pbcopy                  # linki panoya al
 LINK=$(jse share siparis.json -q) && echo $LINK  # değişkene al
 curl -s https://api.ornek.com/order | jse share -  # doğrudan API çıktısını paylaş
+jse xmlshare siparis.xml                         # XML ver, JSON linki al
 ```
 
 ## Kurulum
@@ -103,6 +104,7 @@ Hassas veri paylaşıyorsanız backend'i kendi alan adınıza taşıyıp (`https
 | `find <dosya> <terim>` | Terimi taşıyan yolları listeler. `--values`, `--limit`, `--json` |
 | `get <dosya> <yol>` | Yoldaki değeri yazar. `--raw`, `--minify`, `--xml` |
 | `fix <dosya>` | Yorum / fazla virgül / tek tırnak onarır. `--out`, `--minify` |
+| `xmlshare <dosya\|->` | **XML ver, paylaşım linki al.** `share` seçenekleri + `--numbers`, `--keep-prefixes` |
 | `xml2json <dosya\|->` | XML'i JSON'a çevirir. `--out`, `--minify`, `--numbers`, `--keep-prefixes` |
 | `config show\|set` | Adresleri gösterir ve kaydeder |
 
@@ -113,11 +115,17 @@ bakıp "bu XML'e benziyor" diye tahmin yapılmaz — yanlış tahmin eden bir ar
 kullanıcının anlamadığı bir sonuç üretir. Uzantı ve bayrak kullanıcının açık tercihi.
 
 ```bash
-jse xml2json siparis.xml -o siparis.json         # çevirinin ana adresi
-jse share siparis.xml --title "OrderViewRS"      # uzantı yeter: çevirip paylaşır
+jse xmlshare siparis.xml --title "OrderViewRS"   # XML ver, link al
+cat siparis.xml | jse xmlshare -                 # boru hattında da bayrak gerekmez
+jse xml2json siparis.xml -o siparis.json         # yalnızca çevir
+jse share siparis.xml                            # .xml uzantısı da yeter
 jse values siparis.xml StatusCode                # aynı şekilde
-cat siparis.xml | jse share --xml -              # boru hattında bayrak gerekir
+cat siparis.xml | jse values --xml - StatusCode  # uzantı yoksa bayrak
 ```
+
+`xmlshare` ile `share`ın farkı niyet: `xmlshare` XML beklediğini adıyla söylüyor,
+bu yüzden boru hattında `--xml` gerekmiyor ve çevirim seçenekleri (`--numbers`,
+`--keep-prefixes`) burada. JSON verirseniz durur ve `jse share` der.
 
 JSON beklenen bir yerde XML gelirse komut durur ve yolu söyler:
 `Bu girdi XML gibi görünüyor: --xml ekleyin ya da jse xml2json kullanın.`
