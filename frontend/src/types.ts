@@ -3,7 +3,11 @@ export type JsonObject = { [key: string]: JsonValue }
 export type JsonArray = JsonValue[]
 export type JsonValue = JsonPrimitive | JsonObject | JsonArray
 
-export type ViewMode = 'tree' | 'grid' | 'columns' | 'diff' | 'xml'
+/**
+ * Gorunum: ayni belgeye nasil bakildigi. Karsilastirma ve XML burada yok —
+ * biri ikinci bir girdi, digeri bir girdi bicimi; ikisi de girdi tarafinda.
+ */
+export type ViewMode = 'tree' | 'grid' | 'columns'
 
 export interface ParseResult {
   data: JsonValue | null

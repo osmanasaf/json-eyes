@@ -10,7 +10,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  autoOpenPaths, cellText, filterOpenable, gridShape, highlightParts, isLongValue,
+  autoOpenPaths, cellText, columnStats, filterOpenable, gridShape, highlightParts, isLongValue,
   isRecordArray, previewFields, recordColumns, sortRecords, summaryOf, toCsv, valueAtPath,
 } from './.grid.bundle.mjs'
 
@@ -194,4 +194,41 @@ test('referans onizlemesi bir seviye derine iner, listeyi kirpar', () => {
   const fields = previewFields(target)
   assert.deepEqual(fields.map(f => f.key), ['PaxID', 'Individual.GivenName', 'Individual.Surname'])
   assert.equal(previewFields([1, 2]).length, 0)
+})
+
+test('kolon istatistigi: dagilim, eksik alan ve sayisal ozet', () => {
+  const items = [
+    { StatusCode: 'OPEN', TotalAmount: 100 },
+    { StatusCode: 'OPEN', TotalAmount: 300 },
+    { StatusCode: 'CLOSED', TotalAmount: null },
+    { TotalAmount: 200 },
+    { StatusCode: null, TotalAmount: 'yüz' },
+  ]
+  const status = columnStats(items, 'StatusCode')
+  assert.equal(status.filled, 4)
+  assert.equal(status.missing, 1)
+  assert.equal(status.nulls, 1)
+  assert.equal(status.distinct, 3)
+  assert.deepEqual(status.top[0], { value: 'OPEN', count: 2 })
+  assert.equal(status.numeric, null)
+
+  const amount = columnStats(items, 'TotalAmount')
+  // Metin ve null toplama girmez: zorlanmis bir sayi yanlis toplam uretir.
+  assert.deepEqual(amount.numeric, { min: 100, max: 300, sum: 600, avg: 200 })
+  assert.equal(amount.missing, 0)
+  assert.equal(amount.nulls, 1)
+})
+
+test('kolon istatistigi cok buyuk dizide kesilir ve bunu soyler', () => {
+  const items = Array.from({ length: 20_005 }, (_, i) => ({ Id: i }))
+  const stats = columnStats(items, 'Id')
+  assert.equal(stats.scanned, 20_000)
+  assert.equal(stats.truncated, true)
+})
+
+test('kolon istatistigi ic ice degerleri ozetle sayar', () => {
+  const items = [{ P: { a: 1 } }, { P: { b: 2 } }, { P: [1, 2] }]
+  const stats = columnStats(items, 'P')
+  // "1 alan" iki kez, "2 öğe" bir kez: yapisal dagilim gorunur.
+  assert.deepEqual(stats.top, [{ value: '1 alan', count: 2 }, { value: '2 öğe', count: 1 }])
 })

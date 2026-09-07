@@ -58,14 +58,29 @@ Ayrıntılar ve tüm komutlar: [cli/README.md](cli/README.md) · paket: [npmjs.c
 
 ## Arayüz
 
-Tek bir kabuk: 56px üst bar (dosya adı + geçerlilik rozeti, komut çubuğu, mod anahtarı,
-Paylaş), 38px bağlam şeridi (breadcrumb, yolu kopyala, görünüm filtresi),
-solda 292px editör, ortada görüntüleyici, sağda 240px IATA paneli, altta 30px durum
-çubuğu. Boş durumda editör, bağlam şeridi ve IATA paneli gizlenir; yalnızca bırakma
-alanı ve "Son açılanlar" görünür.
+Tek bir kabuk: 56px üst bar (dosya adı + geçerlilik rozeti, komut çubuğu, görünüm
+anahtarı, Paylaş), 38px bağlam şeridi (breadcrumb, yolu kopyala, görünüm filtresi),
+solda 292px girdi paneli, ortada görüntüleyici, sağda 240px IATA paneli, altta 30px
+durum çubuğu. Boş durumda girdi paneli, bağlam şeridi ve IATA paneli gizlenir;
+yalnızca bırakma alanı ve "Son açılanlar" görünür.
+
+**Görünüm anahtarı yalnızca görünüm taşır: Tree · Grid · Kolon.** Aynı belgeye nasıl
+bakıldığını seçer. Belgenin *nereden geldiği* girdi panelinin işi:
+
+| | nerede | ne |
+|---|---|---|
+| **JSON / XML** sekmeleri | girdi paneli | girdinin biçimi — XML yapıştırılır, istenince JSON'a çevrilir ve sonuç girdinin kendisi olur |
+| **⇄ Karşılaştır** | girdi paneli (paylaşılan görünümde bant) | ikinci bir belge; verilince görüntüleyici farkı gösterir, kapatınca seçili görünüme döner |
+
+Eskiden ikisi de görünüm anahtarındaydı (`Tree · Grid · Kolon · Tablo · Fark · XML`);
+anahtar altı düğmeye çıkınca "bakış açısı" ile "girdi" aynı yere karışmış oldu.
 
 **Klavye**: `Ctrl+K` / `Ctrl+F` görünüm filtresine odaklanır, `Enter` / `Shift+Enter`
 eşleşmeler arasında gezer, `J` / `K` satır seçimini kaydırır, `Esc` aramayı temizler.
+Grid'e tıklandığında klavye tabloyu sürer: `↑ ↓ ← →` (ya da `k j h l`) hücreler
+arasında, `Home` / `End` satır başı ve sonu, `PgUp` / `PgDn` onar satır, `Enter`
+hücreyi açar/kapatır, `Esc` önce açtığın hücreyi sonra içinde bulunduğun tabloyu
+kapatır, `c` değeri, `C` dalı JSON olarak, `y` yolu kopyalar.
 
 **Logo** ana sayfaya (boş durum) döner. Üzerinde çalışılan JSON önce "Son açılanlar"a
 yazılır, tek tıkla geri alınır.
@@ -78,7 +93,8 @@ yeni bir tema eklemek `:root[data-theme='...']` bloğu yazmaktan ibarettir.
 ## Özellikler
 
 - **Tree**: JSON sözdizimi görünümü, yerinde aç/kapa, alan başına XSD tooltip'i
-- **Grid**: **iç içe tablolar**. Tablo biçimi düğümün şeklinden gelir:
+- **Grid**: **iç içe tablolar** — hücre imleci, donmuş anahtar kolonu, kolon menüsü.
+  Tablo biçimi düğümün şeklinden gelir:
   nesne → `anahtar | değer`, **nesne dizisi → kayıt tablosu** (kolonlar öğelerin
   anahtarlarının birleşimi, `#` indeks kolonu), diğer diziler → `# | değer`.
   İç içe bir değer tıklanan **hücrenin içinde** açılır: hiçbir tıklama görünümü
@@ -99,6 +115,21 @@ yeni bir tema eklemek `:root[data-theme='...']` bloğu yazmaktan ibarettir.
     büyütür. Alt durum çubuğu çizilen satır ve açık tablo sayısını gösterir.
   - 40'tan fazla farklı anahtarı olan dizilerde en seyrek dolan kolonlar gizlenir ve
     kaç kolonun gizlendiği şeritte yazılır — sessizce alan düşürmek yok.
+  - **Klavye imleci**: hücreye tıklayınca imleç oraya oturur, oklarla hücre hücre
+    gezinilir (yukarı/aşağı aynı kolonda kalır), `Enter` açar, `Esc` bir üst seviyeye
+    döner. İmleç seçimi de taşır: bağlam şeridi, IATA paneli ve editördeki satır
+    işareti imleci izler.
+  - **Donmuş anahtar kolonu**: 11 kolonlu bir tabloda sağa kayarken hangi satırda
+    olduğunu gösteren tek şey o; `#`/anahtar kolonu yerinde durur.
+  - **Kolon menüsü** (`⋮`): sıralama, o kolona filtre (`⌕` hunisi tek tıkla), kolonu
+    gizleme, kolonun değerlerini kopyalama ve **kolon istatistiği** — kaç farklı
+    değer, kaç kayıtta alan yok, sayısal kolonlarda en küçük/en büyük/toplam/ortalama
+    ve en sık beş değerin dağılımı. `⚙ kolonlar` ile kolon seçici, "yarısından azında
+    dolu olanları gizle" kısayolu.
+  - **Hücre menüsü** (`⋯`): değeri, satırı JSON olarak ya da yolu kopyalar.
+  - **Bant başlığı**: hücrede açılan her alt tablo adıyla çerçevelenir
+    (`▾ TotalPrice · 3 alan`) — derin iç içe yapıda nerede olduğunu söyleyen tek şey.
+  - **Sık/rahat yerleşim** düğmesi: aynı ekranda görünen satır sayısını artırır.
 - **Otomatik düzeltme**: geçersiz JSON'da "Otomatik düzelt ve dene" yorum satırlarını,
   sondaki fazla virgülleri ve tek tırnaklı metinleri onarır; onarım da ayrıştırılamazsa
   metne dokunulmaz.
@@ -141,15 +172,17 @@ yeni bir tema eklemek `:root[data-theme='...']` bloğu yazmaktan ibarettir.
 - **Panel şeritleri**: editör ve IATA panelleri kendi başlıklarındaki `‹` / `›` ile
   kapanır; kapalıyken kenarda dikey yazılı bir şerit kalır, tıklayınca geri açılır.
 
-### XML → JSON aracı
+### XML: bir girdi biçimi
 
-Üst bardaki **XML** düğmesi ayrı bir ekran açar: solda XML, sağda JSON. Girdinin
-içeriğine bakıp "bu XML'e benziyor" diye **tahmin yapılmaz** — çeviriyi kullanıcı
-başlatır. `.xml` uzantılı bir dosya seçmek (uzantı açık bir tercih) doğrudan bu
-aracı açar, dosya kendiliğinden çevrilmez. Sonuç "JSON'u görüntüleyiciye yükle" ile
-normal boru hattına girer (grid, kolon, fark, paylaşım, XSD eşleştirmesi) ya da
-kopyalanır / `.json` olarak indirilir. Seçenekler CLI'daki bayrakların aynısı:
-ad alanı öneklerini koru (`--keep-prefixes`), sayıları çıkar (`--numbers`).
+XML ayrı bir ekran ya da görünüm değil — girdi panelindeki **XML sekmesi**. XML
+yapıştırılır, seçenekler işaretlenir (`önekleri koru`, `sayıları çıkar`; CLI'daki
+`--keep-prefixes` / `--numbers` ile aynı), `JSON'a çevir` denir ve sonuç **girdinin
+kendisi** olur: grid, kolon, karşılaştırma, paylaşım ve XSD eşleştirmesi olduğu gibi
+çalışır. `.xml` uzantılı bir dosya seçmek (uzantı açık bir tercih) doğrudan bu
+sekmeyi doldurur; çeviriyi yine kullanıcı başlatır.
+
+Girdinin içeriğine bakıp "bu XML'e benziyor" diye **tahmin yapılmaz**. Bozuk XML
+satır numarasıyla söylenir ve o satır numara sütununda işaretlenir.
 
 Terminalde aynı iş tek komut: `jse xmlshare siparis.xml` XML'i çevirip paylaşım
 linkini basar (`cat s.xml | jse xmlshare -` boru hattında da çalışır).
@@ -162,9 +195,11 @@ yapıldığı üstteki bantta tek tek yazılır. Aynı çevirici CLI'de de kulla
 
 ### Fark görünümü
 
-`Fark` düğmesi mevcut JSON'u ikinci bir JSON ile karşılaştırır (dosya, sürükle-bırak,
-yapıştır ya da paylaşım linki). Sonuç yan yana iki metin değil **tek bir birleşik
-ağaç**: değişiklikler kendi yerinde, değişmeyen dallar katlı.
+Girdi panelindeki **⇄ Karşılaştır** ikinci bir belge ister (dosya, sürükle-bırak,
+yapıştır ya da paylaşım linki) — karşılaştırma bir görünüm değil, ikinci bir *girdi*.
+Verilince görüntüleyici farkı gösterir, kapatınca seçili görünüme dönülür. Sonuç yan
+yana iki metin değil **tek bir birleşik ağaç**: değişiklikler kendi yerinde,
+değişmeyen dallar katlı.
 
 Diziler indekse göre değil **kimliğe göre** eşleştirilir: `Order` dizisinde `OrderID`,
 `Pax` listesinde `PaxID` kendiliğinden bulunur. Böylece başa bir kayıt eklendiğinde
@@ -364,7 +399,7 @@ json-sarp/
 ├── frontend/          Vue 3 + Vite + TypeScript
 │   └── src/
 │       ├── App.vue                 uygulama kabuğu (header, breadcrumb, durum çubuğu)
-│       ├── components/             EditorPane · JsonGrid + GridTable · XmlPane · IataPanel
+│       ├── components/             EditorPane (JSON/XML) · JsonGrid + GridTable · DiffView
 │       └── utils/grid.ts           tablo modeli: şekil, kolonlar, açılış bütçesi, CSV
 ├── backend/           Spring Boot + H2 + XSD indeksleyici
 │   └── src/main/resources/xsd/     IATA 24.4 şemaları (52 dosya)

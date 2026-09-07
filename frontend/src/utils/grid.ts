@@ -361,3 +361,79 @@ export function filterOpenable(
   }
   return out
 }
+
+/**
+ * Kolon istatistigi: bir kayit tablosunun kolonuna bakarken ilk sorulan seyler.
+ *
+ * NDC'de `StatusCode`'un kac farkli degeri var, `TotalAmount`in toplami ne,
+ * hangi kayitlarda alan bos — tabloya bakan kisi bunu ogrenmek icin veriyi
+ * baska bir araca tasiyor. Kolon basligindan bir tiklama uzakta olmasi
+ * jsongrid'de de, benzerlerinde de yok.
+ *
+ * Tarama tum diziyi gezer (tablo yalnizca 200 satir cizse de sayilar belgenin
+ * tamamini anlatmali); cok buyuk dizilerde ust sinirla kesilir ve bu soylenir.
+ */
+export const MAX_STAT_SCAN = 20_000
+
+export interface ColumnStats {
+  /** Alanin dolu oldugu kayit sayisi (null da dolu sayilir; alan *var*). */
+  filled: number
+  /** Alanin hic olmadigi kayit sayisi. */
+  missing: number
+  /** Degeri null olan kayit sayisi. */
+  nulls: number
+  distinct: number
+  /** En sik gecen degerler (en cok bes). */
+  top: Array<{ value: string; count: number }>
+  numeric: { min: number; max: number; sum: number; avg: number } | null
+  scanned: number
+  truncated: boolean
+}
+
+export function columnStats(items: JsonObject[], column: string): ColumnStats {
+  const counts = new Map<string, number>()
+  let filled = 0
+  let missing = 0
+  let nulls = 0
+  let numbers = 0
+  let min = Number.POSITIVE_INFINITY
+  let max = Number.NEGATIVE_INFINITY
+  let sum = 0
+
+  const scanned = Math.min(items.length, MAX_STAT_SCAN)
+  for (let i = 0; i < scanned; i++) {
+    const value = items[i][column]
+    if (value === undefined) {
+      missing++
+      continue
+    }
+    filled++
+    if (value === null) nulls++
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      numbers++
+      sum += value
+      if (value < min) min = value
+      if (value > max) max = value
+    }
+    const key = isContainer(value) ? summaryOf(value) : String(value)
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+
+  const top = [...counts]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'tr'))
+    .slice(0, 5)
+    .map(([value, count]) => ({ value, count }))
+
+  return {
+    filled,
+    missing,
+    nulls,
+    distinct: counts.size,
+    top,
+    // Toplam/ortalama yalnizca gercekten sayisal degerler uzerinden; karisik
+    // kolonda metinleri sayiya zorlamak yanlis bir toplam uretirdi.
+    numeric: numbers > 0 ? { min, max, sum, avg: sum / numbers } : null,
+    scanned,
+    truncated: items.length > scanned,
+  }
+}

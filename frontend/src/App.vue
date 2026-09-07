@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, provide, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, provide, ref, shallowRef, watch } from 'vue'
 import { COMMENTS, SELECT_FIELD } from './utils/injection'
 import { useComments } from './composables/useComments'
 import type { AnnotateResponse, JsonValue, ViewMode } from './types'
@@ -15,7 +15,6 @@ import JsonTree from './components/JsonTree.vue'
 import JsonGrid from './components/JsonGrid.vue'
 import ColumnView from './components/ColumnView.vue'
 import DiffView from './components/DiffView.vue'
-import XmlPane from './components/XmlPane.vue'
 import IataPanel from './components/IataPanel.vue'
 import FieldValuesPanel from './components/FieldValuesPanel.vue'
 import EditorPane from './components/EditorPane.vue'
@@ -48,6 +47,13 @@ const ROOT_KEY = 'json'
 const rawInput = ref('')
 const fileName = ref<string | null>(null)
 const viewMode = ref<ViewMode>('grid')
+/**
+ * Karsilastirma acik mi. Fark artik bir "mod" degil: ikinci bir girdi
+ * verildiginde goruntuleyici karsilastirmayi gosteriyor, kapatinca secili
+ * gorunume donuyor. Gorunum anahtarinin isi ayni belgeye nasil bakildigini
+ * secmek — belgenin nereden geldigini secmek degil.
+ */
+const comparing = ref(false)
 const searchInput = ref('')
 const searchTerm = ref('')
 const filterMatches = ref(false)
@@ -94,6 +100,7 @@ const annotationError = ref<string | null>(null)
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const filterInputRef = ref<HTMLInputElement | null>(null)
+const editorRef = ref<InstanceType<typeof EditorPane> | null>(null)
 const gridRef = ref<InstanceType<typeof JsonGrid> | null>(null)
 const columnRef = ref<InstanceType<typeof ColumnView> | null>(null)
 
@@ -327,6 +334,8 @@ async function copySelectedPath() {
 }
 
 function setViewMode(mode: ViewMode) {
+  // Gorunum secmek karsilastirmayi kapatir: anahtar yalnizca belgeye bakis acisi.
+  comparing.value = false
   viewMode.value = mode
 }
 
@@ -340,8 +349,8 @@ function focusUnmatched(schemaPath: string) {
 }
 
 function focusOnPath(path: string) {
-  // Fark ve XML ayri ekranlar; hedef dugum grid'de aciliyor.
-  if (viewMode.value === 'diff' || viewMode.value === 'xml') viewMode.value = 'grid'
+  // Karsilastirmadan bir dugume gidilirse belge gorunumune donuluyor.
+  comparing.value = false
   selectedNodePath.value = path
   focusRequest.value = { path, seq: ++focusSeq }
 }
@@ -477,7 +486,7 @@ onMounted(async () => {
   const diffId = params.get('d')
   if (diffId && parsed.value !== null) {
     diffShareId.value = diffId
-    viewMode.value = 'diff'
+    comparing.value = true
   }
   // Yukleme basarisiz olsa da elimizdeki JSON icin aciklamalari getir; watch'in
   // bekleyen cagrisini iptal edip tek seferde calistiriyoruz.
@@ -527,7 +536,7 @@ function readFile(file: File) {
     // Icerige bakip "bu XML'e benziyor" diye karar vermiyoruz; cevirimi orada
     // kullanici baslatir.
     if (/\.xml$/i.test(file.name)) {
-      openXmlTool(text, file.name)
+      openXmlTab(text, file.name)
       return
     }
     xmlNotice.value = null
@@ -606,20 +615,17 @@ function goHome() {
 }
 
 /**
- * XML -> JSON ayri bir hizmet (`XmlPane`). Onceden girdi icerigine bakilip
- * "bu XML'e benziyor" diye karar veriliyordu; girdiden anlam cikarmak
- * kullaniciyi sasirtabilecegi icin o tahmin kaldirildi. Ceviri yalnizca XML
- * araci ekraninda, kullanici isteyince oluyor; sonuc normal boru hattina
- * (grid, kolon, fark, paylasim, XSD eslestirmesi) JSON olarak giriyor.
+ * XML bir *girdi bicimi*: girdi panelindeki XML sekmesinde yapistirilir,
+ * kullanici isteyince cevrilir ve sonuc girdinin kendisi olur. Icerige bakip
+ * "bu XML'e benziyor" diye tahmin yapilmiyor; karar her zaman kullanicinin
+ * (sekme ya da `.xml` uzantisi).
  */
 const xmlNotice = ref<{ root: string; notes: string[] } | null>(null)
-const xmlSeed = ref('')
-const xmlSeedName = ref<string | null>(null)
 
-function openXmlTool(text = '', name: string | null = null) {
-  xmlSeed.value = text
-  xmlSeedName.value = name
-  viewMode.value = 'xml'
+function openXmlTab(text = '', name: string | null = null) {
+  editorVisible.value = true
+  editorPinned.value = true
+  void nextTick(() => editorRef.value?.openXml(text, name))
 }
 
 function onXmlLoad(payload: { text: string; name: string | null; root: string; notes: string[] }) {
@@ -628,7 +634,7 @@ function onXmlLoad(payload: { text: string; name: string | null; root: string; n
   xmlNotice.value = { root: payload.root, notes: payload.notes }
   loadError.value = null
   selectedNodePath.value = null
-  viewMode.value = 'grid'
+  comparing.value = false
   if (payload.name) recents.value = pushRecent(payload.name, payload.text)
 }
 
@@ -725,7 +731,7 @@ function onKeydown(event: KeyboardEvent) {
 const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'girdi.json' : ''))
 
 /** Baglam seridi ve yan panel yalnizca belgeyi gosteren gorunumlerde anlamli. */
-const docView = computed(() => viewMode.value !== 'diff' && viewMode.value !== 'xml')
+const docView = computed(() => !comparing.value)
 </script>
 
 <template>
@@ -783,20 +789,6 @@ const docView = computed(() => viewMode.value !== 'diff' && viewMode.value !== '
           title="Kolon görünümü — her seviye bir sütun, oklarla gezinme"
           @click="setViewMode('columns')"
         >Kolon</button>
-        <span class="mode-sep" />
-        <button
-          class="mode diff"
-          :class="{ active: viewMode === 'diff' }"
-          :disabled="!hasData"
-          title="Bu JSON'u başka bir JSON ile karşılaştır"
-          @click="setViewMode('diff')"
-        >Fark</button>
-        <button
-          class="mode tool"
-          :class="{ active: viewMode === 'xml' }"
-          title="XML → JSON aracı: XML yapıştır, JSON olarak yükle veya indir"
-          @click="openXmlTool(xmlSeed, xmlSeedName)"
-        >XML</button>
       </div>
 
       <div v-if="!isShared" class="share-wrap">
@@ -829,6 +821,10 @@ const docView = computed(() => viewMode.value !== 'diff' && viewMode.value !== '
       <strong v-if="sharedTitle" class="banner-strong">{{ sharedTitle }}</strong>
       Paylaşılmış görünüm — düzenleme kapalı.
       <span v-if="sharedAtLabel" class="banner-note">Paylaşım: {{ sharedAtLabel }}</span>
+      <!-- Paylasilan gorunumde girdi paneli yok; karsilastirma girisi buraya. -->
+      <button class="banner-action" :class="{ on: comparing }" @click="comparing = !comparing">
+        {{ comparing ? '⇄ Karşılaştırmayı kapat' : '⇄ Karşılaştır' }}
+      </button>
       <button class="banner-action" @click="forkShared">Kopyasını al ve düzenle</button>
     </div>
     <div v-if="xmlNotice" class="banner accent">
@@ -883,6 +879,7 @@ const docView = computed(() => viewMode.value !== 'diff' && viewMode.value !== '
       <!-- Sol: JSON editoru (paylasilan gorunumde hic render edilmez) -->
       <EditorPane
         v-if="editorVisible && !isShared"
+        ref="editorRef"
         v-model="rawInput"
         :parse-error="parseError"
         :error-line="errorDetail?.line ?? null"
@@ -890,6 +887,9 @@ const docView = computed(() => viewMode.value !== 'diff' && viewMode.value !== '
         :has-data="hasData"
         :recents="recents"
         :sync-range="syncRange"
+        :comparing="comparing"
+        @xml="onXmlLoad"
+        @toggle-compare="comparing = !comparing"
         @format="handleFormat"
         @minify="handleMinify"
         @sample="loadSample"
@@ -911,20 +911,7 @@ const docView = computed(() => viewMode.value !== 'diff' && viewMode.value !== '
 
       <!-- Orta: goruntuleyici -->
       <section class="viewer">
-        <!--
-          XML -> JSON araci: JSON boru hattinin disinda, kendi ekrani. Girdi
-          gecerli olsun olmasin her zaman acilabilir.
-        -->
-        <XmlPane
-          v-if="viewMode === 'xml'"
-          :initial="xmlSeed"
-          :initial-name="xmlSeedName"
-          @update:text="xmlSeed = $event"
-          @load="onXmlLoad"
-          @close="viewMode = hasData ? 'grid' : 'xml'"
-        />
-
-        <div v-else-if="sharedLoading" class="center-note">Paylaşılan JSON yükleniyor…</div>
+        <div v-if="sharedLoading" class="center-note">Paylaşılan JSON yükleniyor…</div>
 
         <div v-else-if="parseError" class="center-note error">
           <h2 class="error-title">JSON ayrıştırılamadı</h2>
@@ -932,8 +919,8 @@ const docView = computed(() => viewMode.value !== 'diff' && viewMode.value !== '
           <p class="error-hint">Hatalı satır solda işaretlendi. Düzeltince grid kendiliğinden oluşur.</p>
           <div class="error-actions">
             <button class="error-action" @click="handleRepair">Otomatik düzelt ve dene</button>
-            <button class="error-action ghost" @click="openXmlTool(rawInput, fileName)">
-              Elinizdeki XML mi? XML → JSON aracını açın
+            <button class="error-action ghost" @click="openXmlTab(rawInput, fileName)">
+              Elinizdeki XML mi? Girdi panelindeki XML sekmesine taşı
             </button>
           </div>
         </div>
@@ -954,22 +941,23 @@ const docView = computed(() => viewMode.value !== 'diff' && viewMode.value !== '
         -->
         <template v-else>
           <!--
-            Fark gorunumu ayri bir ekran: grid/tablo/kolon davranisina
-            dokunmuyor, yalnizca goruntuleyici alanini devraliyor.
+            Karsilastirma: ikinci bir girdi verildiginde goruntuleyici alanini
+            devraliyor. Gorunum anahtarina dokunmuyor; kapatinca secili
+            gorunume donuluyor.
           -->
           <DiffView
-            v-if="viewMode === 'diff'"
+            v-if="comparing"
             :current="parsed"
             :root-key="ROOT_KEY"
             :current-name="displayName"
             :load-share="loadShareForDiff"
             :auto-share="diffShareId"
             @focus-path="focusOnPath"
-            @close="viewMode = 'grid'"
+            @close="comparing = false"
           />
 
           <ColumnView
-            v-if="viewMode === 'columns'"
+            v-if="!comparing && viewMode === 'columns'"
             ref="columnRef"
             :data="parsed!"
             :root-key="ROOT_KEY"
@@ -979,7 +967,7 @@ const docView = computed(() => viewMode.value !== 'diff' && viewMode.value !== '
             @focus-path="focusOnPath"
           />
 
-          <div v-else-if="viewMode === 'tree'" class="tree-scroll">
+          <div v-else-if="!comparing && viewMode === 'tree'" class="tree-scroll">
             <JsonTree
               :data="parsed!"
               :root-key="ROOT_KEY"
@@ -995,7 +983,7 @@ const docView = computed(() => viewMode.value !== 'diff' && viewMode.value !== '
           </div>
 
           <JsonGrid
-            v-show="viewMode === 'grid'"
+            v-show="!comparing && viewMode === 'grid'"
             ref="gridRef"
             :data="parsed!"
             :root-key="ROOT_KEY"
@@ -1045,7 +1033,7 @@ const docView = computed(() => viewMode.value !== 'diff' && viewMode.value !== '
     <footer class="status-bar">
       <span v-if="hasData" class="stat">{{ nodeCount.toLocaleString('tr-TR') }} node</span>
       <span v-if="hasData" class="stat">ayrıştırma {{ Math.round(parseState.ms) }} ms</span>
-      <span v-if="viewMode === 'grid'" class="stat">{{ gridStats.rows }} satır · {{ gridStats.tables }} tablo açık</span>
+      <span v-if="!comparing && viewMode === 'grid'" class="stat">{{ gridStats.rows }} satır · {{ gridStats.tables }} tablo açık</span>
       <span v-if="syncLineLabel" class="stat accent">⌁ {{ syncLineLabel }}</span>
       <span v-if="annotation?.messageType" class="stat">{{ annotation.messageType }} %{{ matchPercent }}</span>
       <div class="status-spacer" />
@@ -1098,9 +1086,7 @@ const docView = computed(() => viewMode.value !== 'diff' && viewMode.value !== '
 .mode:hover:not(:disabled) { color: var(--text-primary); }
 .mode.active { background: var(--bg-tertiary); color: var(--text-primary); }
 .mode:disabled { opacity: .35; cursor: not-allowed; }
-.mode-sep { width: 1px; align-self: stretch; background: var(--border); margin: 2px 3px; }
-.mode.diff.active { background: var(--accent-dim); color: var(--accent); }
-.mode.tool.active { background: var(--bg-object); color: var(--purple); }
+
 
 .share-wrap { position: relative; flex-shrink: 0; }
 .share-btn { font-size: 12.5px; font-weight: 600; color: var(--bg-primary); background: var(--accent); border-radius: 7px; padding: 6px 13px; }
@@ -1125,6 +1111,9 @@ const docView = computed(() => viewMode.value !== 'diff' && viewMode.value !== '
 .banner-note { font-size: 11.5px; color: var(--text-muted); }
 .banner-strong { color: var(--text-primary); }
 .banner-action { margin-left: auto; font-size: 12px; color: var(--accent); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; white-space: nowrap; }
+/* Ikinci ve sonraki banner dugmeleri yan yana dursun; ilki bosluga yapisir. */
+.banner-action + .banner-action { margin-left: 6px; }
+.banner-action.on { color: var(--accent); border-color: var(--accent); background: var(--accent-wash); }
 .banner-close { margin-left: auto; color: inherit; font-size: 16px; line-height: 1; opacity: .7; }
 .banner-close:hover { opacity: 1; }
 

@@ -2,6 +2,19 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { RecentFile } from '../utils/storage'
 import { formatRelative, formatSize } from '../utils/storage'
+import { XmlParseError, xmlToJson } from '../utils/xml'
+
+/**
+ * Girdi paneli. Buraya iki sey tasindi:
+ *
+ * - **XML bir girdi bicimi**, ayri bir ekran degil. Onceden ust bardaki gorunum
+ *   anahtarinda "XML" diye bir dugme vardi; oysa anahtarin isi ayni belgeye
+ *   nasil bakildigini secmek (Tree/Grid/Kolon), belgenin nereden geldigini
+ *   secmek degil. Artik sekmeler: JSON · XML · Geçmiş.
+ * - **Karsilastirma ikinci bir girdidir**: "Fark" da gorunum anahtarindan
+ *   cikti, dugmesi girdinin yaninda. Sonucun bir gorunum olmasi dogru ama
+ *   *girisi* buradan yapiliyor.
+ */
 
 const props = defineProps<{
   modelValue: string
@@ -16,6 +29,8 @@ const props = defineProps<{
    * editor o satira kayar ve satirlar isaretlenir.
    */
   syncRange?: { start: number; end: number; startLine: number; endLine: number } | null
+  /** Karsilastirma acik mi; dugme durumunu gosterir. */
+  comparing?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -28,24 +43,93 @@ const emit = defineEmits<{
   openRecent: [file: RecentFile]
   drop: [event: DragEvent]
   collapse: []
+  /** XML cevrildi: JSON metni ve cevirim notlari. */
+  xml: [payload: { text: string; name: string | null; root: string; notes: string[] }]
+  toggleCompare: []
 }>()
 
-type Tab = 'input' | 'history'
-const tab = ref<Tab>('input')
+type Tab = 'json' | 'xml' | 'history'
+const tab = ref<Tab>('json')
 
+/** XML girdisi ve cevirim secenekleri; CLI'daki bayraklarin aynisi. */
+const xmlText = ref('')
+const xmlName = ref<string | null>(null)
+const keepPrefixes = ref(false)
+const numbers = ref(false)
+const xmlError = ref<string | null>(null)
+const xmlErrorLine = ref<number | null>(null)
+
+const isXml = computed(() => tab.value === 'xml')
+
+/**
+ * Duzenlenen metin. Gutter, yapistirma ve senkron seridi tek bir textarea
+ * uzerinden calisiyor; bicim degisince altindaki kaynak degisiyor.
+ */
 const text = computed({
-  get: () => props.modelValue,
-  set: (value: string) => emit('update:modelValue', value),
+  get: () => (isXml.value ? xmlText.value : props.modelValue),
+  set: (value: string) => {
+    if (isXml.value) {
+      xmlText.value = value
+      xmlError.value = null
+      xmlErrorLine.value = null
+    } else {
+      emit('update:modelValue', value)
+    }
+  },
 })
+
+/** Gosterilecek hata satiri: JSON'da ayristirma, XML'de cevirim hatasi. */
+const activeErrorLine = computed(() => (isXml.value ? xmlErrorLine.value : props.errorLine))
+
+function convertXml() {
+  const source = xmlText.value
+  if (!source.trim()) {
+    xmlError.value = 'XML boş.'
+    return
+  }
+  try {
+    const result = xmlToJson(source, { keepPrefixes: keepPrefixes.value, numbers: numbers.value })
+    xmlError.value = null
+    xmlErrorLine.value = null
+    emit('xml', {
+      text: JSON.stringify(result.data, null, 2),
+      name: xmlName.value ? xmlName.value.replace(/\.xml$/i, '.json') : null,
+      root: result.root,
+      notes: result.notes,
+    })
+    // Cevrilen JSON artik girdinin kendisi; kullanici JSON sekmesinde devam eder.
+    tab.value = 'json'
+  } catch (error) {
+    if (error instanceof XmlParseError) {
+      xmlError.value = error.message
+      xmlErrorLine.value = error.line
+    } else {
+      xmlError.value = (error as Error).message
+      xmlErrorLine.value = null
+    }
+  }
+}
+
+/** `.xml` dosyasi secildiginde App buradan XML sekmesini dolduruyor. */
+function openXml(source: string, name: string | null) {
+  xmlText.value = source
+  xmlName.value = name
+  xmlError.value = null
+  xmlErrorLine.value = null
+  tab.value = 'xml'
+}
+
+defineExpose({ openXml })
 
 /** Satir yuksekligi; numara sutunundaki pencereleme buna dayaniyor. */
 const LINE_HEIGHT = 20
 
 const lineCount = computed(() => {
-  if (props.modelValue.length === 0) return 1
+  const source = text.value
+  if (source.length === 0) return 1
   let count = 1
-  for (let i = 0; i < props.modelValue.length; i++) {
-    if (props.modelValue.charCodeAt(i) === 10) count++
+  for (let i = 0; i < source.length; i++) {
+    if (source.charCodeAt(i) === 10) count++
   }
   return count
 })
@@ -107,7 +191,8 @@ function measureViewport() {
  */
 watch(() => props.syncRange, (range) => {
   const ta = codeEl.value
-  if (!range || !ta) return
+  // Senkron seridi JSON metnine ait; XML sekmesinde anlamsiz.
+  if (!range || !ta || isXml.value) return
   const top = (range.startLine - 1) * LINE_HEIGHT
   const bottom = range.endLine * LINE_HEIGHT
   const viewTop = ta.scrollTop
@@ -127,7 +212,7 @@ const MAX_BAND_LINES = 40
 
 const syncLines = computed(() => {
   const range = props.syncRange
-  if (!range) return null
+  if (!range || isXml.value) return null
   return { first: range.startLine, last: Math.min(range.endLine, range.startLine + MAX_BAND_LINES - 1) }
 })
 
@@ -162,14 +247,21 @@ onMounted(() => {
 onBeforeUnmount(() => resizeObserver?.disconnect())
 
 watch(() => props.recents.length, (count) => {
-  if (count === 0 && tab.value === 'history') tab.value = 'input'
+  if (count === 0 && tab.value === 'history') tab.value = 'json'
 })
 </script>
 
 <template>
   <section class="editor-pane" @drop="emit('drop', $event)" @dragover.prevent>
+    <!-- Sekmeler girdinin *bicimi*: JSON mu XML mi, ya da gecmis. -->
     <div class="tabs">
-      <button class="tab" :class="{ active: tab === 'input' }" @click="tab = 'input'">Girdi</button>
+      <button class="tab" :class="{ active: tab === 'json' }" @click="tab = 'json'">JSON</button>
+      <button
+        class="tab"
+        :class="{ active: tab === 'xml' }"
+        title="XML yapıştır, JSON'a çevir — sonuç girdinin kendisi olur"
+        @click="tab = 'xml'"
+      >XML</button>
       <button
         class="tab"
         :class="{ active: tab === 'history' }"
@@ -177,21 +269,33 @@ watch(() => props.recents.length, (count) => {
         @click="tab = 'history'"
       >Geçmiş</button>
       <div class="tab-spacer" />
-      <button class="tab-action" :disabled="!hasData" title="Girintili biçime getir" @click="emit('format')">⤢</button>
-      <button class="tab-action" :disabled="!hasData" title="Tek satıra indir" @click="emit('minify')">⤡</button>
+      <button class="tab-action" :disabled="!hasData || isXml" title="Girintili biçime getir" @click="emit('format')">⤢</button>
+      <button class="tab-action" :disabled="!hasData || isXml" title="Tek satıra indir" @click="emit('minify')">⤡</button>
       <button class="tab-action" title="Örnek JSON yükle" @click="emit('sample')">◇</button>
       <button class="tab-action danger" title="Temizle" @click="emit('clear')">×</button>
       <button class="tab-action collapse" title="Editörü gizle" @click="emit('collapse')">‹</button>
     </div>
 
-    <div v-if="tab === 'input'" class="code-area">
+    <!-- Karsilastirma da bir girdi isi: ikinci bir belge seciliyor. -->
+    <button
+      class="compare-btn"
+      :class="{ on: comparing }"
+      :disabled="!hasData"
+      :title="comparing ? 'Karşılaştırmayı kapat' : 'Bu JSON\'u ikinci bir JSON ile karşılaştır'"
+      @click="emit('toggleCompare')"
+    >
+      <span class="compare-glyph">⇄</span>
+      {{ comparing ? 'Karşılaştırma açık' : 'Karşılaştır' }}
+    </button>
+
+    <div v-if="tab !== 'history'" class="code-area">
       <div class="gutter">
         <div class="gutter-inner" :style="{ transform: `translateY(${gutterOffset}px)` }">
           <span
             v-for="n in visibleLines"
             :key="n"
             class="line-no"
-            :class="{ bad: n === errorLine, synced: isSynced(n) }"
+            :class="{ bad: n === activeErrorLine, synced: isSynced(n) }"
           >{{ n }}</span>
         </div>
       </div>
@@ -202,14 +306,30 @@ watch(() => props.recents.length, (count) => {
           ref="codeEl"
           v-model="text"
           class="code"
-          :class="{ invalid: parseError }"
+          :class="{ invalid: isXml ? xmlError : parseError }"
           spellcheck="false"
           wrap="off"
-          placeholder="JSON verisini buraya yapıştırın veya dosya sürükleyin…"
+          :placeholder="isXml
+            ? 'XML yapıştırın veya .xml dosyası sürükleyin — sonra JSON\'a çevirin…'
+            : 'JSON verisini buraya yapıştırın veya dosya sürükleyin…'"
           @scroll="syncScroll"
           @paste="handlePaste"
         />
       </div>
+    </div>
+
+    <!-- XML sekmesinin cevirim seridi: secenekler CLI bayraklarinin aynisi. -->
+    <div v-if="isXml" class="xml-bar">
+      <label class="xml-opt" title="iata:Order → Order yerine olduğu gibi kalsın">
+        <input v-model="keepPrefixes" type="checkbox" />
+        önekleri koru
+      </label>
+      <label class="xml-opt" title="0123 gibi değerler yine metin kalır; kod alanları bozulmaz">
+        <input v-model="numbers" type="checkbox" />
+        sayıları çıkar
+      </label>
+      <div class="tab-spacer" />
+      <button class="xml-go" :disabled="!text.trim()" @click="convertXml">JSON'a çevir</button>
     </div>
 
     <div v-else class="history">
@@ -224,7 +344,17 @@ watch(() => props.recents.length, (count) => {
       </button>
     </div>
 
-    <div v-if="parseError" class="status bad">
+    <div v-if="isXml" class="status" :class="xmlError ? 'bad' : 'ok'">
+      <span class="status-dot" />
+      <span class="status-text">
+        <template v-if="xmlError">
+          <template v-if="xmlErrorLine">Satır {{ xmlErrorLine }}: </template>{{ xmlError }}
+        </template>
+        <template v-else-if="xmlName">{{ xmlName }} · {{ lineCount.toLocaleString('tr-TR') }} satır XML</template>
+        <template v-else>XML → JSON · değerler metin kalır, öznitelikler "@ad" olur</template>
+      </span>
+    </div>
+    <div v-else-if="parseError" class="status bad">
       <span class="status-dot" />
       <span class="status-text">
         <template v-if="errorLine">Satır {{ errorLine }}: </template>{{ parseError }}
@@ -253,6 +383,24 @@ watch(() => props.recents.length, (count) => {
 .tab-action.danger:hover { color: var(--red); }
 .tab-action.collapse { margin-left: 4px; border-left: 1px solid var(--border-subtle); border-radius: 0 5px 5px 0; font-size: 15px; }
 .tab-action.collapse:hover { color: var(--accent); }
+
+/*
+ * Karsilastir dugmesi: girdinin hemen altinda, gorunum anahtarinda degil.
+ * Ikinci bir belge secmek bir *girdi* isi; sonucun fark gorunumu olmasi
+ * ondan sonra geliyor.
+ */
+.compare-btn { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 6px 8px 0; padding: 5px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: 11.5px; color: var(--text-secondary); }
+.compare-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+.compare-btn.on { color: var(--accent); border-color: var(--accent); background: var(--accent-wash); }
+.compare-btn:disabled { opacity: .35; cursor: not-allowed; }
+.compare-glyph { font-size: 13px; }
+
+/* XML sekmesinin cevirim seridi. */
+.xml-bar { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-top: 1px solid var(--border-subtle); background: var(--bg-secondary); }
+.xml-opt { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); white-space: nowrap; cursor: pointer; }
+.xml-go { font-size: 11.5px; color: var(--accent); border: 1px solid var(--accent); background: var(--accent-dim); border-radius: 6px; padding: 3px 11px; white-space: nowrap; }
+.xml-go:hover:not(:disabled) { background: var(--accent-strong); }
+.xml-go:disabled { opacity: .4; cursor: not-allowed; border-color: var(--border); color: var(--text-muted); background: transparent; }
 
 .code-area { flex: 1; min-height: 0; display: flex; background: var(--bg-primary); padding: 8px 0; }
 .gutter { width: 34px; flex-shrink: 0; overflow: hidden; padding-left: 12px; }
