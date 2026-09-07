@@ -118,11 +118,17 @@ watch(() => props.syncRange, (range) => {
   scrollTop.value = ta.scrollTop
 })
 
-/** Isaretli satir araligi; gutter ve arka plan seridi bunu kullanir. */
+/**
+ * Isaretli satir araligi. Cok satirli bir dugum (or. tum Response govdesi)
+ * belgenin tamamini kaplayabilir; isaret o zaman anlamini yitirdigi icin
+ * baslangictan itibaren sinirli sayida satir vurgulaniyor.
+ */
+const MAX_BAND_LINES = 40
+
 const syncLines = computed(() => {
   const range = props.syncRange
   if (!range) return null
-  return { first: range.startLine, last: range.endLine }
+  return { first: range.startLine, last: Math.min(range.endLine, range.startLine + MAX_BAND_LINES - 1) }
 })
 
 /** Arka plandaki isaret seridinin konumu (textarea saydam, serit arkasinda). */

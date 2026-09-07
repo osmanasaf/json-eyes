@@ -14,6 +14,7 @@ import { buildTextIndex, lineOfOffset, EMPTY_TEXT_INDEX, type JsonTextIndex } fr
 import { pushRecent, readRecents, readTheme, writeTheme, type RecentFile, type Theme } from './utils/storage'
 import JsonTree from './components/JsonTree.vue'
 import JsonGrid from './components/JsonGrid.vue'
+import ColumnView from './components/ColumnView.vue'
 import IataPanel from './components/IataPanel.vue'
 import FieldValuesPanel from './components/FieldValuesPanel.vue'
 import EditorPane from './components/EditorPane.vue'
@@ -96,6 +97,7 @@ const annotationError = ref<string | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const filterInputRef = ref<HTMLInputElement | null>(null)
 const gridRef = ref<InstanceType<typeof JsonGrid> | null>(null)
+const columnRef = ref<InstanceType<typeof ColumnView> | null>(null)
 
 // Her tus vurusunda tum belgeyi ayristirmamak icin girisi geciktiriyoruz;
 // paylasim/dosya yukleme gibi programatik degisikliklerde aninda uygulanir.
@@ -284,9 +286,10 @@ const fieldValues = computed(() => {
 const syncLineLabel = computed(() => {
   const range = syncRange.value
   if (!range) return null
-  return range.startLine === range.endLine
+  const span = range.endLine - range.startLine + 1
+  return span === 1
     ? `editör satır ${range.startLine}`
-    : `editör satır ${range.startLine}–${range.endLine}`
+    : `editör satır ${range.startLine} · ${span.toLocaleString('tr-TR')} satır`
 })
 
 /**
@@ -465,7 +468,8 @@ function goToMatch(step: number) {
   if (matchCount.value === 0) return
   activeIndex.value = (activeIndex.value + step + matchCount.value) % matchCount.value
   const path = searchIndex.value.matches[activeIndex.value]
-  if (path && viewMode.value === 'grid') focusOnPath(path)
+  // Tablo modunda odak grid'e dondurur; agac kendi eslesmesini zaten aciyor.
+  if (path && (viewMode.value === 'grid' || viewMode.value === 'columns')) focusOnPath(path)
 }
 
 function clearSearch() {
@@ -730,6 +734,27 @@ function onKeydown(event: KeyboardEvent) {
     return
   }
   if (isTypingTarget(event.target) || meta || event.altKey) return
+
+  // Kolon gorunumunde ok tuslari sutunlar arasinda gezinir (Finder gibi).
+  if (viewMode.value === 'columns') {
+    const view = columnRef.value
+    if (!view) return
+    if (event.key === 'ArrowDown' || event.key === 'j' || event.key === 'J') {
+      event.preventDefault()
+      view.moveSelection(1)
+    } else if (event.key === 'ArrowUp' || event.key === 'k' || event.key === 'K') {
+      event.preventDefault()
+      view.moveSelection(-1)
+    } else if (event.key === 'ArrowRight' || event.key === 'l' || event.key === 'Enter') {
+      event.preventDefault()
+      view.descend()
+    } else if (event.key === 'ArrowLeft' || event.key === 'h') {
+      event.preventDefault()
+      view.ascend()
+    }
+    return
+  }
+
   if (event.key === 'j' || event.key === 'J') {
     event.preventDefault()
     gridRef.value?.moveSelection(1)
@@ -792,6 +817,13 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
       <div class="mode-switch">
         <button class="mode" :class="{ active: viewMode === 'tree' }" @click="setViewMode('tree')">Tree</button>
         <button class="mode" :class="{ active: viewMode === 'grid' }" @click="setViewMode('grid')">Grid</button>
+        <button
+          class="mode"
+          :class="{ active: viewMode === 'columns' }"
+          :disabled="!hasData"
+          title="Kolon görünümü — her seviye bir sütun, oklarla gezinme"
+          @click="setViewMode('columns')"
+        >Kolon</button>
         <button
           class="mode"
           :class="{ active: viewMode === 'table' }"
@@ -981,7 +1013,19 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
             />
           </template>
 
-          <div v-if="viewMode === 'tree'" class="tree-scroll">
+          <ColumnView
+            v-if="viewMode === 'columns'"
+            ref="columnRef"
+            :data="parsed!"
+            :root-key="ROOT_KEY"
+            :selected-path="selectedNodePath"
+            :doc-lookup="docLookup"
+            :search-term="searchTerm"
+            @focus-path="focusOnPath"
+            @open-table="openTable"
+          />
+
+          <div v-else-if="viewMode === 'tree'" class="tree-scroll">
             <JsonTree
               :data="parsed!"
               :root-key="ROOT_KEY"
@@ -1053,7 +1097,10 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
       <span v-if="syncLineLabel" class="stat accent">⌁ {{ syncLineLabel }}</span>
       <span v-if="annotation?.messageType" class="stat">{{ annotation.messageType }} %{{ matchPercent }}</span>
       <div class="status-spacer" />
-      <span class="stat">Ctrl+K komutlar · Ctrl+F filtre · J/K satır</span>
+      <span class="stat">
+        Ctrl+K komutlar · Ctrl+F filtre ·
+        {{ viewMode === 'columns' ? '↑↓ kardeş, →← seviye' : 'J/K satır' }}
+      </span>
     </footer>
 
     <input ref="fileInputRef" type="file" accept=".json,application/json" hidden @change="handleFile" />

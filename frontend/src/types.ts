@@ -3,7 +3,7 @@ export type JsonObject = { [key: string]: JsonValue }
 export type JsonArray = JsonValue[]
 export type JsonValue = JsonPrimitive | JsonObject | JsonArray
 
-export type ViewMode = 'tree' | 'grid' | 'table'
+export type ViewMode = 'tree' | 'grid' | 'table' | 'columns'
 
 export interface ParseResult {
   data: JsonValue | null

@@ -300,6 +300,8 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
           />
         </div>
       </div>
+      <!-- Satir detayi dugmesinin kolonu; baslikta bos durur ki hizalama bozulmasin. -->
+      <div class="head-gutter" />
     </div>
 
     <div class="body">
@@ -324,6 +326,17 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
               textAlign: col.kind === 'number' ? 'right' : 'left',
             }"
           >{{ cellText(row.item[col.name]) }}</div>
+          <!--
+            Ic ice hucreler bir alt seviyeye indigi icin satirin ortasina
+            tiklamak her zaman detayi acmaz; detay bu dugmeyle her satirda
+            erisilebilir kalir.
+          -->
+          <button
+            class="row-detail"
+            :class="{ open: selectedIndex === row.index }"
+            title="Satır detayı: tüm alanlar, tam değerler"
+            @click.stop="select(row.index)"
+          >⋯</button>
         </div>
 
         <!--
@@ -431,6 +444,7 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
 .head-arrow { font-size: 9px; color: var(--accent); }
 .head-kind { margin-left: auto; font-size: 9px; color: var(--text-muted); }
 .head-filter { padding: 0 8px 7px; }
+.head-gutter { width: 26px; flex-shrink: 0; }
 .filter-input { width: 100%; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 5px; outline: none; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 3px 7px; }
 .filter-input.filled, .filter-input:focus { border-color: var(--accent); }
 
@@ -441,6 +455,11 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
 .row.selected { background: var(--purple-wash); box-shadow: inset 2px 0 0 var(--purple); }
 .cell { min-width: 0; padding: 6px 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-right: 1px solid var(--border-subtle); }
 .inline .cell { padding: 5px 9px; font-size: 11.5px; }
+
+.row-detail { width: 26px; flex-shrink: 0; font-size: 13px; line-height: 1; color: var(--text-muted); opacity: 0; }
+.row:hover .row-detail { opacity: 1; }
+.row-detail:hover { color: var(--accent); background: var(--accent-dim); }
+.row-detail.open { opacity: 1; color: var(--purple); }
 
 .cell.nested { font-style: italic; }
 .row:hover .cell.nested { text-decoration: underline dotted; }
