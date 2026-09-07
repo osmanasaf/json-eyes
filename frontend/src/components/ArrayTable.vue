@@ -1,6 +1,13 @@
 <script setup lang="ts">
-import { computed, inject, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, inject, ref, watch } from 'vue'
 import { SELECT_FIELD } from '../utils/injection'
+
+/**
+ * Satir altinda acilan gomulu JSON grid. JsonGrid bu bileseni kendi icinde
+ * kullandigi icin (satir ici tablo) statik import dongusel olurdu; async
+ * bilesen dongulyu calisma zamanina tasiyip kiriyor.
+ */
+const JsonGrid = defineAsyncComponent(() => import('./JsonGrid.vue'))
 import type { JsonObject, JsonValue } from '../types'
 
 const props = defineProps<{
@@ -59,12 +66,19 @@ const nestedKeys = computed(() => columns.value.filter(c => c.kind === 'nested')
 
 const sort = ref<{ col: string; dir: 'asc' | 'desc' } | null>(null)
 const columnFilters = ref<Record<string, string>>({})
-const selectedIndex = ref<number | null>(null)
+/**
+ * Satirin altinda acilan bolum. `field` null ise satirin tamami, doluysa o
+ * ic ice alan gosterilir. Onceden ic ice hucreye tiklamak tablo seviyesini
+ * degistiriyordu (kullanici baktigi tabloyu kaybediyordu); artik hicbir tiklama
+ * gorunumu degistirmiyor, gezinme yalnizca acik dugmelerle oluyor.
+ */
+const open = ref<{ index: number; field: string | null } | null>(null)
+const selectedIndex = computed(() => open.value?.index ?? null)
 
 watch(() => props.path, () => {
   sort.value = null
   columnFilters.value = {}
-  selectedIndex.value = null
+  open.value = null
 })
 
 function toggleSort(col: string) {
@@ -158,15 +172,11 @@ const selectedLabel = computed(() => {
   return idColumn ? cellText(item[idColumn.name]) : `#${selectedIndex.value}`
 })
 
-/**
- * Satir secimi tabloda kalir. Onceden secim dogrudan `focusPath` yayiyordu;
- * uygulama da odak isteginde Tablo modundan Grid'e gectigi icin tabloda bir
- * satira tiklamak tabloyu kapatiyordu. Artik secim satir detayini acar, grid'e
- * gecis yalnizca detaydaki acik dugmeyle olur.
- */
+/** Satirin tamamini altta acar/kapatir. */
 function select(index: number) {
-  selectedIndex.value = selectedIndex.value === index ? null : index
-  if (selectedIndex.value !== null) selectField?.(`${props.path}.${index}`)
+  const same = open.value?.index === index && open.value.field === null
+  open.value = same ? null : { index, field: null }
+  if (open.value) selectField?.(`${props.path}.${index}`)
 }
 
 function openInGrid(path: string) {
@@ -174,44 +184,41 @@ function openInGrid(path: string) {
 }
 
 /**
- * Ic ice hucre tiklamasi bir alt seviyeye iner (tablo icinde gezinme). Satirin
- * kendisine tiklamak satir detayini acar; ikisi ayri hareket.
+ * Ic ice hucre tiklamasi: o alani satirin altinda gomulu grid olarak acar.
+ * Gorunum degismez — kullanici baktigi tabloda kalir, isterse acilan gridin
+ * basligindaki dugmelerle tabloya/grid'e gecer.
  */
 function onCellClick(row: { index: number; item: JsonObject }, name: string, event: MouseEvent) {
-  const value = row.item[name]
-  if (!isNested(value)) return
+  if (!isNested(row.item[name])) return
   event.stopPropagation()
-  selectField?.(`${props.path}.${row.index}.${name}`)
-  emit('descend', `${props.path}.${row.index}.${name}`)
+  const same = open.value?.index === row.index && open.value.field === name
+  open.value = same ? null : { index: row.index, field: name }
+  if (open.value) selectField?.(`${props.path}.${row.index}.${name}`)
 }
 
-/** Secili satirin tum alanlari: ic ice olanlar tam JSON, uzun metinler tam haliyle. */
-const DETAIL_CHARS = 20_000
-
-const detailFields = computed(() => {
-  if (selectedIndex.value === null) return []
-  const item = props.items[selectedIndex.value]
-  if (!item) return []
-  return Object.entries(item).map(([name, value]) => {
-    const nested = isNested(value)
-    const full = nested
-      ? JSON.stringify(value, null, 2)
-      : value === null ? 'null' : String(value)
-    return {
-      name,
-      nested,
-      path: `${props.path}.${selectedIndex.value}.${name}`,
-      type: Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value,
-      text: full.length > DETAIL_CHARS ? full.slice(0, DETAIL_CHARS) : full,
-      clipped: Math.max(0, full.length - DETAIL_CHARS),
-      color: colorOf(name, value),
-    }
-  })
+/** Altta acilan dugumun yolu ve degeri; gomulu grid bunlarla besleniyor. */
+const openPath = computed(() => {
+  const current = open.value
+  if (!current) return null
+  const base = `${props.path}.${current.index}`
+  return current.field === null ? base : `${base}.${current.field}`
 })
 
-const selectedPath = computed(() =>
-  selectedIndex.value === null ? null : `${props.path}.${selectedIndex.value}`,
-)
+const openValue = computed<JsonValue | null>(() => {
+  const current = open.value
+  if (!current) return null
+  const item = props.items[current.index]
+  if (!item) return null
+  const value = current.field === null ? item : item[current.field]
+  return value === undefined ? null : value
+})
+
+/** Acilan bolumun basligindaki ozet: "3 alan" / "2 öğe". */
+const openSummary = computed(() => {
+  const value = openValue.value
+  if (value === null || typeof value !== 'object') return null
+  return Array.isArray(value) ? `${value.length} öğe` : `${Object.keys(value).length} alan`
+})
 
 /** Kolonlarin genislik agirligi: kimlik ve tarih alanlari daha genis. */
 function flexOf(name: string, kind: ColumnKind): number {
@@ -269,7 +276,7 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
   <div class="array-table" :class="variant">
     <div v-if="variant === 'full'" class="strip">
       <span class="count-pill">{{ items.length.toLocaleString('tr-TR') }} kayıt</span>
-      <span class="strip-hint">iç içe hücre: bir seviye aşağı · satır: detay</span>
+      <span class="strip-hint">iç içe hücre: altta JSON grid açar · ⋯ satırın tamamı</span>
       <span v-if="activeFilterSummary" class="strip-filters">{{ activeFilterSummary }}</span>
       <div class="spacer" />
       <button class="strip-btn clear" :disabled="!activeFilterSummary" @click="clearFilters">Filtreleri temizle</button>
@@ -334,47 +341,32 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
           <button
             class="row-detail"
             :class="{ open: selectedIndex === row.index }"
-            title="Satır detayı: tüm alanlar, tam değerler"
+            title="Satırın tamamını altta JSON grid olarak aç"
             @click.stop="select(row.index)"
           >⋯</button>
         </div>
 
         <!--
-          Satir detayi tiklanan satirin hemen altinda acilir: hucreler tek
-          satira sigmadigi icin uzun metinler ve ic ice nesneler ancak burada
-          tam haliyle okunabiliyor. Detay tablonun icinde durdugu icin kayit
-          incelemek gorunumden cikmayi gerektirmez.
+          Satirin altinda acilan gomulu JSON grid: tiklanan ic ice alan (ya da
+          satirin tamami) burada kendi aci/kapa, tip ve uzun deger davranisiyla
+          okunur. Tablo yerinde kalir; hicbir tiklama gorunumu degistirmez.
         -->
-        <div v-if="selectedIndex === row.index && detailFields.length > 0" class="detail">
-          <div class="detail-head">
-            <code class="detail-path">{{ selectedPath?.split('.').slice(1).join('.') }}</code>
-            <span class="detail-count">{{ detailFields.length }} alan</span>
+        <div v-if="open?.index === row.index && openValue !== null" class="expand">
+          <div class="expand-head">
+            <code class="expand-path">{{ openPath?.split('.').slice(1).join('.') }}</code>
+            <span v-if="openSummary" class="expand-count">{{ openSummary }}</span>
             <div class="spacer" />
-            <button class="detail-btn" @click.stop="openInGrid(selectedPath!)">Grid'de aç</button>
-            <button class="detail-close" title="Detayı kapat" @click.stop="selectedIndex = null">×</button>
+            <button
+              v-if="openSummary"
+              class="expand-btn"
+              title="Bu düğümü tabloda aç"
+              @click.stop="emit('descend', openPath!)"
+            >⊞ tabloda aç</button>
+            <button class="expand-btn" title="Bu düğümü grid'de aç" @click.stop="openInGrid(openPath!)">↗ grid'de aç</button>
+            <button class="expand-close" title="Kapat" @click.stop="open = null">×</button>
           </div>
-          <div class="detail-body">
-            <div v-for="field in detailFields" :key="field.name" class="detail-field">
-              <div class="detail-key">
-                <span class="detail-name">{{ field.name }}</span>
-                <span class="detail-type">{{ field.type }}</span>
-                <button
-                  v-if="field.nested"
-                  class="detail-goto"
-                  title="Bu alanı tabloda aç"
-                  @click.stop="emit('descend', field.path)"
-                >⊞</button>
-                <button
-                  class="detail-goto"
-                  title="Bu alanı grid'de aç"
-                  @click.stop="openInGrid(field.path)"
-                >↗</button>
-              </div>
-              <pre class="detail-value" :style="{ color: field.color }">{{ field.text }}</pre>
-              <p v-if="field.clipped > 0" class="detail-clip">
-                +{{ field.clipped.toLocaleString('tr-TR') }} karakter daha (kırpıldı)
-              </p>
-            </div>
+          <div class="expand-body">
+            <JsonGrid :data="openValue" :root-key="openPath!" @focus-path="openInGrid" @expand-table="emit('descend', $event)" />
           </div>
         </div>
       </template>
@@ -404,7 +396,7 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
       </span>
       <div class="spacer" />
       <span v-if="nestedKeys.length > 0" class="total nested-note">
-        {{ nestedKeys.length }} iç içe alan özet gösteriliyor ({{ nestedKeys.join(', ') }}) — satıra tıklayın
+        {{ nestedKeys.length }} iç içe alan özet gösteriliyor ({{ nestedKeys.join(', ') }}) — hücreye tıklayın
       </span>
     </div>
 
@@ -464,24 +456,19 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
 .cell.nested { font-style: italic; }
 .row:hover .cell.nested { text-decoration: underline dotted; }
 
-.detail { border-bottom: 1px solid var(--border); background: var(--bg-secondary); box-shadow: inset 2px 0 0 var(--purple); }
-.detail-head { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-bottom: 1px solid var(--border-subtle); }
-.detail-path { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.detail-count { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
-.detail-btn { font-size: 11px; color: var(--accent); border: 1px solid var(--border); border-radius: 6px; padding: 2px 9px; white-space: nowrap; }
-.detail-btn:hover { background: var(--accent-dim); }
-.detail-close { font-size: 15px; line-height: 1; color: var(--text-muted); padding: 0 4px; }
-.detail-close:hover { color: var(--red); }
-.detail-body { padding: 4px 12px 10px; }
-.detail-field { padding: 6px 0; border-bottom: 1px solid var(--border-subtle); }
-.detail-field:last-child { border-bottom: none; }
-.detail-key { display: flex; align-items: center; gap: 7px; }
-.detail-name { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; color: var(--color-key); }
-.detail-type { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: var(--text-muted); text-transform: uppercase; }
-.detail-goto { font-size: 11px; color: var(--accent); border-radius: 4px; padding: 0 5px; }
-.detail-goto:hover { background: var(--accent-dim); }
-.detail-value { margin: 3px 0 0; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow-y: auto; }
-.detail-clip { font-size: 10px; color: var(--orange); margin-top: 3px; }
+.expand { border-bottom: 1px solid var(--border); background: var(--bg-secondary); box-shadow: inset 2px 0 0 var(--purple); }
+.expand-head { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-bottom: 1px solid var(--border-subtle); }
+.expand-path { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.expand-count { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
+.expand-btn { font-size: 11px; color: var(--accent); border: 1px solid var(--border); border-radius: 6px; padding: 2px 9px; white-space: nowrap; }
+.expand-btn:hover { background: var(--accent-dim); }
+.expand-close { font-size: 15px; line-height: 1; color: var(--text-muted); padding: 0 4px; }
+.expand-close:hover { color: var(--red); }
+/*
+ * Gomulu grid icerige gore buyur, bir noktadan sonra kendi icinde kaydirilir:
+ * 1200 ogeli bir dizi acildiginda tablo ekrandan tasmasin.
+ */
+.expand-body { display: flex; flex-direction: column; max-height: 340px; min-height: 88px; background: var(--bg-primary); }
 
 .empty-note { padding: 14px; text-align: center; font-size: 11.5px; color: var(--text-muted); }
 .virtual-note { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
