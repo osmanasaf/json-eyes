@@ -8,7 +8,19 @@ import { effectiveFieldName, isRefField, resolveRef, type RefIndex, type RefTarg
  * edilir: sanallastirma yalnizca boyle mumkun (pencereye giren satirlar bilinmeli)
  * ve referans/yorum/tablo kutulari da birer satir olarak listede yerini alir.
  */
-export type GridRowKind = 'row' | 'ref' | 'thread' | 'table' | 'more'
+export type GridRowKind = 'row' | 'ref' | 'thread' | 'table' | 'more' | 'value'
+
+/**
+ * Deger hucresi tek satirlik ve kirpiliyor: bu uzunlugun ustundeki ya da satir
+ * sonu iceren degerler hucreye sigmaz, satirin altinda tam haliyle acilir.
+ */
+export const LONG_VALUE_CHARS = 48
+
+/** Deger hucrede kirpilacak kadar uzun mu (veya cok satirli mi). */
+export function isLongValue(value: JsonValue): boolean {
+  if (typeof value !== 'string') return String(value ?? 'null').length > LONG_VALUE_CHARS
+  return value.length > LONG_VALUE_CHARS || /[\r\n\t]/.test(value)
+}
 
 export interface GridRowItem {
   /** v-for anahtari; ayni yol icin farkli turler ayri anahtar alir. */
@@ -30,6 +42,10 @@ export interface GridRowItem {
   tableReady?: boolean
   refTarget?: RefTarget
   refOpen?: boolean
+  /** Deger hucreye sigmiyor; satirda "tam deger" rozeti cikar. */
+  valueLong?: boolean
+  /** Tam deger kutusu bu satirin altinda acik mi. */
+  valueOpen?: boolean
   commentCount?: number
   threadOpen?: boolean
   /** Satirin kendisi mi eslesti yoksa eslesme alt agacinda mi. */
@@ -54,6 +70,8 @@ export interface FlattenOptions {
   docLookup?: (nodePath: string) => FieldDoc | undefined
   refIndex?: RefIndex
   refOpenPath?: string | null
+  /** Tam degeri acilmis satirin yolu. */
+  valueOpenPath?: string | null
   openThreadPath?: string | null
   commentCountFor?: (path: string) => number
   commentsAvailable?: boolean
@@ -109,6 +127,8 @@ export function flattenTree(data: JsonValue, options: FlattenOptions): GridRowIt
       ? (Array.isArray(value) ? value.length : Object.keys(value as JsonObject).length)
       : 0
     const refTarget = refFor(path, value, isContainer)
+    const valueLong = !isContainer && isLongValue(value)
+    const valueOpen = valueLong && options.valueOpenPath === path
 
     out.push({
       key: path,
@@ -125,11 +145,17 @@ export function flattenTree(data: JsonValue, options: FlattenOptions): GridRowIt
       tableReady: isObjectArray(value),
       refTarget,
       refOpen: refTarget !== undefined && options.refOpenPath === path,
+      valueLong,
+      valueOpen,
       commentCount: options.commentsAvailable ? (options.commentCountFor?.(path) ?? 0) : 0,
       threadOpen: options.openThreadPath === path,
       matchKind: matchKindOf(field, value, isContainer),
     })
 
+    // Tam deger kutusu satirin hemen altinda; kirpilan metin boylece okunabilir.
+    if (valueOpen) {
+      out.push({ key: `${path}::value`, kind: 'value', path, depth, field, value, type })
+    }
     if (refTarget && options.refOpenPath === path) {
       out.push({ key: `${path}::ref`, kind: 'ref', path, depth, refTarget })
     }
@@ -141,7 +167,10 @@ export function flattenTree(data: JsonValue, options: FlattenOptions): GridRowIt
 
     // Nesne dizileri "Tablo" modunda tek bir tablo satirina iner; cocuklar acilmaz.
     if (options.arrayTableMode && isObjectArray(value)) {
-      out.push({ key: `${path}::table`, kind: 'table', path, depth, items: value })
+      // "Yalniz eslesen" acikken tablo da filtrelenir; yoksa gorunum kendi
+      // filtresiyle celisir (grid gizlerken tablo hepsini gosterirdi).
+      const items = filterActive ? value.filter(item => matchesDeep(item, term)) : value
+      out.push({ key: `${path}::table`, kind: 'table', path, depth, items })
       return
     }
 

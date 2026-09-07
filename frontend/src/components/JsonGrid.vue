@@ -4,6 +4,7 @@ import { useVirtualizer } from '@tanstack/vue-virtual'
 import { COMMENTS, SELECT_FIELD } from '../utils/injection'
 import type { FieldDoc, JsonValue } from '../types'
 import type { RefIndex } from '../utils/references'
+import type { SearchIndex } from '../utils/search'
 import { collectExpandable, flattenTree, type GridRowItem } from '../utils/flatten'
 import { getType } from '../utils/json'
 import InfoBubble from './InfoBubble.vue'
@@ -20,6 +21,8 @@ const props = defineProps<{
   /** Nesne dizileri satir icinde tabloya donussun mu. */
   arrayTableMode?: boolean
   refIndex?: RefIndex
+  /** Arama sonuclari; eslesmelere giden dallar bununla kendiliginden acilir. */
+  search?: SearchIndex
   focusRequest?: { path: string; seq: number } | null
   selectedPath?: string | null
   /** Sunucudan alan aciklamalari geldi mi; gelmediyse sema isaretleri gizlenir. */
@@ -40,12 +43,50 @@ const ROW_PAGE_SIZE = 200
 const expanded = ref(new Set<string>([props.rootKey]))
 const pageSizes = ref(new Map<string, number>())
 const refOpenPath = ref<string | null>(null)
+const valueOpenPath = ref<string | null>(null)
 
 watch(() => props.data, () => {
   expanded.value = new Set([props.rootKey])
   pageSizes.value = new Map()
   refOpenPath.value = null
+  valueOpenPath.value = null
+  searchOpened.value = new Set()
+  userOpened.value = new Set()
 })
+
+/**
+ * Arama eslesmeleri kapali bir dalin icinde kalabilir: grid yalnizca acilmis
+ * dallari satira cevirdigi icin filtre acikken ekran bombos gorunurdu. Bu yuzden
+ * eslesmelere giden tum atalar kendiliginden acilir (agac gorunumu de boyle
+ * davranir).
+ *
+ * Arama icin acilan dallar ayrica tutuluyor: terim silinince yalnizca onlar
+ * kapanir, kullanicinin elle actigi dallar yerinde kalir. Yoksa tek bir arama
+ * belgenin yarisini kalici olarak acik birakirdi.
+ */
+const searchOpened = ref(new Set<string>())
+const userOpened = ref(new Set<string>())
+
+watch(() => props.search, (search) => {
+  if (!search || search.visible.size === 0) {
+    if (searchOpened.value.size === 0) return
+    const next = new Set(expanded.value)
+    for (const path of searchOpened.value) {
+      if (!userOpened.value.has(path)) next.delete(path)
+    }
+    searchOpened.value = new Set()
+    expanded.value = next
+    return
+  }
+  const next = new Set(expanded.value)
+  const opened = new Set(searchOpened.value)
+  for (const path of search.visible) {
+    if (!next.has(path)) opened.add(path)
+    next.add(path)
+  }
+  searchOpened.value = opened
+  expanded.value = next
+}, { immediate: true })
 
 const commentsAvailable = computed(() => comments?.available.value === true)
 
@@ -60,6 +101,7 @@ const rows = computed<GridRowItem[]>(() => flattenTree(props.data, {
   docLookup: props.docLookup,
   refIndex: props.refIndex,
   refOpenPath: refOpenPath.value,
+  valueOpenPath: valueOpenPath.value,
   openThreadPath: comments?.openPath.value ?? null,
   commentCountFor: path => comments?.countFor(path) ?? 0,
   commentsAvailable: commentsAvailable.value,
@@ -110,23 +152,42 @@ watch([rows, virtualRows], () => {
 
 function toggle(path: string) {
   const next = new Set(expanded.value)
-  if (next.has(path)) next.delete(path)
-  else next.add(path)
+  const marks = new Set(userOpened.value)
+  if (next.has(path)) {
+    next.delete(path)
+    marks.delete(path)
+  } else {
+    next.add(path)
+    marks.add(path)
+  }
+  userOpened.value = marks
   expanded.value = next
 }
 
 function onRowClick(row: GridRowItem) {
   selectField?.(row.path)
   if (row.isContainer) toggle(row.path)
+  // Kirpilmis deger satira tiklayinca da acilir: kullanici once oraya tikliyor.
+  else if (row.valueLong) toggleValue(row.path)
+}
+
+function toggleValue(path: string) {
+  valueOpenPath.value = valueOpenPath.value === path ? null : path
 }
 
 function expandAll() {
-  expanded.value = collectExpandable(props.data, props.rootKey)
+  const all = collectExpandable(props.data, props.rootKey)
+  // Elle acilmis sayilir: aramanin bitmesi "tümünü aç"i geri almamali.
+  userOpened.value = new Set(all)
+  expanded.value = all
 }
 
 function collapseAll() {
   expanded.value = new Set([props.rootKey])
   pageSizes.value = new Map()
+  valueOpenPath.value = null
+  searchOpened.value = new Set()
+  userOpened.value = new Set()
 }
 
 function showMore(path: string) {
@@ -186,13 +247,63 @@ function displayValue(value: JsonValue): string {
   return String(value)
 }
 
+/**
+ * Hucrede tek satir gosterilir: satir sonlari gorunur bir isarete cevrilir,
+ * yoksa cok satirli bir metin hucrede yan yana yapisik gorunur.
+ */
+function cellValue(value: JsonValue): string {
+  return displayValue(value).replace(/\r?\n/g, ' ↵ ').replace(/\t/g, '  ')
+}
+
+/**
+ * Tam deger kutusunda gosterilen metin. Cok uzun degerler (or. gomulu token,
+ * base64 govde) tarayiciyi kilitlemesin diye kirpilir; kopyalama tam degeri alir.
+ */
+const MAX_DETAIL_CHARS = 20_000
+
+function detailText(value: JsonValue): string {
+  const text = displayValue(value)
+  return text.length > MAX_DETAIL_CHARS ? text.slice(0, MAX_DETAIL_CHARS) : text
+}
+
+function detailClipped(value: JsonValue): number {
+  return Math.max(0, displayValue(value).length - MAX_DETAIL_CHARS)
+}
+
+function valueMeta(value: JsonValue): string {
+  const text = displayValue(value)
+  const lines = text.split(/\r?\n/).length
+  const chars = `${text.length.toLocaleString('tr-TR')} karakter`
+  return lines > 1 ? `${chars} · ${lines.toLocaleString('tr-TR')} satır` : chars
+}
+
+const copiedPath = ref<string | null>(null)
+let copyTimer: ReturnType<typeof setTimeout> | null = null
+
+async function copyValue(path: string, value: JsonValue) {
+  try {
+    await navigator.clipboard.writeText(displayValue(value))
+    copiedPath.value = path
+    if (copyTimer) clearTimeout(copyTimer)
+    copyTimer = setTimeout(() => { copiedPath.value = null }, 1500)
+  } catch {
+    copiedPath.value = null
+  }
+}
+
 // --- Odak ve klavye gezinmesi ------------------------------------------------
 
 watch(() => props.focusRequest, async (request) => {
   if (!request) return
   const next = new Set(expanded.value)
+  const marks = new Set(userOpened.value)
   const segments = request.path.split('.')
-  for (let i = 1; i <= segments.length; i++) next.add(segments.slice(0, i).join('.'))
+  for (let i = 1; i <= segments.length; i++) {
+    const ancestor = segments.slice(0, i).join('.')
+    next.add(ancestor)
+    marks.add(ancestor)
+  }
+  userOpened.value = marks
   expanded.value = next
   selectField?.(request.path)
   // Satir listesi yeniden kurulduktan sonra hedefin indeksi belli olur.
@@ -266,7 +377,7 @@ defineExpose({ moveSelection, expandAll, collapseAll })
                   @click.stop="toggle(rows[vrow.index].path)"
                 >{{ rows[vrow.index].isOpen ? '▾' : '▸' }}</button>
                 <span v-else class="caret-ph" />
-                <span class="field">{{ rows[vrow.index].field }}</span>
+                <span class="field" :title="rows[vrow.index].field">{{ rows[vrow.index].field }}</span>
                 <InfoBubble v-if="rows[vrow.index].doc">
                   <template #trigger>
                     <span
@@ -290,9 +401,19 @@ defineExpose({ moveSelection, expandAll, collapseAll })
 
               <div class="cell cell-value">
                 <span v-if="rows[vrow.index].isContainer" class="summary">{{ rows[vrow.index].summary }}</span>
-                <span v-else class="value" :class="`v-${rows[vrow.index].type}`">
-                  {{ displayValue(rows[vrow.index].value!) }}
-                </span>
+                <span
+                  v-else
+                  class="value"
+                  :class="[`v-${rows[vrow.index].type}`, { clipped: rows[vrow.index].valueLong }]"
+                >{{ cellValue(rows[vrow.index].value!) }}</span>
+                <!-- Hucreye sigmayan deger: satirin altinda tam haliyle acilir. -->
+                <button
+                  v-if="rows[vrow.index].valueLong"
+                  class="full-chip"
+                  :class="{ open: rows[vrow.index].valueOpen }"
+                  :title="rows[vrow.index].valueOpen ? 'Tam değeri kapat' : 'Tam değeri aç'"
+                  @click.stop="toggleValue(rows[vrow.index].path)"
+                >{{ rows[vrow.index].valueOpen ? '▴ kapat' : '⤢ tam değer' }}</button>
                 <button
                   v-if="rows[vrow.index].tableReady"
                   class="table-chip"
@@ -314,6 +435,29 @@ defineExpose({ moveSelection, expandAll, collapseAll })
                   :aria-label="rows[vrow.index].commentCount! > 0 ? `${rows[vrow.index].commentCount} yorum` : 'Yorum ekle'"
                   @click.stop="comments?.toggle(rows[vrow.index].path)"
                 ><span>💬</span><span v-if="rows[vrow.index].commentCount! > 0">{{ rows[vrow.index].commentCount }}</span></button>
+              </div>
+            </div>
+
+            <!-- Tam deger kutusu -->
+            <div v-else-if="rows[vrow.index].kind === 'value'" class="extra-row">
+              <div class="value-box" :style="{ marginLeft: `${(rows[vrow.index].depth + 1) * 18}px` }">
+                <div class="value-head">
+                  <code class="value-field">{{ rows[vrow.index].field }}</code>
+                  <span class="value-meta">{{ valueMeta(rows[vrow.index].value!) }}</span>
+                  <div class="value-spacer" />
+                  <button class="value-copy" @click="copyValue(rows[vrow.index].path, rows[vrow.index].value!)">
+                    {{ copiedPath === rows[vrow.index].path ? '✓ kopyalandı' : '⧉ kopyala' }}
+                  </button>
+                  <button class="value-close" title="Kapat" @click="toggleValue(rows[vrow.index].path)">×</button>
+                </div>
+                <pre
+                  class="value-full"
+                  :class="`v-${rows[vrow.index].type}`"
+                >{{ detailText(rows[vrow.index].value!) }}</pre>
+                <p v-if="detailClipped(rows[vrow.index].value!) > 0" class="value-clip">
+                  Görüntülemede ilk {{ MAX_DETAIL_CHARS.toLocaleString('tr-TR') }} karakter gösteriliyor;
+                  kalan {{ detailClipped(rows[vrow.index].value!).toLocaleString('tr-TR') }} karakter için kopyalayın.
+                </p>
               </div>
             </div>
 
@@ -432,6 +576,10 @@ defineExpose({ moveSelection, expandAll, collapseAll })
 .v-null { color: var(--color-null); font-style: italic; }
 .summary { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--text-muted); font-style: italic; }
 
+.value.clipped { cursor: zoom-in; }
+.full-chip { font-size: 10px; color: var(--cyan); background: var(--bg-tertiary); padding: 1px 8px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
+.full-chip:hover, .full-chip.open { background: var(--accent-dim); color: var(--accent); }
+
 .table-chip { font-size: 10px; color: var(--green); background: var(--bg-array); padding: 1px 8px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
 .table-chip:hover { background: var(--green-wash); }
 .ref-chip { font-size: 10px; color: var(--accent); background: var(--accent-dim); padding: 1px 8px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
@@ -451,6 +599,19 @@ defineExpose({ moveSelection, expandAll, collapseAll })
 .ref-field { display: flex; gap: 10px; padding: 2px 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
 .ref-key { color: var(--color-key); width: 110px; flex-shrink: 0; }
 .ref-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.value-box { border-left: 2px solid var(--cyan); background: var(--bg-secondary); border-radius: 0 6px 6px 0; padding: 8px 11px; }
+.value-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.value-field { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--color-key); }
+.value-meta { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); }
+.value-spacer { flex: 1; }
+.value-copy { font-size: 10.5px; color: var(--accent); border: 1px solid var(--border); border-radius: 4px; padding: 1px 8px; white-space: nowrap; }
+.value-copy:hover { background: var(--accent-dim); }
+.value-close { font-size: 14px; line-height: 1; color: var(--text-muted); padding: 0 4px; }
+.value-close:hover { color: var(--red); }
+/* Tam deger: sarilir, satir sonlari korunur, cok uzun degerde kendi icinde kaydirilir. */
+.value-full { font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow-y: auto; margin: 0; }
+.value-clip { margin-top: 6px; font-size: 10.5px; color: var(--orange); }
 
 .more-btn { font-size: 11px; color: var(--accent); background: var(--accent-dim); padding: 3px 10px; border-radius: 5px; }
 .more-btn:hover { background: var(--accent-strong); }

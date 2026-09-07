@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
+import { SELECT_FIELD } from '../utils/injection'
 import type { JsonObject, JsonValue } from '../types'
 
 const props = defineProps<{
@@ -16,30 +17,39 @@ const props = defineProps<{
 
 const emit = defineEmits<{ focusPath: [path: string]; expand: [path: string]; close: [] }>()
 
-/** Tablo yalnizca skaler alanlari gosterir; ic ice nesneler satir sayisini bozardi. */
+// Secim, gorunum degistirmeden baglam seridine ve IATA paneline yansisin.
+const selectField = inject(SELECT_FIELD, null)
+
+type ColumnKind = 'number' | 'text' | 'nested'
+
+/**
+ * Kolonlar: skaler alanlar oldugu gibi, ic ice nesne/dizi alanlari ise ozet
+ * olarak ("3 alan", "2 öğe") gosterilir. Onceden ic ice alanlar tablodan tumden
+ * dusuruluyordu; NDC kayitlarinin bilgisi cogunlukla orada oldugu icin tablo
+ * bos gorunuyordu. Ozet hucreye tiklanarak o dugume gidilir, satir detayinda da
+ * tam JSON'u okunur.
+ */
 const columns = computed(() => {
-  const seen = new Map<string, 'number' | 'text'>()
+  const seen = new Map<string, ColumnKind>()
   for (const item of props.items) {
     for (const [key, value] of Object.entries(item)) {
-      if (value !== null && typeof value === 'object') continue
-      const kind = typeof value === 'number' ? 'number' : 'text'
-      // Bir kolonda tek bir sayisal olmayan deger varsa kolon metin sayilir.
-      if (!seen.has(key) || kind === 'text') seen.set(key, kind)
+      const kind: ColumnKind = value !== null && typeof value === 'object'
+        ? 'nested'
+        : typeof value === 'number' ? 'number' : 'text'
+      const current = seen.get(key)
+      if (current === undefined) {
+        seen.set(key, kind)
+        continue
+      }
+      // Ayni kolonda karisik tipler varsa en genel gosterim kazanir: metin.
+      if (current !== kind) seen.set(key, 'text')
     }
   }
   return [...seen].map(([name, kind]) => ({ name, kind }))
 })
 
-/** Tabloya sigmayan ic ice alanlar; kullaniciya kirpma sessizce yapilmaz. */
-const nestedKeys = computed(() => {
-  const keys = new Set<string>()
-  for (const item of props.items) {
-    for (const [key, value] of Object.entries(item)) {
-      if (value !== null && typeof value === 'object') keys.add(key)
-    }
-  }
-  return [...keys]
-})
+/** Ozet olarak gosterilen ic ice alanlar; alt seritte bilgi olarak yazilir. */
+const nestedKeys = computed(() => columns.value.filter(c => c.kind === 'nested').map(c => c.name))
 
 const sort = ref<{ col: string; dir: 'asc' | 'desc' } | null>(null)
 const columnFilters = ref<Record<string, string>>({})
@@ -60,7 +70,21 @@ function toggleSort(col: string) {
 function cellText(value: JsonValue | undefined): string {
   if (value === undefined) return ''
   if (value === null) return 'null'
-  return String(value)
+  if (Array.isArray(value)) return `[${value.length} öğe]`
+  if (typeof value === 'object') return `{${Object.keys(value).length} alan}`
+  // Cok satirli metin hucrede tek satira iner; satir sonu gorunur kalir.
+  return String(value).replace(/\r?\n/g, ' ↵ ')
+}
+
+function isNested(value: JsonValue | undefined): boolean {
+  return value !== null && value !== undefined && typeof value === 'object'
+}
+
+/** Kolon filtresi ve CSV ic ice alanlarda tam JSON metni uzerinden calisir. */
+function searchText(value: JsonValue | undefined): string {
+  if (value === undefined) return ''
+  if (isNested(value)) return JSON.stringify(value)
+  return value === null ? 'null' : String(value)
 }
 
 /** Satirlar orijinal indeksleriyle tasinir; secim ve yol bu indekse baglidir. */
@@ -72,7 +96,7 @@ const rows = computed(() => {
   let list = props.items.map((item, index) => ({ index, item }))
   if (filters.length > 0) {
     list = list.filter(({ item }) =>
-      filters.every(([col, text]) => cellText(item[col]).toLowerCase().includes(text)),
+      filters.every(([col, text]) => searchText(item[col]).toLowerCase().includes(text)),
     )
   }
 
@@ -84,11 +108,17 @@ const rows = computed(() => {
       const av = a.item[active.col]
       const bv = b.item[active.col]
       if (kind === 'number') return factor * (Number(av ?? 0) - Number(bv ?? 0))
+      if (kind === 'nested') return factor * (childCount(av) - childCount(bv))
       return factor * cellText(av).localeCompare(cellText(bv), 'tr')
     })
   }
   return list
 })
+
+function childCount(value: JsonValue | undefined): number {
+  if (!isNested(value)) return -1
+  return Array.isArray(value) ? value.length : Object.keys(value as JsonObject).length
+}
 
 const activeFilterSummary = computed(() => {
   const parts = Object.entries(columnFilters.value)
@@ -122,13 +152,52 @@ const selectedLabel = computed(() => {
   return idColumn ? cellText(item[idColumn.name]) : `#${selectedIndex.value}`
 })
 
+/**
+ * Satir secimi tabloda kalir. Onceden secim dogrudan `focusPath` yayiyordu;
+ * uygulama da odak isteginde Tablo modundan Grid'e gectigi icin tabloda bir
+ * satira tiklamak tabloyu kapatiyordu. Artik secim satir detayini acar, grid'e
+ * gecis yalnizca detaydaki acik dugmeyle olur.
+ */
 function select(index: number) {
-  selectedIndex.value = index
-  emit('focusPath', `${props.path}.${index}`)
+  selectedIndex.value = selectedIndex.value === index ? null : index
+  if (selectedIndex.value !== null) selectField?.(`${props.path}.${index}`)
 }
 
+function openInGrid(path: string) {
+  emit('focusPath', path)
+}
+
+/** Secili satirin tum alanlari: ic ice olanlar tam JSON, uzun metinler tam haliyle. */
+const DETAIL_CHARS = 20_000
+
+const detailFields = computed(() => {
+  if (selectedIndex.value === null) return []
+  const item = props.items[selectedIndex.value]
+  if (!item) return []
+  return Object.entries(item).map(([name, value]) => {
+    const nested = isNested(value)
+    const full = nested
+      ? JSON.stringify(value, null, 2)
+      : value === null ? 'null' : String(value)
+    return {
+      name,
+      nested,
+      path: `${props.path}.${selectedIndex.value}.${name}`,
+      type: Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value,
+      text: full.length > DETAIL_CHARS ? full.slice(0, DETAIL_CHARS) : full,
+      clipped: Math.max(0, full.length - DETAIL_CHARS),
+      color: colorOf(name, value),
+    }
+  })
+})
+
+const selectedPath = computed(() =>
+  selectedIndex.value === null ? null : `${props.path}.${selectedIndex.value}`,
+)
+
 /** Kolonlarin genislik agirligi: kimlik ve tarih alanlari daha genis. */
-function flexOf(name: string, kind: 'number' | 'text'): number {
+function flexOf(name: string, kind: ColumnKind): number {
+  if (kind === 'nested') return 0.7
   if (/date|time/i.test(name)) return 1.3
   if (/ID$/i.test(name)) return 1.2
   if (kind === 'number') return 0.8
@@ -138,6 +207,8 @@ function flexOf(name: string, kind: 'number' | 'text'): number {
 
 function colorOf(name: string, value: JsonValue | undefined): string {
   if (value === undefined || value === null) return 'var(--color-null)'
+  if (Array.isArray(value)) return 'var(--green)'
+  if (typeof value === 'object') return 'var(--purple)'
   if (typeof value === 'number') return 'var(--color-number)'
   if (typeof value === 'boolean') return 'var(--color-bool)'
   if (/Status(Code)?$/i.test(name)) {
@@ -155,7 +226,8 @@ function downloadCsv() {
   const escape = (text: string) => (/[";\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text)
   const lines = [
     names.join(';'),
-    ...rows.value.map(({ item }) => names.map(name => escape(cellText(item[name]))).join(';')),
+    // Ic ice alanlar CSV'de sikistirilmis JSON olarak cikar; ozet metin veri kaybi olurdu.
+    ...rows.value.map(({ item }) => names.map(name => escape(searchText(item[name]))).join(';')),
   ]
   // Excel'in UTF-8'i dogru okumasi icin BOM sart.
   const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' })
@@ -195,9 +267,11 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
         :style="{ flex: flexOf(col.name, col.kind) }"
       >
         <button class="head-sort" :class="{ active: sort?.col === col.name }" @click="toggleSort(col.name)">
-          <span class="head-name">{{ col.name }}</span>
+          <span class="head-name" :title="col.name">{{ col.name }}</span>
           <span v-if="sort?.col === col.name" class="head-arrow">{{ sort.dir === 'asc' ? '▲' : '▼' }}</span>
-          <span v-if="variant === 'full'" class="head-kind">{{ col.kind === 'number' ? 'num' : 'str' }}</span>
+          <span v-if="variant === 'full'" class="head-kind">
+            {{ col.kind === 'number' ? 'num' : col.kind === 'nested' ? 'obj' : 'str' }}
+          </span>
         </button>
         <div v-if="variant === 'full'" class="head-filter">
           <input
@@ -212,24 +286,60 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
     </div>
 
     <div class="body">
-      <div
-        v-for="row in visibleRows"
-        :key="row.index"
-        class="row"
-        :class="{ odd: row.index % 2 === 1, selected: selectedIndex === row.index }"
-        @click="select(row.index)"
-      >
+      <template v-for="row in visibleRows" :key="row.index">
         <div
-          v-for="col in columns"
-          :key="col.name"
-          class="cell"
-          :style="{
-            flex: flexOf(col.name, col.kind),
-            color: colorOf(col.name, row.item[col.name]),
-            textAlign: col.kind === 'number' ? 'right' : 'left',
-          }"
-        >{{ cellText(row.item[col.name]) }}</div>
-      </div>
+          class="row"
+          :class="{ odd: row.index % 2 === 1, selected: selectedIndex === row.index }"
+          @click="select(row.index)"
+        >
+          <div
+            v-for="col in columns"
+            :key="col.name"
+            class="cell"
+            :class="{ nested: isNested(row.item[col.name]) }"
+            :title="searchText(row.item[col.name]).slice(0, 400)"
+            :style="{
+              flex: flexOf(col.name, col.kind),
+              color: colorOf(col.name, row.item[col.name]),
+              textAlign: col.kind === 'number' ? 'right' : 'left',
+            }"
+          >{{ cellText(row.item[col.name]) }}</div>
+        </div>
+
+        <!--
+          Satir detayi tiklanan satirin hemen altinda acilir: hucreler tek
+          satira sigmadigi icin uzun metinler ve ic ice nesneler ancak burada
+          tam haliyle okunabiliyor. Detay tablonun icinde durdugu icin kayit
+          incelemek gorunumden cikmayi gerektirmez.
+        -->
+        <div v-if="selectedIndex === row.index && detailFields.length > 0" class="detail">
+          <div class="detail-head">
+            <code class="detail-path">{{ selectedPath?.split('.').slice(1).join('.') }}</code>
+            <span class="detail-count">{{ detailFields.length }} alan</span>
+            <div class="spacer" />
+            <button class="detail-btn" @click.stop="openInGrid(selectedPath!)">Grid'de aç</button>
+            <button class="detail-close" title="Detayı kapat" @click.stop="selectedIndex = null">×</button>
+          </div>
+          <div class="detail-body">
+            <div v-for="field in detailFields" :key="field.name" class="detail-field">
+              <div class="detail-key">
+                <span class="detail-name">{{ field.name }}</span>
+                <span class="detail-type">{{ field.type }}</span>
+                <button
+                  v-if="field.nested"
+                  class="detail-goto"
+                  title="Bu alanı grid'de aç"
+                  @click.stop="openInGrid(field.path)"
+                >↗</button>
+              </div>
+              <pre class="detail-value" :style="{ color: field.color }">{{ field.text }}</pre>
+              <p v-if="field.clipped > 0" class="detail-clip">
+                +{{ field.clipped.toLocaleString('tr-TR') }} karakter daha (kırpıldı)
+              </p>
+            </div>
+          </div>
+        </div>
+      </template>
 
       <div v-if="rows.length === 0" class="empty-note">Filtrelerle eşleşen kayıt yok.</div>
 
@@ -256,13 +366,13 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
       </span>
       <div class="spacer" />
       <span v-if="nestedKeys.length > 0" class="total nested-note">
-        {{ nestedKeys.length }} iç içe alan tabloda gösterilmiyor: {{ nestedKeys.join(', ') }}
+        {{ nestedKeys.length }} iç içe alan özet gösteriliyor ({{ nestedKeys.join(', ') }}) — satıra tıklayın
       </span>
     </div>
 
     <div v-else class="inline-foot">
       {{ rows.length.toLocaleString('tr-TR') }} kayıt · {{ columns.length }} kolon
-      <template v-if="nestedKeys.length > 0"> · {{ nestedKeys.length }} iç içe alan gizli</template>
+      <template v-if="nestedKeys.length > 0"> · {{ nestedKeys.length }} iç içe alan özet</template>
       <button class="foot-btn" @click="emit('expand', path)">tam ekran</button>
     </div>
   </div>
@@ -306,6 +416,28 @@ const pendingRows = computed(() => Math.max(0, rows.value.length - rendered.valu
 .row.selected { background: var(--purple-wash); box-shadow: inset 2px 0 0 var(--purple); }
 .cell { min-width: 0; padding: 6px 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-right: 1px solid var(--border-subtle); }
 .inline .cell { padding: 5px 9px; font-size: 11.5px; }
+
+.cell.nested { font-style: italic; }
+.row:hover .cell.nested { text-decoration: underline dotted; }
+
+.detail { border-bottom: 1px solid var(--border); background: var(--bg-secondary); box-shadow: inset 2px 0 0 var(--purple); }
+.detail-head { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-bottom: 1px solid var(--border-subtle); }
+.detail-path { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detail-count { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
+.detail-btn { font-size: 11px; color: var(--accent); border: 1px solid var(--border); border-radius: 6px; padding: 2px 9px; white-space: nowrap; }
+.detail-btn:hover { background: var(--accent-dim); }
+.detail-close { font-size: 15px; line-height: 1; color: var(--text-muted); padding: 0 4px; }
+.detail-close:hover { color: var(--red); }
+.detail-body { padding: 4px 12px 10px; }
+.detail-field { padding: 6px 0; border-bottom: 1px solid var(--border-subtle); }
+.detail-field:last-child { border-bottom: none; }
+.detail-key { display: flex; align-items: center; gap: 7px; }
+.detail-name { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; color: var(--color-key); }
+.detail-type { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: var(--text-muted); text-transform: uppercase; }
+.detail-goto { font-size: 11px; color: var(--accent); border-radius: 4px; padding: 0 5px; }
+.detail-goto:hover { background: var(--accent-dim); }
+.detail-value { margin: 3px 0 0; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow-y: auto; }
+.detail-clip { font-size: 10px; color: var(--orange); margin-top: 3px; }
 
 .empty-note { padding: 14px; text-align: center; font-size: 11.5px; color: var(--text-muted); }
 .virtual-note { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }

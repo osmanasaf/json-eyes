@@ -818,6 +818,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
             :filter-matches="filterMatches"
             :array-table-mode="arrayTableMode"
             :ref-index="refIndex"
+            :search="searchIndex"
             :focus-request="focusRequest"
             :selected-path="selectedNodePath"
             :schema-known="schemaKnown"
