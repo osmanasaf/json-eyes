@@ -15,6 +15,7 @@ import { pushRecent, readRecents, readTheme, writeTheme, type RecentFile, type T
 import JsonTree from './components/JsonTree.vue'
 import JsonGrid from './components/JsonGrid.vue'
 import ColumnView from './components/ColumnView.vue'
+import DiffView from './components/DiffView.vue'
 import IataPanel from './components/IataPanel.vue'
 import FieldValuesPanel from './components/FieldValuesPanel.vue'
 import EditorPane from './components/EditorPane.vue'
@@ -525,6 +526,17 @@ function forkShared() {
   window.history.replaceState({}, '', url.pathname + url.search)
 }
 
+/**
+ * Fark gorunumu icin paylasimdan JSON getirir. Kullanicinin elindeki
+ * karsilastirma malzemesi genellikle bir paylasim linki oluyor.
+ */
+async function loadShareForDiff(idOrUrl: string): Promise<{ json: JsonValue; label: string }> {
+  const match = /[?&]s=([A-Za-z0-9]+)/.exec(idOrUrl)
+  const id = match ? match[1] : idOrUrl.trim()
+  const share = await getShare(id)
+  return { json: share.json, label: share.title ?? `paylaşım ${share.id}` }
+}
+
 async function runAnnotation(json: JsonValue) {
   annotationLoading.value = true
   annotationError.value = null
@@ -831,6 +843,14 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
           title="Seçili seviyeyi tabloda aç — iç içe hücreler bir alt seviyeye iner"
           @click="setViewMode('table')"
         >Tablo</button>
+        <span class="mode-sep" />
+        <button
+          class="mode diff"
+          :class="{ active: viewMode === 'diff' }"
+          :disabled="!hasData"
+          title="Bu JSON'u başka bir JSON ile karşılaştır"
+          @click="setViewMode('diff')"
+        >Fark</button>
       </div>
 
       <div v-if="!isShared" class="share-wrap">
@@ -868,7 +888,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
     <div v-if="shareError" class="banner bad">{{ shareError }}<button class="banner-close" @click="shareError = null">×</button></div>
     <div v-if="loadError" class="banner bad">{{ loadError }}<button class="banner-close" @click="loadError = null">×</button></div>
 
-    <div v-if="hasData" class="crumbs-bar">
+    <div v-if="hasData && viewMode !== 'diff'" class="crumbs-bar">
       <nav class="crumbs">
         <template v-for="(crumb, index) in crumbs" :key="index">
           <button
@@ -968,8 +988,22 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
           maliyetli olduklari icin yalnizca secildiklerinde kurulur.
         -->
         <template v-else>
+          <!--
+            Fark gorunumu ayri bir ekran: grid/tablo/kolon davranisina
+            dokunmuyor, yalnizca goruntuleyici alanini devraliyor.
+          -->
+          <DiffView
+            v-if="viewMode === 'diff'"
+            :current="parsed"
+            :root-key="ROOT_KEY"
+            :current-name="displayName"
+            :load-share="loadShareForDiff"
+            @focus-path="focusOnPath"
+            @close="viewMode = 'grid'"
+          />
+
           <!-- Tablo modu: seviye seridi + o seviyenin tablosu -->
-          <template v-if="viewMode === 'table' && tableLevel">
+          <template v-else-if="viewMode === 'table' && tableLevel">
             <div class="level-bar">
               <button class="level-btn" title="Grid görünümüne dön" @click="viewMode = 'grid'">← Grid</button>
               <button
@@ -1063,13 +1097,13 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 
       <!-- Sag: IATA paneli -->
       <button
-        v-if="!iataVisible && hasData"
+        v-if="!iataVisible && hasData && viewMode !== 'diff'"
         class="rail right"
         title="IATA panelini aç"
         @click="toggleIata"
       ><span class="rail-glyph">‹</span><span class="rail-label">IATA</span></button>
 
-      <div v-if="iataVisible && hasData" class="side-col">
+      <div v-if="iataVisible && hasData && viewMode !== 'diff'" class="side-col">
         <IataPanel
           :annotation="annotation"
           :loading="annotationLoading"
@@ -1146,6 +1180,8 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 .mode:hover:not(:disabled) { color: var(--text-primary); }
 .mode.active { background: var(--bg-tertiary); color: var(--text-primary); }
 .mode:disabled { opacity: .35; cursor: not-allowed; }
+.mode-sep { width: 1px; align-self: stretch; background: var(--border); margin: 2px 3px; }
+.mode.diff.active { background: var(--accent-dim); color: var(--accent); }
 
 .share-wrap { position: relative; flex-shrink: 0; }
 .share-btn { font-size: 12.5px; font-weight: 600; color: var(--bg-primary); background: var(--accent); border-radius: 7px; padding: 6px 13px; }

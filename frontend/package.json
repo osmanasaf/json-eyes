@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "pretest": "esbuild src/utils/diff.ts --bundle --format=esm --platform=node --outfile=test/.diff.bundle.mjs --log-level=error",
+    "test": "node --test test/diff.test.mjs"
   },
   "dependencies": {
     "@tanstack/vue-virtual": "^3.13.34",

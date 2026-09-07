@@ -130,6 +130,23 @@ yeni bir tema eklemek `:root[data-theme='...']` bloğu yazmaktan ibarettir.
 - **Panel şeritleri**: editör ve IATA panelleri kendi başlıklarındaki `‹` / `›` ile
   kapanır; kapalıyken kenarda dikey yazılı bir şerit kalır, tıklayınca geri açılır.
 
+### Fark görünümü
+
+`Fark` düğmesi mevcut JSON'u ikinci bir JSON ile karşılaştırır (dosya, sürükle-bırak,
+yapıştır ya da paylaşım linki). Sonuç yan yana iki metin değil **tek bir birleşik
+ağaç**: değişiklikler kendi yerinde, değişmeyen dallar katlı.
+
+Diziler indekse göre değil **kimliğe göre** eşleştirilir: `Order` dizisinde `OrderID`,
+`Pax` listesinde `PaxID` kendiliğinden bulunur. Böylece başa bir kayıt eklendiğinde
+rapor "her şey değişti" demez; yalnızca gerçekten değişen kayıt görünür ve satırda
+hangi kayıt olduğu (`ORD100005`) yazar. Kayma ile gerçek yeniden sıralama ayrılır —
+sadece sırası değişen öğeler "taşındı" olarak raporlanır (LIS). Kimliği olmayan
+dizilerde metin diff'lerinin LCS'i kullanılır.
+
+Üstteki dört sayı (eklendi / silindi / değişti / taşındı), ↑↓ ile değişiklikler
+arasında gezinme, "yalnız değişenler" filtresi ve uzun değerlerde A/B yan yana tam
+metin var. 4,3 MB'lık iki NDC yanıtı ~15 ms'de karşılaştırılıyor.
+
 ## Alan eşleştirme
 
 Gerçek JSON'larda kapsayıcı adları standarttan sapar (`PaxList` → `passengerList`,
@@ -300,6 +317,7 @@ almak gerekir.
 
 ```bash
 cd backend && mvn test     # XSD indeksleme ve alan eşleştirme (gerçek IATA şemaları)
+cd frontend && npm test    # fark motoru: kimlik eşleştirme, taşıma tespiti, LCS
 cd cli && npm test         # CLI: derlenmiş paket, sahte API sunucusuna karşı
 ```
 
