@@ -23,7 +23,10 @@ export interface FieldValueStats {
   fieldPath: string
   /** Alanin bulundugu dugum sayisi. */
   total: number
-  /** Alanin beklendigi ama bulunmadigi kayit sayisi. */
+  /**
+   * Alanin beklendigi ama bulunmadigi kayit sayisi. Yol uzerindeki herhangi bir
+   * parcanin eksik olmasi (or. kayitta `TotalPrice` hic yoksa) buraya sayilir.
+   */
   missing: number
   distinct: DistinctValue[]
   /** Farkli deger sayisi (liste kirpilmadan once). */
@@ -127,8 +130,13 @@ export function collectFieldValues(
       return
     }
 
+    // Ara dugum de eksik olabilir (kayitta TotalPrice hic yoksa TotalAmount da
+    // yoktur); bunu saymamak "alan yok" sayisini oldugundan kucuk gosteriyordu.
     const key = target[depth]
-    if (!Object.prototype.hasOwnProperty.call(object, key)) return
+    if (!Object.prototype.hasOwnProperty.call(object, key)) {
+      missing++
+      return
+    }
     walk(object[key], depth + 1, `${path}.${key}`)
   }
 

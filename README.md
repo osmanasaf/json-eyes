@@ -43,6 +43,15 @@ npm run dev
 
 Vite dev sunucusu `/api` isteklerini `http://localhost:8080` adresine proxy eder.
 
+### Komut satırı
+
+```bash
+cd cli && npm install && npm run build
+node dist/jse.mjs share siparis.json      # JSON ver, paylaşım linki al
+```
+
+Ayrıntılar ve tüm komutlar: [cli/README.md](cli/README.md)
+
 ## Arayüz
 
 Tek bir kabuk: 56px üst bar (dosya adı + geçerlilik rozeti, komut çubuğu, mod anahtarı,
@@ -286,11 +295,9 @@ almak gerekir.
 ## Testler
 
 ```bash
-cd backend
-mvn test
+cd backend && mvn test     # XSD indeksleme ve alan eşleştirme (gerçek IATA şemaları)
+cd cli && npm test         # CLI: derlenmiş paket, sahte API sunucusuna karşı
 ```
-
-XSD indeksleme ve alan eşleştirme testleri gerçek IATA şemalarıyla çalışır.
 
 ## Yapı
 
@@ -303,5 +310,6 @@ json-sarp/
 │       └── utils/flatten.ts        ağacı sanallaştırılabilir düz satır listesine çevirir
 ├── backend/           Spring Boot + H2 + XSD indeksleyici
 │   └── src/main/resources/xsd/     IATA 24.4 şemaları (52 dosya)
+├── cli/               `jse` komut satırı aracı (paylaşım linki + yerel inceleme)
 └── design_handoff_json_eyes/       uygulanan tasarım referansı (Tur 5)
 ```

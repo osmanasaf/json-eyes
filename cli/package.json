@@ -1,0 +1,27 @@
+{
+  "name": "json-eyes-cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "JSON Eyes komut satiri araci: JSON'u paylasim linkine cevirir, alan dagilimini ve yollari terminalde gosterir.",
+  "type": "module",
+  "bin": {
+    "jse": "./dist/jse.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/jse.mjs --banner:js=\"#!/usr/bin/env node\"",
+    "dev": "npm run build && node dist/jse.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.5.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
