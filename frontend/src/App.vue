@@ -9,6 +9,7 @@ import { buildSearchIndex, EMPTY_SEARCH } from './utils/search'
 import { buildRefIndex, EMPTY_REF_INDEX } from './utils/references'
 import { isObjectArray } from './utils/flatten'
 import { tryRepair } from './utils/repair'
+import { buildTextIndex, lineOfOffset, EMPTY_TEXT_INDEX, type JsonTextIndex } from './utils/textIndex'
 import { pushRecent, readRecents, readTheme, writeTheme, type RecentFile, type Theme } from './utils/storage'
 import JsonTree from './components/JsonTree.vue'
 import JsonGrid from './components/JsonGrid.vue'
@@ -205,6 +206,73 @@ const selectedSchemaPath = computed(() =>
     ? toSchemaPath(selectedNodePath.value, ROOT_KEY, annotation.value?.messageType ?? null)
     : null,
 )
+
+/**
+ * GridSync: goruntuleyicide secilen alanin ham metindeki yeri. Indeks metnin
+ * ikinci bir gecisini gerektirdigi icin metin basina bir kez kuruluyor ve
+ * reaktif olmayan bir degiskende tutuluyor (icerigi Vue'nun izlemesine gerek
+ * yok). Ilk secimde bekleme olmasin diye ayristirmadan sonra bos zamanda
+ * onceden kuruluyor.
+ */
+let textIndexCache: { text: string; index: JsonTextIndex } | null = null
+
+/** Cok buyuk girdilerde indeks kurulmaz; senkron sessizce devre disi kalir. */
+const MAX_SYNC_CHARS = 12_000_000
+
+function textIndexFor(text: string): JsonTextIndex {
+  if (textIndexCache?.text === text) return textIndexCache.index
+  if (text.length > MAX_SYNC_CHARS) return EMPTY_TEXT_INDEX
+  const index = buildTextIndex(text, ROOT_KEY)
+  textIndexCache = { text, index }
+  return index
+}
+
+type SyncRange = { start: number; end: number; startLine: number; endLine: number }
+const syncRange = ref<SyncRange | null>(null)
+
+function updateSyncRange() {
+  const path = selectedNodePath.value
+  if (!path || !editorVisible.value || isShared.value || parsed.value === null) {
+    syncRange.value = null
+    return
+  }
+  const index = textIndexFor(parsedInput.value)
+  const range = index.ranges.get(path)
+  if (!range) {
+    syncRange.value = null
+    return
+  }
+  syncRange.value = {
+    start: range.start,
+    end: range.end,
+    startLine: lineOfOffset(index, range.start),
+    endLine: lineOfOffset(index, Math.max(range.start, range.end - 1)),
+  }
+}
+
+watch([selectedNodePath, parsedInput, editorVisible, isShared], updateSyncRange, { immediate: true })
+
+// Ayristirma basariliysa indeksi bos zamanda kur: ilk tiklama beklemesin.
+watch(parsedInput, (text) => {
+  if (parsed.value === null || isShared.value || text.length > MAX_SYNC_CHARS) return
+  const prewarm = () => {
+    if (parsedInput.value !== text) return
+    textIndexFor(text)
+    updateSyncRange()
+  }
+  const idle = (window as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback
+  if (idle) idle(prewarm)
+  else setTimeout(prewarm, 300)
+})
+
+/** Editorde secili alanin kacinci satirda oldugu; alt durum cubugunda gosterilir. */
+const syncLineLabel = computed(() => {
+  const range = syncRange.value
+  if (!range) return null
+  return range.startLine === range.endLine
+    ? `editör satır ${range.startLine}`
+    : `editör satır ${range.startLine}–${range.endLine}`
+})
 
 /**
  * Bağlam şeridi. Her parca kendi yolunu tasiyor: tiklanabilir olmasi ust
@@ -807,6 +875,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
         :node-count="nodeCount"
         :has-data="hasData"
         :recents="recents"
+        :sync-range="syncRange"
         @format="handleFormat"
         @minify="handleMinify"
         @sample="loadSample"
@@ -956,6 +1025,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
       <span v-if="hasData" class="stat">{{ nodeCount.toLocaleString('tr-TR') }} node</span>
       <span v-if="hasData" class="stat">ayrıştırma {{ Math.round(parseState.ms) }} ms</span>
       <span v-if="viewMode === 'grid'" class="stat">{{ gridStats.rendered }}/{{ gridStats.total }} satır render</span>
+      <span v-if="syncLineLabel" class="stat accent">⌁ {{ syncLineLabel }}</span>
       <span v-if="annotation?.messageType" class="stat">{{ annotation.messageType }} %{{ matchPercent }}</span>
       <div class="status-spacer" />
       <span class="stat">Ctrl+K komutlar · Ctrl+F filtre · J/K satır</span>
@@ -1088,6 +1158,7 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 /* --- Alt durum cubugu ------------------------------------------------------ */
 .status-bar { display: flex; align-items: center; gap: 16px; height: var(--status-h); padding: 0 16px; background: var(--bg-secondary); border-top: 1px solid var(--border); flex-shrink: 0; }
 .stat { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
+.stat.accent { color: var(--accent); }
 .status-spacer { flex: 1; }
 
 /* Kapali panelin kenar seridi: dikey yazili, tiklanabilir ince bir sutun. */

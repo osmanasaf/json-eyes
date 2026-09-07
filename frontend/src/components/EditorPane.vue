@@ -11,6 +11,11 @@ const props = defineProps<{
   nodeCount: number
   hasData: boolean
   recents: RecentFile[]
+  /**
+   * Goruntuleyicide secili alanin metindeki yeri (GridSync). Verildiginde
+   * editor o satira kayar ve satirlar isaretlenir.
+   */
+  syncRange?: { start: number; end: number; startLine: number; endLine: number } | null
 }>()
 
 const emit = defineEmits<{
@@ -94,6 +99,48 @@ function measureViewport() {
   if (codeEl.value) viewportHeight.value = codeEl.value.clientHeight
 }
 
+/**
+ * GridSync: secili alanin satirini goruntuye getirir. Satir hesabi ancak metin
+ * sarilmadiginda (wrap="off") dogru; textarea bu yuzden yatay kaydirmali.
+ * Zaten gorunen bir satir icin kaydirma yapilmaz — kullanicinin baktigi yer
+ * her secimde zıplamasin.
+ */
+watch(() => props.syncRange, (range) => {
+  const ta = codeEl.value
+  if (!range || !ta) return
+  const top = (range.startLine - 1) * LINE_HEIGHT
+  const bottom = range.endLine * LINE_HEIGHT
+  const viewTop = ta.scrollTop
+  const viewBottom = viewTop + ta.clientHeight
+  if (top >= viewTop + LINE_HEIGHT && bottom <= viewBottom - LINE_HEIGHT) return
+  const target = Math.max(0, top - Math.max(LINE_HEIGHT * 2, ta.clientHeight / 3))
+  ta.scrollTop = target
+  scrollTop.value = ta.scrollTop
+})
+
+/** Isaretli satir araligi; gutter ve arka plan seridi bunu kullanir. */
+const syncLines = computed(() => {
+  const range = props.syncRange
+  if (!range) return null
+  return { first: range.startLine, last: range.endLine }
+})
+
+/** Arka plandaki isaret seridinin konumu (textarea saydam, serit arkasinda). */
+const bandStyle = computed(() => {
+  const lines = syncLines.value
+  if (!lines) return null
+  const height = (lines.last - lines.first + 1) * LINE_HEIGHT
+  return {
+    top: `${(lines.first - 1) * LINE_HEIGHT - scrollTop.value}px`,
+    height: `${height}px`,
+  }
+})
+
+function isSynced(line: number): boolean {
+  const lines = syncLines.value
+  return lines !== null && line >= lines.first && line <= lines.last
+}
+
 // Viewport yuksekligi yalnizca kutunun boyutu degisince degisir (panel acilip
 // kapanmasi, pencere yeniden boyutlanmasi) — icerik degisince degil. Onceden
 // bir `watch(() => props.modelValue, measureViewport)` vardi; bu, buyuk bir
@@ -138,20 +185,25 @@ watch(() => props.recents.length, (count) => {
             v-for="n in visibleLines"
             :key="n"
             class="line-no"
-            :class="{ bad: n === errorLine }"
+            :class="{ bad: n === errorLine, synced: isSynced(n) }"
           >{{ n }}</span>
         </div>
       </div>
-      <textarea
-        ref="codeEl"
-        v-model="text"
-        class="code"
-        :class="{ invalid: parseError }"
-        spellcheck="false"
-        placeholder="JSON verisini buraya yapıştırın veya dosya sürükleyin…"
-        @scroll="syncScroll"
-        @paste="handlePaste"
-      />
+      <div class="code-wrap">
+        <!-- Secili alanin satirlari: saydam textarea'nin arkasindaki serit. -->
+        <div v-if="bandStyle" class="sync-band" :style="bandStyle" />
+        <textarea
+          ref="codeEl"
+          v-model="text"
+          class="code"
+          :class="{ invalid: parseError }"
+          spellcheck="false"
+          wrap="off"
+          placeholder="JSON verisini buraya yapıştırın veya dosya sürükleyin…"
+          @scroll="syncScroll"
+          @paste="handlePaste"
+        />
+      </div>
     </div>
 
     <div v-else class="history">
@@ -201,7 +253,15 @@ watch(() => props.recents.length, (count) => {
 .gutter-inner { display: flex; flex-direction: column; }
 .line-no { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 20px; height: 20px; color: var(--border); text-align: right; flex-shrink: 0; }
 .line-no.bad { color: var(--red); font-weight: 600; }
-.code { flex: 1; min-width: 0; background: transparent; color: var(--text-primary); border: none; outline: none; resize: none; padding: 0 12px 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 20px; }
+.line-no.synced { color: var(--accent); }
+/*
+ * Sarma kapali: satir numaralari ve GridSync satir hesabi ancak boyle koda
+ * denk gelir (sarilan tek bir uzun satir gutter'i kaydiriyordu). Uzun satirlar
+ * icin yatay kaydirma var.
+ */
+.code-wrap { position: relative; flex: 1; min-width: 0; display: flex; }
+.sync-band { position: absolute; left: 0; right: 0; background: var(--accent-wash); border-left: 2px solid var(--accent); pointer-events: none; }
+.code { flex: 1; min-width: 0; position: relative; background: transparent; color: var(--text-primary); border: none; outline: none; resize: none; padding: 0 12px 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 20px; white-space: pre; overflow-x: auto; }
 .code.invalid { color: var(--text-secondary); }
 
 .history { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; }
