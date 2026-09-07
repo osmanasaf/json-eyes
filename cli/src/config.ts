@@ -22,14 +22,13 @@ export interface CliConfig {
  * Boylece CLI kurulur kurulmaz `jse share` calisir, kullanicinin yapilandirma
  * yapmasi gerekmez.
  *
- * Adres duz HTTP: Coolify'in verdigi `*.sslip.io` alan adinda HTTPS calismiyor
- * (Let's Encrypt bu ortak alan adina rate limit uyguluyor — bkz. depo README'si,
- * "Alan adi ve HTTPS"). Bu yuzden paylasilan JSON bu hopta acik metin gidiyor;
- * CLI bunu her istekte kullaniciya soyluyor (asagidaki `insecureNotice`).
- * Backend kendi alan adina tasindiginda burasi ve vercel.json birlikte
- * `https://` yapilmali.
+ * Adres HTTPS: backend `asaf.dev` altinda kendi alan adinda, sertifikayi Coolify
+ * Let's Encrypt'ten aliyor. 0.2.x surumleri Coolify'in gecici `*.sslip.io`
+ * adresine duz HTTP ile gidiyordu; o adres kapaninca eski surumlerin
+ * `jse config set api https://jsoneyes-api.asaf.dev` demesi gerekir.
+ * Backend tasinirsa burasi ve vercel.json birlikte degismeli.
  */
-const DEFAULT_API = 'http://t78qo9weypgend50er2jx07z.178.104.138.59.sslip.io/api'
+const DEFAULT_API = 'https://jsoneyes-api.asaf.dev/api'
 
 const LOCAL_HOSTS = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/
 

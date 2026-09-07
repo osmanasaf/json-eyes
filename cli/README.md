@@ -9,7 +9,7 @@ okunur paylaşım linki al.**
 
 ```bash
 $ jse share siparis.json --title "OrderViewRS canlı"
-https://json-eyes.vercel.app/?s=4bK9zQ1x
+https://jsoneyes.asaf.dev/?s=4bK9zQ1x
 ```
 
 Link `stdout`'a, geri kalan her şey `stderr`'e yazılır; boru hattında rahat kullanılır:
@@ -80,19 +80,19 @@ CLI bunu uyarı olarak söyler, `--web` ile düzeltebilirsiniz.
 
 ### Şifresiz bağlantı uyarısı
 
-Üretim backend'i şu an düz HTTP üzerinden yayında: Coolify'ın verdiği `*.sslip.io`
-alan adında HTTPS çalışmıyor (Let's Encrypt bu ortak alan adına rate limit
-uyguluyor — ayrıntı: deponun kök README'sindeki "Alan adı ve HTTPS"). Bu yüzden
-`jse share` gönderdiğiniz JSON'u açık metin olarak iletir ve CLI her seferinde
-bunu söyler:
+Gömülü üretim adresi (`https://jsoneyes-api.asaf.dev`) HTTPS'tir; varsayılan
+kurulumda uyarı çıkmaz. `jse config set api http://…` ile düz HTTP bir backend
+verirseniz CLI her paylaşımda bunu söyler:
 
 ```
-uyarı Bağlantı şifresiz (…sslip.io): gönderilen JSON yolda açık metin gider.
+uyarı Bağlantı şifresiz (backend.ornek.com): gönderilen JSON yolda açık metin gider.
 ```
 
-Hassas veri paylaşıyorsanız backend'i kendi alan adınıza taşıyıp (`https://`)
-`jse config set api https://…` demeniz gerekir. Uyarı yerel adreslerde
-(localhost/127.0.0.1) çıkmaz.
+Uyarı yerel adreslerde (localhost/127.0.0.1) çıkmaz.
+
+**0.2.x'ten yükseltme:** eski sürümler Coolify'ın geçici `*.sslip.io` adresine
+gidiyordu. `npm install -g json-eyes@latest` yeterli; yükseltemiyorsanız
+`jse config set api https://jsoneyes-api.asaf.dev` deyin.
 
 ## Komutlar
 

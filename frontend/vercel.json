@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "http://t78qo9weypgend50er2jx07z.178.104.138.59.sslip.io/api/:path*"
+      "destination": "https://jsoneyes-api.asaf.dev/api/:path*"
     }
   ]
 }

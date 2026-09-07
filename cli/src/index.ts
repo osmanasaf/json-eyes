@@ -80,7 +80,7 @@ ${color.bold('ÖRNEKLER')}
   LINK=$(jse share siparis.json -q) && echo $LINK
   jse values siparis.json Response.Order.StatusCode
   jse find siparis.json PAX42 --values
-  jse fetch https://json-eyes.vercel.app/?s=4bK9zQ1x --out kopya.json
+  jse fetch https://jsoneyes.asaf.dev/?s=4bK9zQ1x --out kopya.json
   jse xmlshare siparis.xml --title "OrderViewRS (XML)"
   cat siparis.xml | jse xmlshare - -q
   jse xml2json siparis.xml -o siparis.json

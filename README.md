@@ -244,12 +244,34 @@ Her ayar ortam değişkeniyle de verilebilir: `jsonsarp.public-base-url` →
 
 ## Yayına alma
 
-Mimari: **backend Coolify'da Docker olarak**, **ön yüz Vercel'de statik**. Ön yüz
-istekleri `/api` altına gider, Vercel bunları backend'e taşır (rewrite). Böylece
-tarayıcı her zaman kendi alan adıyla konuşur; ne CORS ne de HTTPS sayfadan HTTP
-backend'e gitmenin doğurduğu **karışık içerik (mixed content)** sorunu çıkar.
+Mimari: **backend Coolify'da Docker olarak**, **ön yüz Vercel'de statik**, ikisi de
+`asaf.dev` altında:
 
-Sıra önemli: backend'in alan adı belli olmadan `vercel.json` doldurulamaz.
+| Ne | Adres | Nerede |
+|----|-------|--------|
+| Ön yüz | `https://jsoneyes.asaf.dev` | Vercel |
+| Backend | `https://jsoneyes-api.asaf.dev` | Coolify |
+
+Ön yüz istekleri `/api` altına gider, Vercel bunları backend'e taşır (rewrite).
+Böylece tarayıcı her zaman kendi alan adıyla konuşur; ne CORS ne de karışık içerik
+(mixed content) sorunu çıkar. Alan adı Cloudflare Registrar'da, DNS Cloudflare'de.
+
+### 0. DNS — Cloudflare
+
+`asaf.dev` bölgesinde iki kayıt:
+
+| Tür | Ad | Hedef | Proxy |
+|-----|----|-------|-------|
+| A | `jsoneyes-api` | Coolify sunucusunun IP'si | **Kapalı** (DNS only) |
+| CNAME | `jsoneyes` | `cname.vercel-dns.com` | **Kapalı** (DNS only) |
+
+Proxy kapalı olmalı: Coolify Let's Encrypt doğrulamasını (HTTP-01) doğrudan
+sunucuda yapar, Vercel de kendi sertifikasını kendi alır. `.dev` HSTS ön yüklü
+olduğu için tarayıcı bu adreslere düz HTTP ile hiç gitmez; sertifika alınmadan
+site açılmaz, o yüzden sırayı bozmayın.
+
+Başka projeler için de `*` wildcard A kaydı (sunucu IP'sine, proxy kapalı)
+eklenebilir; o zaman Coolify'da yeni host için DNS'e dokunmak gerekmez.
 
 ### 1. Backend — Coolify
 
@@ -261,13 +283,17 @@ Yeni kaynak: **Private Repository (with GitHub App)** → depoyu seç → Build 
 | Base Directory | `/backend` |
 | Dockerfile Location | `/backend/Dockerfile` |
 | Ports Exposes | `8080` |
-| Domain | Coolify'ın verdiği alt alan adı (Let's Encrypt sertifikasıyla) |
+| Domains | `https://jsoneyes-api.asaf.dev` |
+
+Domains alanına `https://` ile yazınca Coolify sertifikayı kendisi alır ve HTTP'yi
+HTTPS'e yönlendirir. Geçiş süresince eski `*.sslip.io` adresini de virgülle aynı
+alana ekleyebilirsiniz; 0.2.x CLI kurulumları oraya gitmeye devam eder.
 
 **Environment Variables:**
 
 | Değişken | Değer |
 |----------|-------|
-| `JSONSARP_PUBLIC_BASE_URL` | Vercel adresi, ör. `https://json-eyes.vercel.app` |
+| `JSONSARP_PUBLIC_BASE_URL` | `https://jsoneyes.asaf.dev` |
 
 **Persistent Storage** (şart): `/app/data` için bir volume tanımlayın. H2 dosya
 veritabanı orada durur; volume bağlanmazsa her yeni dağıtımda paylaşımlar ve
@@ -284,44 +310,41 @@ indeksi de yüklenmiş demektir.
 İlk derleme uzun sürer (Maven bağımlılıkları çekilir); sonraki dağıtımlarda
 `pom.xml` değişmediği sürece o katman önbellekten gelir.
 
+Doğrulama: `curl -sI https://jsoneyes-api.asaf.dev/api/iata/messages` 200 dönmeli
+ve sertifika hatası vermemeli.
+
 ### 2. Ön yüz — Vercel
 
-1. [vercel.json](frontend/vercel.json) içindeki rewrite hedefi **1. adımda alınan
-   alan adı** olmalı:
+1. [vercel.json](frontend/vercel.json) içindeki rewrite hedefi backend adresidir:
 
    ```json
-   { "source": "/api/:path*", "destination": "http://<coolify-alan-adiniz>/api/:path*" }
+   { "source": "/api/:path*", "destination": "https://jsoneyes-api.asaf.dev/api/:path*" }
    ```
-
-   Backend'de HTTPS yoksa bu hop şifresizdir; bkz. aşağıdaki "Alan adı ve HTTPS".
 
 2. Vercel'de projeyi aynı depodan oluşturun, **Root Directory** ayarını `frontend`
    yapın. Derleme ayarlarını `vercel.json` taşıdığı için başka bir şey gerekmez.
-3. `VITE_API_BASE` ayarlamayın (boş kalsın) — rewrite zaten `/api`'yi karşılıyor.
-4. Vercel adresi belli olunca Coolify'daki `JSONSARP_PUBLIC_BASE_URL` değerini o
-   adresle güncelleyip backend'i yeniden başlatın. Bu adım atlanırsa "Paylaş"
-   düğmesinin ürettiği linkler `localhost:5173`'ü gösterir.
+3. Project → Settings → Domains → `jsoneyes.asaf.dev` ekleyin. Vercel 0. adımdaki
+   CNAME'i görünce sertifikayı alır. Eski `*.vercel.app` adresi otomatik olarak
+   yeni alan adına yönlenir; dolaşımdaki eski paylaşım linkleri kırılmaz.
+4. `VITE_API_BASE` ayarlamayın (boş kalsın) — rewrite zaten `/api`'yi karşılıyor.
 
 **Alternatif** (rewrite yerine doğrudan çağrı): Vercel'de
-`VITE_API_BASE=https://<coolify-alan-adiniz>/api`, Coolify'da
-`JSONSARP_CORS_ALLOWED_ORIGINS=https://<vercel-adresiniz>`. Bir hop daha az, ama
+`VITE_API_BASE=https://jsoneyes-api.asaf.dev/api`, Coolify'da
+`JSONSARP_CORS_ALLOWED_ORIGINS=https://jsoneyes.asaf.dev`. Bir hop daha az, ama
 CORS'u doğru ayarlamak size kalır.
+
+### 3. CLI
+
+Gömülü üretim adresi ([cli/src/config.ts](cli/src/config.ts)) `vercel.json`'daki
+hedefle aynı olmalı. Backend adresi değişirse ikisi birlikte değişir ve CLI'ın
+yeni sürümü npm'e çıkar; yayındaki eski sürümler eski adrese gitmeye devam eder.
 
 ### Alan adı ve HTTPS
 
-Coolify'ın otomatik verdiği `*.sslip.io` adresinde HTTPS **çalışmaz**: Let's Encrypt
-bu ortak alan adına rate limit uyguluyor, sertifika doğrulaması başarısız oluyor.
-Bu yüzden backend şu an düz HTTP üzerinden yayında.
-
-Sonuç: tarayıcı ile Vercel arası HTTPS, **Vercel ile backend arası şifresiz**.
-Paylaşılan JSON içerikleri ve yorumlar bu hopta açık metin gider. CLI (`jse`)
-backend'e doğrudan gittiği için orada tüm yol şifresizdir; araç bunu her paylaşımda
-uyarı olarak yazar.
-
-Kalıcı çözüm: sahip olduğunuz bir alan adına alt alan adı açmak
-(ör. `json-eyes-api.ornek.com` → A kaydı sunucu IP'sine), Coolify'da Domains
-alanına `https://json-eyes-api.ornek.com` yazmak. Coolify Let's Encrypt
-sertifikasını kendisi alır; ardından `vercel.json`'daki hedefi de `https://` yapın.
+Tüm yol şifreli: tarayıcı → Vercel → backend ve `jse` → backend. Coolify'ın kendi
+verdiği `*.sslip.io` adresinde Let's Encrypt çalışmadığı (ortak alan adına rate
+limit) için proje bir süre düz HTTP'de yayındaydı; `asaf.dev` altına taşınmakla
+bu bitti. Kendi kurulumunuzu HTTP'de çalıştırırsanız CLI her paylaşımda uyarır.
 
 ### Erişim kontrolü
 

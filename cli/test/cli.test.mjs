@@ -427,10 +427,11 @@ test('yardim ve surum', async () => {
   assert.equal(version.stdout.trim(), PKG.version)
 })
 
-test('varsayilan adres uretim backend\'i ve duz HTTP uyarisi cikiyor', async () => {
+test('varsayilan adres HTTPS uretim backend\'i, duz HTTP verilirse uyari cikiyor', async () => {
   // Yapilandirma ve ortam degiskeni olmadan: gomulu uretim adresi kullanilmali.
+  // Adres HTTPS olmali: 0.2.x'te sslip.io uzerinden duz HTTP gidiyordu, o donem bitti.
   const show = await run(['config', 'show'], { env: { XDG_CONFIG_HOME: join(workDir, 'bos-config') } })
-  assert.match(show.stdout, /^api\s+http:\/\/\S+\/api\s+\(default\)/m)
+  assert.match(show.stdout, /^api\s+https:\/\/jsoneyes-api\.asaf\.dev\/api\s+\(default\)/m)
 
   // Duz HTTP ile konusuluyorsa kullanici uyarilmali (yerel adresler haric).
   // Adres 127.0.0.2: DNS'e gitmedigi icin baglanti aninda reddediliyor ama
