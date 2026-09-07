@@ -12,9 +12,10 @@
   ],
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --target=node18 --format=esm --outfile=dist/jse.mjs --banner:js=\"#!/usr/bin/env node\"",
+    "prepare": "npm run build",
     "dev": "npm run build && node dist/jse.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/"
+    "test": "node --test 'test/*.test.mjs'"
   },
   "devDependencies": {
     "@types/node": "^26.5.0",
