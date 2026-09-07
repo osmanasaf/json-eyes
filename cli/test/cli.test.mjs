@@ -61,10 +61,19 @@ writeFileSync(brokenXmlPath, '<a><b>x</c></a>')
  * birakildiginda boru hattindan okuyan komutlar sonsuza kadar bekler
  * (execFile'in `input` secenegi yok, bu yuzden spawn kullaniliyor).
  */
+/**
+ * Cocuk surecin ortami. `FORCE_COLOR` disarida birakiliyor: npm, kendi
+ * yasam dongusu betiklerine bunu ayarliyor (Windows'ta gorunur oldu) ve
+ * NO_COLOR ile birlikteyken Node cocugun *stderr*'ine bir uyari basiyor —
+ * "NO_COLOR yok sayildi". Testin sinadigi ciktinin yanina Node'un kendi
+ * gurultusu karisiyordu.
+ */
+const { FORCE_COLOR: _forceColor, ...BASE_ENV } = process.env
+
 function run(args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [CLI, ...args], {
-      env: { ...process.env, NO_COLOR: '1', XDG_CONFIG_HOME: join(workDir, 'config'), ...options.env },
+      env: { ...BASE_ENV, NO_COLOR: '1', XDG_CONFIG_HOME: join(workDir, 'config'), ...options.env },
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     let stdout = ''
@@ -342,8 +351,10 @@ test('xmlshare: boru hattinda bayrak gerekmez, niyet komut adinda', async () => 
     const result = await run(['xmlshare', '-', '--api', api, '-q'], { input: XML })
     assert.equal(result.code, 0)
     assert.equal(result.stdout.trim(), 'http://localhost:5173/?s=testID12')
-    // -q ile bilgi satirlari da susuyor.
-    assert.equal(result.stderr, '')
+    // -q ile bilgi satirlari susuyor. Tam esitlik yerine *bizim* satirlarimizi
+    // ariyoruz: stderr'e Node'un kendi uyarilari da dusebiliyor, onlar bu
+    // testin konusu degil.
+    assert.doesNotMatch(result.stderr, /XML çevrildi|gönderiliyor|paylaşıldı/)
     assert.equal(received[0].json.IATA_OrderViewRS.Response.Order[0].OrderID, 'ORD1')
   })
 })
