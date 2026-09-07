@@ -9,11 +9,13 @@ import { buildSearchIndex, EMPTY_SEARCH } from './utils/search'
 import { buildRefIndex, EMPTY_REF_INDEX } from './utils/references'
 import { isObjectArray } from './utils/flatten'
 import { tryRepair } from './utils/repair'
+import { collectFieldValues } from './utils/related'
 import { buildTextIndex, lineOfOffset, EMPTY_TEXT_INDEX, type JsonTextIndex } from './utils/textIndex'
 import { pushRecent, readRecents, readTheme, writeTheme, type RecentFile, type Theme } from './utils/storage'
 import JsonTree from './components/JsonTree.vue'
 import JsonGrid from './components/JsonGrid.vue'
 import IataPanel from './components/IataPanel.vue'
+import FieldValuesPanel from './components/FieldValuesPanel.vue'
 import EditorPane from './components/EditorPane.vue'
 import EmptyState from './components/EmptyState.vue'
 import ArrayTable from './components/ArrayTable.vue'
@@ -263,6 +265,19 @@ watch(parsedInput, (text) => {
   const idle = (window as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback
   if (idle) idle(prewarm)
   else setTimeout(prewarm, 300)
+})
+
+/**
+ * Secili alanin belge genelindeki degerleri. Yalnizca panel acikken hesaplanir;
+ * tarama eslesmeyen dallari budadigi icin secim degistikce yeniden calisabilir.
+ */
+const fieldValuesOpen = ref(true)
+
+const fieldValues = computed(() => {
+  if (!fieldValuesOpen.value || !iataVisible.value) return null
+  const path = selectedNodePath.value
+  if (!path || parsed.value === null || path === ROOT_KEY) return null
+  return collectFieldValues(parsed.value, ROOT_KEY, path)
 })
 
 /** Editorde secili alanin kacinci satirda oldugu; alt durum cubugunda gosterilir. */
@@ -1010,15 +1025,25 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
         @click="toggleIata"
       ><span class="rail-glyph">‹</span><span class="rail-label">IATA</span></button>
 
-      <IataPanel
-        v-if="iataVisible && hasData"
-        :annotation="annotation"
-        :loading="annotationLoading"
-        :error="annotationError"
-        :selected-path="selectedSchemaPath"
-        @focus-path="focusUnmatched"
-        @collapse="toggleIata"
-      />
+      <div v-if="iataVisible && hasData" class="side-col">
+        <IataPanel
+          :annotation="annotation"
+          :loading="annotationLoading"
+          :error="annotationError"
+          :selected-path="selectedSchemaPath"
+          @focus-path="focusUnmatched"
+          @collapse="toggleIata"
+        />
+        <!-- Secili alanin belgedeki tum degerleri; NDC'de dagilima bakmak ilk adim. -->
+        <FieldValuesPanel
+          v-if="fieldValuesOpen"
+          :stats="fieldValues"
+          :has-selection="selectedNodePath !== null && selectedNodePath !== ROOT_KEY"
+          @focus-path="focusOnPath"
+          @collapse="fieldValuesOpen = false"
+        />
+        <button v-else class="values-reopen" @click="fieldValuesOpen = true">▴ Alan değerleri</button>
+      </div>
     </div>
 
     <footer class="status-bar">
@@ -1160,6 +1185,13 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 .stat { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
 .stat.accent { color: var(--accent); }
 .status-spacer { flex: 1; }
+
+/* Sag sutun: IATA paneli ustte esner, alan degerleri altta kendi payini alir. */
+.side-col { display: flex; flex-direction: column; width: var(--iata-w); flex-shrink: 0; min-height: 0; }
+.side-col > :first-child { flex: 1 1 auto; min-height: 0; }
+.side-col > .values-panel { flex: 0 1 auto; max-height: 52%; }
+.values-reopen { flex-shrink: 0; font-size: 11px; color: var(--text-muted); background: var(--bg-secondary); border-top: 1px solid var(--border); padding: 7px 12px; text-align: left; }
+.values-reopen:hover { color: var(--accent); }
 
 /* Kapali panelin kenar seridi: dikey yazili, tiklanabilir ince bir sutun. */
 .rail { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 10px; width: 26px; flex-shrink: 0; padding-top: 10px; background: var(--bg-secondary); color: var(--text-muted); }
