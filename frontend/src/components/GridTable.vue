@@ -8,7 +8,7 @@ import type { RefTarget } from '../utils/references'
 import {
   MAX_DETAIL_CHARS, cellText, childCount, clippedCount, columnStats, detailText, entriesOf,
   gridShape, highlightParts, isContainer, isLongValue, previewFields, recordColumns, searchText,
-  sortRecords, toCsv, valueMeta,
+  sortRecords, summaryOf, toCsv, valueMeta,
   type ColumnKind, type GridColumn, type SortState,
 } from '../utils/grid'
 import InfoBubble from './InfoBubble.vue'
@@ -19,31 +19,65 @@ import CommentThread from './CommentThread.vue'
  * Bir JSON dugumunu tablo olarak cizer ve ic ice degerler icin kendini yeniden
  * cagirir (Vue, SFC'nin kendi adiyla ozyinelemesine izin verir).
  *
- * Tablo bicimi dugumun seklinden geliyor: nesne -> anahtar/deger, nesne dizisi
- * -> kayit tablosu, diger dizi -> indeks/deger. Ic ice bir deger tiklanan
- * *hucrenin icinde*, adini tasiyan bir bant basligiyla aciliyor; hicbir tiklama
- * gorunumu degistirmiyor.
+ * Duzen tasarimdan geliyor (`JSON Eyes v3`): her kapsayici, solunda seviye
+ * rengini tasiyan 8px omurgasi olan **cerceveli bir kart**; kartin basligi
+ * `[±]` isaret kutusu + adin zinciri + ozet. Veri ise tablo:
  *
- * Kolon basligindaki `⋮` menusu jsongrid'deki kolon menusunun karsiligi ama
- * daha fazlasini yapiyor: siralama, filtre, **kolon istatistigi** (kac farkli
- * deger, eksik alan, sayisal ozet), kolonu gizleme ve kolonun degerlerini
- * kopyalama.
+ * - nesne  -> skaler alanlar `anahtar | deger` tablosunda, kapsayici alanlar
+ *   kendi kartlarinda (ic ice kart yerine hucrede rozet degil — yon bulmayi
+ *   saglayan sey bu cerceve).
+ * - nesne dizisi -> tutamak + `#` + kolonlar; ic ice degerler *hucrenin
+ *   icinde* `[+]` ile aciliyor, kolon hizasi bozulmuyor.
+ * - diger dizi -> `# | deger`.
+ *
+ * Tek alanli sarmalayici zincirler (`IATA_OrderViewRS › Response`) tek bir
+ * kart basliginda birlesiyor: NDC yanitlari bes seviye sarmalayiciyla geliyor,
+ * her biri ayri kart olsa ekranin yarisi cerceve olurdu.
  */
 const props = defineProps<{
   value: JsonValue
   path: string
   depth: number
+  /** Kart basliginda gorunen ad; cerceveli kullanimda gerekli. */
+  label?: string
+  /** Cerceveli mi (tuval seviyesi) yoksa bir hucrenin icinde mi. */
+  framed?: boolean
 }>()
 
 const ctx = inject(GRID)!
 
-const shape = computed(() => gridShape(props.value))
+/**
+ * Tek alanli sarmalayici zinciri: kart basliginda adlar birlesir, govdede
+ * zincirin *ucundaki* dugum cizilir.
+ */
+const chain = computed(() => {
+  const labels: string[] = props.label ? [props.label] : []
+  let value = props.value
+  let path = props.path
+  if (props.framed) {
+    for (;;) {
+      if (Array.isArray(value) || !isContainer(value)) break
+      const entries = Object.entries(value as JsonObject)
+      if (entries.length !== 1 || !isContainer(entries[0][1])) break
+      labels.push(entries[0][0])
+      value = entries[0][1]
+      path = childPath(path, entries[0][0])
+    }
+  }
+  return { labels, value, path }
+})
+
+const value = computed(() => chain.value.value)
+const path = computed(() => chain.value.path)
+const shape = computed(() => gridShape(value.value))
+const open = computed(() => !props.framed || props.depth === 0 || ctx.isOpen(props.path))
+
 const term = computed(() => ctx.searchTerm.value.trim())
 const needle = computed(() => term.value.toLowerCase())
 const filtering = computed(() => ctx.filterMatches.value && term.value.length > 0)
 
 const records = computed<JsonObject[] | null>(() =>
-  shape.value === 'records' ? (props.value as JsonObject[]) : null,
+  shape.value === 'records' ? (value.value as JsonObject[]) : null,
 )
 
 /** Diziden cikarilan tum kolonlar (cok anahtarliysa en seyrek dolanlar kirpilir). */
@@ -53,15 +87,15 @@ const columnInfo = computed(() =>
 
 /** Kullanicinin gizledigi kolonlar dusuldukten sonra gorunenler. */
 const visibleColumns = computed(() => {
-  const hidden = ctx.hiddenColumns(props.path)
-  return hidden.size === 0
+  const hiddenSet = ctx.hiddenColumns(path.value)
+  return hiddenSet.size === 0
     ? columnInfo.value.columns
-    : columnInfo.value.columns.filter(column => !hidden.has(column.name))
+    : columnInfo.value.columns.filter(column => !hiddenSet.has(column.name))
 })
 
 /** Kolon basliklarindaki XSD aciklamalari; dizi indeksleri sema yolunda dusuyor. */
 const columnDocs = computed<Array<FieldDoc | undefined>>(() =>
-  visibleColumns.value.map(column => ctx.docFor(childPath(childPath(props.path, 0), column.name))),
+  visibleColumns.value.map(column => ctx.docFor(childPath(childPath(path.value, 0), column.name))),
 )
 
 // --- Kolon sirasi ve kolon filtreleri (yalnizca kayit tablosunda) -------------
@@ -69,9 +103,10 @@ const columnDocs = computed<Array<FieldDoc | undefined>>(() =>
 const sort = ref<SortState | null>(null)
 const filters = ref<Record<string, string>>({})
 const filtersOpen = ref(false)
+const filterInputs = ref<Record<string, HTMLInputElement | null>>({})
 
 // Bilesen baska bir dugume baglanirsa yerel siralama/filtre gecersiz kalir.
-watch(() => props.value, () => {
+watch(value, () => {
   sort.value = null
   filters.value = {}
 })
@@ -100,20 +135,14 @@ function focusFilter(name: string) {
   filtersOpen.value = true
   closeMenu()
   // Filtre satiri yeni cizildiyse odak bir sonraki kareye kaliyor.
-  requestAnimationFrame(() => {
-    const input = filterInputs.value[name]
-    input?.focus()
-  })
+  requestAnimationFrame(() => filterInputs.value[name]?.focus())
 }
-
-const filterInputs = ref<Record<string, HTMLInputElement | null>>({})
 
 // --- Satir modeli ------------------------------------------------------------
 
 interface CellModel {
   path: string
   value: JsonValue | undefined
-  /** Hucrede gorunen tek satirlik metin. */
   text: string
   container: boolean
   count: number
@@ -124,7 +153,7 @@ interface CellModel {
   matched: boolean
   tone: string | null
   refTarget: RefTarget | undefined
-  /** Ic ice tablonun bant basliginda gorunen ad. */
+  /** Hucredeki `[+] ad` etiketinde ve menude gorunen ad. */
   label: string
 }
 
@@ -133,36 +162,34 @@ interface RowModel {
   lead: string
   leadMatched: boolean
   path: string
-  /** Gorunen sira; klavye gezinmesi bunu kullaniyor. */
   index: number
   cells: CellModel[]
   doc: FieldDoc | undefined
-  /** Kayit tablosunda satirin kaynak nesnesi. */
   item: JsonObject | null
 }
 
 function makeCell(
-  path: string,
-  value: JsonValue | undefined,
+  cellPath: string,
+  cellValue: JsonValue | undefined,
   kind: ColumnKind,
   column: string | null,
   label: string,
 ): CellModel {
-  const container = isContainer(value)
-  const text = cellText(value)
+  const container = isContainer(cellValue)
+  const text = cellText(cellValue)
   return {
-    path,
-    value,
+    path: cellPath,
+    value: cellValue,
     text,
     container,
-    count: container ? childCount(value) : 0,
-    isArray: Array.isArray(value),
-    long: isLongValue(value),
+    count: container ? childCount(cellValue) : 0,
+    isArray: Array.isArray(cellValue),
+    long: isLongValue(cellValue),
     numeric: kind === 'number',
-    missing: value === undefined,
+    missing: cellValue === undefined,
     matched: !container && needle.value.length > 0 && text.toLowerCase().includes(needle.value),
-    tone: statusTone(column, value),
-    refTarget: container || value === undefined ? undefined : ctx.refFor(path, value),
+    tone: statusTone(column, cellValue),
+    refTarget: container || cellValue === undefined ? undefined : ctx.refFor(cellPath, cellValue),
     label,
   }
 }
@@ -171,15 +198,51 @@ function makeCell(
  * Durum alanlari renkle okunur olsun: NDC'de `StatusCode` tabloya bakarken ilk
  * arananlardan. Renk tek basina anlam tasimiyor, degerin metni yaninda duruyor.
  */
-function statusTone(column: string | null, value: JsonValue | undefined): string | null {
-  if (!column || typeof value !== 'string' || !/status/i.test(column)) return null
-  const text = value.toUpperCase()
+function statusTone(column: string | null, cellValue: JsonValue | undefined): string | null {
+  if (!column || typeof cellValue !== 'string' || !/status/i.test(column)) return null
+  const text = cellValue.toUpperCase()
   if (/OPEN|OK|ACTIVE|CONFIRM|SUCCESS/.test(text)) return 'ok'
   if (/PEND|WARN|HOLD|PARTIAL/.test(text)) return 'warn'
   if (/CLOSE|CANCEL|VOID|EXPIRE|FAIL|ERROR/.test(text)) return 'off'
   return null
 }
 
+function kindOf(entry: JsonValue | undefined): ColumnKind {
+  if (isContainer(entry)) return 'nested'
+  return typeof entry === 'number' ? 'number' : 'text'
+}
+
+/** Nesne dugumunun alanlari: skalerler tabloya, kapsayicilar kendi kartlarina. */
+const objectEntries = computed(() => {
+  if (shape.value !== 'object') return { scalars: [] as RowModel[], cards: [] as Array<{ key: string; path: string; value: JsonValue }> }
+  const scalars: RowModel[] = []
+  const cards: Array<{ key: string; path: string; value: JsonValue }> = []
+  let position = 0
+  for (const entry of entriesOf(value.value)) {
+    const keep = !filtering.value
+      || entry.key.toLowerCase().includes(needle.value)
+      || matchesDeep(entry.value, term.value)
+    if (!keep) continue
+    const entryPath = childPath(path.value, entry.key)
+    if (isContainer(entry.value) && childCount(entry.value) > 0) {
+      cards.push({ key: entry.key, path: entryPath, value: entry.value })
+      continue
+    }
+    scalars.push({
+      key: entry.key,
+      lead: entry.key,
+      leadMatched: needle.value.length > 0 && entry.key.toLowerCase().includes(needle.value),
+      path: entryPath,
+      index: position++,
+      item: null,
+      doc: ctx.docFor(entryPath),
+      cells: [makeCell(entryPath, entry.value, kindOf(entry.value), null, entry.key)],
+    })
+  }
+  return { scalars, cards }
+})
+
+/** Kayit / liste tablosunun satirlari. */
 const rows = computed<RowModel[]>(() => {
   const items = records.value
   if (items) {
@@ -195,7 +258,7 @@ const rows = computed<RowModel[]>(() => {
       list = sortRecords(list, sort.value, kind)
     }
     return list.map(({ index, item }, position) => {
-      const rowPath = childPath(props.path, index)
+      const rowPath = childPath(path.value, index)
       return {
         key: String(index),
         lead: String(index),
@@ -210,49 +273,61 @@ const rows = computed<RowModel[]>(() => {
     })
   }
 
-  return entriesOf(props.value)
-    .filter(entry => !filtering.value
-      || entry.key.toLowerCase().includes(needle.value)
-      || matchesDeep(entry.value, term.value))
+  if (shape.value !== 'list') return objectEntries.value.scalars
+
+  return entriesOf(value.value)
+    .filter(entry => !filtering.value || matchesDeep(entry.value, term.value))
     .map((entry, position) => {
-      const path = childPath(props.path, entry.key)
-      const kind: ColumnKind = isContainer(entry.value)
-        ? 'nested'
-        : typeof entry.value === 'number' ? 'number' : 'text'
+      const entryPath = childPath(path.value, entry.key)
       return {
         key: entry.key,
         lead: entry.key,
-        leadMatched: needle.value.length > 0 && entry.key.toLowerCase().includes(needle.value),
-        path,
+        leadMatched: false,
+        path: entryPath,
         index: position,
         item: null,
-        doc: shape.value === 'object' ? ctx.docFor(path) : undefined,
-        cells: [makeCell(path, entry.value, kind, null, entry.key)],
+        doc: undefined,
+        cells: [makeCell(entryPath, entry.value, kindOf(entry.value), null, `#${entry.key}`)],
       }
     })
 })
 
-const shown = computed(() => rows.value.slice(0, ctx.windowOf(props.path)))
+const shown = computed(() => rows.value.slice(0, ctx.windowOf(path.value)))
 const pending = computed(() => Math.max(0, rows.value.length - shown.value.length))
+const hasTable = computed(() => rows.value.length > 0 || shape.value !== 'object')
 
 const leadLabel = computed(() => (shape.value === 'object' ? 'anahtar' : '#'))
-const colspan = computed(() => (records.value ? visibleColumns.value.length + 1 : 2))
-const hiddenCount = computed(() => ctx.hiddenColumns(props.path).size)
+/** Tutamak (yalnizca tuval seviyesinde) + `#`/anahtar + deger kolonlari. */
+const colspan = computed(() =>
+  (records.value ? visibleColumns.value.length : 1) + (props.framed ? 2 : 1))
+const hiddenCount = computed(() => ctx.hiddenColumns(path.value).size)
 
-/** Kayit tablosunda toplam; siralanan kolon sayisalsa o, degilse ilk sayisal kolon. */
-const sumColumn = computed(() => {
-  if (!records.value) return null
-  const list = visibleColumns.value
-  return list.find(c => c.name === sort.value?.column && c.kind === 'number')
-    ?? list.find(c => c.kind === 'number')
-    ?? null
+/** Kart basliginda gorunen ozet: kayitta `[1.200]`, nesnede `{ 3 alan }`. */
+const titleCount = computed(() => {
+  const count = childCount(value.value)
+  return Array.isArray(value.value) ? `[${count.toLocaleString('tr-TR')}]` : `{ ${summaryOf(value.value)} }`
 })
 
-const sumValue = computed(() => {
-  const column = sumColumn.value
-  if (!column) return null
-  const total = rows.value.reduce((acc, row) => acc + (Number(row.item?.[column.name]) || 0), 0)
-  return total.toLocaleString('tr-TR', { maximumFractionDigits: 2 })
+const titleNote = computed(() => {
+  if (!records.value) return ''
+  if (sort.value) return `${sort.value.column} ${sort.value.dir === 'asc' ? '↑' : '↓'}`
+  return 'JSON sırası'
+})
+
+/** Kayit tablosunun alt bilgi satiri: sayim, filtre ve sayisal kolon toplami. */
+const footNote = computed(() => {
+  if (!records.value) return ''
+  const parts = [`${rows.value.length.toLocaleString('tr-TR')} / ${records.value.length.toLocaleString('tr-TR')} kayıt`]
+  if (activeFilters.value.length > 0) parts.push(`${activeFilters.value.length} kolon filtresi`)
+  const column = visibleColumns.value.find(c => c.name === sort.value?.column && c.kind === 'number')
+    ?? visibleColumns.value.find(c => c.kind === 'number')
+  if (column) {
+    const total = rows.value.reduce((acc, row) => acc + (Number(row.item?.[column.name]) || 0), 0)
+    parts.push(`Σ ${column.name} = ${total.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`)
+  }
+  if (columnInfo.value.hidden > 0) parts.push(`${columnInfo.value.hidden} kolon sığmadı`)
+  if (hiddenCount.value > 0) parts.push(`${hiddenCount.value} kolon gizli`)
+  return parts.join(' · ')
 })
 
 // --- Etkilesim ---------------------------------------------------------------
@@ -270,18 +345,16 @@ function onCellClick(cell: CellModel) {
 
 function onLeadClick(row: RowModel) {
   ctx.select(row.path)
-  // Kayit satirinin indeksi satirin tamamini altta acar; nesne tablosunda
-  // anahtar hucresi degerin kendisini acar.
   if (records.value) ctx.toggle(row.path)
   else if (row.cells[0].container && row.cells[0].count > 0) ctx.toggle(row.cells[0].path)
 }
 
-// --- Menuler (kolon ve hucre) ------------------------------------------------
+// --- Menuler (kolon, hucre, satir, kolon secici) -----------------------------
 /*
  * Menuler `position: fixed`: tablo kendi icinde kaydirildigi icin (genis kayit
  * tablolari) mutlak konumlu bir katman kirpilirdi.
  */
-type MenuKind = 'column' | 'cell' | 'columns'
+type MenuKind = 'column' | 'cell' | 'row' | 'columns'
 const menu = ref<{ kind: MenuKind; key: string; top: number; left: number } | null>(null)
 
 function openMenu(kind: MenuKind, key: string, event: MouseEvent) {
@@ -289,7 +362,7 @@ function openMenu(kind: MenuKind, key: string, event: MouseEvent) {
   menu.value = {
     kind,
     key,
-    top: Math.min(rect.bottom + 4, window.innerHeight - 240),
+    top: Math.min(rect.bottom + 4, window.innerHeight - 260),
     left: Math.min(rect.left, window.innerWidth - 300),
   }
 }
@@ -313,6 +386,12 @@ const menuCell = computed(() => {
   return null
 })
 
+const menuRow = computed(() => {
+  const current = menu.value
+  if (!current || current.kind !== 'row') return null
+  return shown.value.find(row => row.path === current.key) ?? null
+})
+
 const copied = ref<string | null>(null)
 let copyTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -333,12 +412,11 @@ function copyCellValue(cell: CellModel) {
 }
 
 function copyRow(row: RowModel) {
-  const value = row.item ?? row.cells[0]?.value ?? null
-  void copy(JSON.stringify(value, null, 2), 'satır')
+  void copy(JSON.stringify(row.item ?? row.cells[0]?.value ?? null, null, 2), 'satır')
 }
 
-function copyPath(path: string) {
-  void copy(path.split('.').slice(1).join('.'), 'yol')
+function copyPath(target: string) {
+  void copy(target.split('.').slice(1).join('.'), 'yol')
 }
 
 /** Kolonun butun degerleri: baska bir araca (Excel, jq) tasimanin kisa yolu. */
@@ -349,17 +427,17 @@ function copyColumn(name: string) {
 }
 
 function hideColumn(name: string) {
-  ctx.toggleColumn(props.path, name)
+  ctx.toggleColumn(path.value, name)
   closeMenu()
 }
 
-/** Tek bir kaydi dahi doldurmayan kolonlari gizler; genis tablolarda ilk hamle. */
+/** Yarisindan azinda dolu kolonlari gizler; genis tablolarda ilk hamle. */
 function hideSparse() {
   const items = records.value
   if (!items) return
   const half = items.length / 2
   ctx.setHiddenColumns(
-    props.path,
+    path.value,
     columnInfo.value.columns.filter(column => column.filled < half).map(column => column.name),
   )
   closeMenu()
@@ -374,7 +452,7 @@ function downloadCsv() {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `${props.path.split('.').filter(s => !/^\d+$/.test(s)).slice(-1)[0] ?? 'tablo'}.csv`
+  link.download = `${path.value.split('.').filter(s => !/^\d+$/.test(s)).slice(-1)[0] ?? 'tablo'}.csv`
   link.click()
   URL.revokeObjectURL(url)
 }
@@ -385,315 +463,355 @@ function parts(text: string) {
   return term.value ? highlightParts(text, term.value) : [{ text, hit: false }]
 }
 
-function typeClass(value: JsonValue | undefined): string {
-  return `v-${getType(value === undefined ? null : value)}`
+function typeClass(entry: JsonValue | undefined): string {
+  return `v-${getType(entry === undefined ? null : entry)}`
 }
 
 function isMatch(text: string): boolean {
   return needle.value.length > 0 && text.toLowerCase().includes(needle.value)
 }
 
-function shortNumber(value: number): string {
-  return value.toLocaleString('tr-TR', { maximumFractionDigits: 2 })
+function shortNumber(entry: number): string {
+  return entry.toLocaleString('tr-TR', { maximumFractionDigits: 2 })
+}
+
+function kindLabel(kind: ColumnKind): string {
+  return kind === 'number' ? 'num' : kind === 'nested' ? 'obj' : 'str'
 }
 </script>
 
 <template>
-  <div class="gt" :class="[`d-${Math.min(depth, 4)}`, shape, { dense: ctx.dense.value }]">
-    <!-- Kayit tablosu seridi: sayim, siralama durumu, kolonlar, CSV -->
-    <div v-if="records" class="gt-bar">
-      <span class="gt-count">{{ rows.length.toLocaleString('tr-TR') }} kayıt</span>
-      <span class="gt-dim">{{ visibleColumns.length }}/{{ columnInfo.columns.length }} kolon</span>
-      <span v-if="columnInfo.hidden > 0" class="gt-warn">
-        {{ columnInfo.hidden }} kolon sığmadı
-      </span>
-      <span v-if="sort" class="gt-sort">{{ sort.column }} {{ sort.dir === 'asc' ? '↑' : '↓' }}</span>
-      <span v-if="activeFilters.length > 0" class="gt-sort">
-        {{ activeFilters.length }} kolon filtresi
-      </span>
-      <span v-if="sumColumn" class="gt-dim">Σ {{ sumColumn.name }} = {{ sumValue }}</span>
-      <span v-if="copied" class="gt-ok">✓ {{ copied }} kopyalandı</span>
-      <div class="gt-spacer" />
-      <button
-        class="gt-btn"
-        :class="{ on: hiddenCount > 0 }"
-        title="Kolonları göster/gizle"
-        @click="openMenu('columns', props.path, $event)"
-      >⚙ kolonlar<template v-if="hiddenCount > 0"> ({{ hiddenCount }} gizli)</template></button>
-      <button class="gt-btn" title="Görünen kayıtları CSV olarak indir" @click="downloadCsv">CSV</button>
-    </div>
+  <!-- Cerceveli kart: omurga + baslik + govde. Hucre icinde cerceve yok. -->
+  <component
+    :is="framed ? 'div' : 'div'"
+    class="gt"
+    :class="[`d-${Math.min(depth, 4)}`, shape, { dense: ctx.dense.value, card: framed, bare: !framed }]"
+  >
+    <div v-if="framed" class="spine" />
 
-    <div class="gt-scroll" :class="{ scroll: depth > 0 }">
-      <table class="gt-table" :class="{ sticky: depth === 0 }">
-        <thead v-if="records || depth === 0">
-          <tr>
-            <th class="th-lead">{{ leadLabel }}</th>
-            <th v-if="!records" class="th-value">değer</th>
-            <th v-for="(column, ci) in visibleColumns" :key="column.name" class="th-col">
-              <div class="th-row">
-                <button
-                  class="th-sort"
-                  :class="{ active: sort?.column === column.name, hit: isMatch(column.name) }"
-                  :title="`${column.name} — sırala`"
-                  @click="toggleSort(column.name)"
-                >
-                  <span class="th-name">{{ column.name }}</span>
-                  <span v-if="sort?.column === column.name" class="th-arrow">
-                    {{ sort.dir === 'asc' ? '▲' : '▼' }}
+    <div class="body">
+      <!-- Kart basligi: [±] · ad zinciri · ozet · siralama notu · eylemler -->
+      <div v-if="framed" class="title-row">
+        <button
+          class="title"
+          :title="open ? 'Kapat' : 'Aç'"
+          @click="ctx.toggle(props.path); ctx.setCursor(null)"
+        >
+          <span class="sign">[{{ open ? '−' : '+' }}]</span>
+          <span v-if="chain.labels.length === 0" class="chain-name last">kök</span>
+          <template v-for="(name, i) in chain.labels" :key="i">
+            <span v-if="i > 0" class="chain-sep">›</span>
+            <span class="chain-name" :class="{ last: i === chain.labels.length - 1, hit: isMatch(name) }">{{ name }}</span>
+          </template>
+          <span class="title-count">{{ titleCount }}</span>
+          <span v-if="titleNote && open" class="title-note">{{ titleNote }}</span>
+        </button>
+        <span v-if="copied" class="title-ok">✓ {{ copied }} kopyalandı</span>
+        <div class="spacer" />
+        <template v-if="records && open">
+          <button
+            class="act"
+            :class="{ on: hiddenCount > 0 }"
+            title="Kolonları göster/gizle"
+            @click="openMenu('columns', path, $event)"
+          >⚙ kolonlar</button>
+          <button class="act" title="Görünen kayıtları CSV olarak indir" @click="downloadCsv">CSV</button>
+        </template>
+      </div>
+
+      <template v-if="open">
+        <!-- Nesnenin skaler alanlari / kayit ve liste tablosu -->
+        <div v-if="hasTable" class="scroll" :class="{ pan: depth > 0 || !framed }">
+          <table class="table" :class="{ sticky: depth === 0 }">
+            <!--
+              Kolon genislikleri colgroup'tan geliyor: hucrelere yazilan
+              `width` otomatik yerlesimde yalnizca bir *tercih*, tutamak kolonu
+              bu yuzden 250px'e kadar sisiyordu.
+            -->
+            <colgroup>
+              <col v-if="framed" class="col-handle" />
+              <col class="col-lead" />
+              <col v-if="!records" />
+              <col v-for="column in visibleColumns" :key="column.name" />
+            </colgroup>
+            <thead v-if="records || shape === 'list'">
+              <tr>
+                <th v-if="framed" class="th-handle" />
+                <th class="th-lead">{{ leadLabel }}</th>
+                <th v-if="!records" class="th-value">değer</th>
+                <th v-for="(column, ci) in visibleColumns" :key="column.name" class="th-col">
+                  <span class="th-row">
+                    <button
+                      class="th-sort"
+                      :class="{ active: sort?.column === column.name, hit: isMatch(column.name) }"
+                      :title="`${column.name} · ${kindLabel(column.kind)} — sırala`"
+                      @click="toggleSort(column.name)"
+                    >{{ column.name }}</button>
+                    <span v-if="sort?.column === column.name" class="th-arrow">
+                      {{ sort.dir === 'asc' ? '▲' : '▼' }}
+                    </span>
+                    <InfoBubble v-if="columnDocs[ci]">
+                      <template #trigger>
+                        <span
+                          class="mark"
+                          :class="columnDocs[ci]!.matchKind === 'INFERRED' ? 'guess-doc' : 'has-doc'"
+                        >{{ columnDocs[ci]!.matchKind === 'INFERRED' ? '≈' : 'ⓘ' }}</span>
+                      </template>
+                      <FieldDocCard :field="columnDocs[ci]!" />
+                    </InfoBubble>
+                    <button
+                      class="th-funnel"
+                      :class="{ on: (filters[column.name] ?? '').trim().length > 0 }"
+                      :title="`${column.name} — filtrele`"
+                      @click="focusFilter(column.name)"
+                    >▽</button>
+                    <button
+                      class="th-menu"
+                      :title="`${column.name} — kolon menüsü`"
+                      @click="openMenu('column', column.name, $event)"
+                    >⋮</button>
                   </span>
-                </button>
-                <InfoBubble v-if="columnDocs[ci]">
-                  <template #trigger>
-                    <span
-                      class="mark"
-                      :class="columnDocs[ci]!.matchKind === 'INFERRED' ? 'guess-doc' : 'has-doc'"
-                    >{{ columnDocs[ci]!.matchKind === 'INFERRED' ? '≈' : 'ⓘ' }}</span>
-                  </template>
-                  <FieldDocCard :field="columnDocs[ci]!" />
-                </InfoBubble>
-                <button
-                  class="th-funnel"
-                  :class="{ on: (filters[column.name] ?? '').trim().length > 0 }"
-                  :title="`${column.name} — filtrele`"
-                  @click="focusFilter(column.name)"
-                >⌕</button>
-                <button
-                  class="th-menu"
-                  :title="`${column.name} — kolon menüsü`"
-                  @click="openMenu('column', column.name, $event)"
-                >⋮</button>
-              </div>
-              <span class="th-kind">
-                {{ column.kind === 'number' ? 'num' : column.kind === 'nested' ? 'obj' : 'str' }}
-                <template v-if="column.filled < records!.length">
-                  · {{ column.filled }}/{{ records!.length }}
-                </template>
-              </span>
-            </th>
-          </tr>
-          <tr v-if="records && filtersOpen" class="tr-filters">
-            <th class="th-lead" />
-            <th v-for="column in visibleColumns" :key="column.name">
-              <input
-                :ref="el => { filterInputs[column.name] = el as HTMLInputElement | null }"
-                v-model="filters[column.name]"
-                class="th-filter"
-                type="text"
-                placeholder="filtre"
-                :class="{ filled: (filters[column.name] ?? '').length > 0 }"
-                @click.stop
-              />
-            </th>
-          </tr>
-        </thead>
-
-        <tbody>
-          <template v-for="row in shown" :key="row.key">
-            <tr
-              class="tr"
-              :class="{ selected: ctx.selectedPath.value === row.path }"
-              :data-row-path="row.path"
-            >
-              <!-- Bas hucre: nesne tablosunda anahtar, kayit tablosunda indeks -->
-              <td class="td-lead" :class="{ hit: row.leadMatched }" @click="onLeadClick(row)">
-                <span class="lead-text">
-                  <template v-for="(part, i) in parts(row.lead)" :key="i">
-                    <mark v-if="part.hit" class="hl">{{ part.text }}</mark>
-                    <template v-else>{{ part.text }}</template>
-                  </template>
-                </span>
-                <InfoBubble v-if="row.doc">
-                  <template #trigger>
-                    <span
-                      class="mark"
-                      :class="row.doc.matchKind === 'INFERRED' ? 'guess-doc' : 'has-doc'"
-                    >{{ row.doc.matchKind === 'INFERRED' ? '≈' : 'ⓘ' }}</span>
-                  </template>
-                  <FieldDocCard :field="row.doc" />
-                </InfoBubble>
-                <span
-                  v-else-if="shape === 'object' && ctx.schemaKnown.value"
-                  class="mark no-doc"
-                  title="Şemada karşılığı yok"
-                >●</span>
-                <button
-                  v-if="ctx.commentsAvailable.value"
-                  class="chip comment"
-                  :class="{ has: (ctx.comments?.countFor(row.path) ?? 0) > 0 }"
-                  :aria-label="`${row.lead} — yorumlar`"
-                  @click.stop="ctx.comments?.toggle(row.path)"
-                >💬<template v-if="(ctx.comments?.countFor(row.path) ?? 0) > 0">{{ ctx.comments!.countFor(row.path) }}</template></button>
-              </td>
-
-              <!-- Deger hucreleri: skaler metin ya da hucre icinde acilan alt tablo -->
-              <td
-                v-for="(cell, ci) in row.cells"
-                :key="cell.path"
-                class="td-cell"
-                :class="[
-                  typeClass(cell.value),
-                  cell.tone ? `tone-${cell.tone}` : '',
-                  {
-                    nested: cell.container,
-                    open: cell.container && ctx.isOpen(cell.path),
-                    num: cell.numeric,
-                    hit: cell.matched,
-                    missing: cell.missing,
-                    cursor: ctx.cursor.value === cell.path,
-                  },
-                ]"
-                :data-cell-path="cell.path"
-                :data-table="props.path"
-                :data-row="row.index"
-                :data-col="ci"
-                @click="onCellClick(cell)"
-              >
-                <!-- Kapsayici: ozet rozeti; acikken adiyla birlikte alt tablo -->
-                <template v-if="cell.container">
-                  <span class="nest-chip" :class="{ empty: cell.count === 0 }">
-                    <span v-if="cell.count > 0" class="caret">{{ ctx.isOpen(cell.path) ? '▾' : '▸' }}</span>
-                    <span class="nest-brace">{{ cell.isArray ? '[' : '{' }}</span>
-                    <span class="nest-summary">{{ cell.text }}</span>
-                    <span class="nest-brace">{{ cell.isArray ? ']' : '}' }}</span>
-                  </span>
-                  <div v-if="cell.count > 0 && ctx.isOpen(cell.path)" class="nest-body" @click.stop>
-                    <!--
-                      Bant basligi: derin ic ice yapida hangi dugumun icinde
-                      oldugunu soyleyen tek sey bu. jsongrid'de de her seviye
-                      adiyla cerceveleniyor; kapatma dugmesi de burada.
-                    -->
-                    <div class="nest-head">
-                      <button class="nest-close" title="Kapat" @click="ctx.toggle(cell.path)">▾</button>
-                      <span class="nest-name">{{ cell.label }}</span>
-                      <span class="nest-meta">{{ cell.text }}</span>
-                      <div class="gt-spacer" />
-                      <button class="nest-act" title="Bu dalı JSON olarak kopyala" @click="copyCellValue(cell)">⧉</button>
-                    </div>
-                    <GridTable :value="cell.value!" :path="cell.path" :depth="depth + 1" />
-                  </div>
-                </template>
-
-                <!-- Skaler deger -->
-                <template v-else>
-                  <span class="val" :class="{ clipped: cell.long }">
-                    <template v-for="(part, i) in parts(cell.text)" :key="i">
-                      <mark v-if="part.hit" class="hl">{{ part.text }}</mark>
-                      <template v-else>{{ part.text }}</template>
+                  <span class="th-kind">
+                    {{ kindLabel(column.kind) }}
+                    <template v-if="column.filled < records!.length">
+                      · {{ column.filled }}/{{ records!.length }}
                     </template>
                   </span>
-                  <button
-                    v-if="cell.long"
-                    class="chip long"
-                    :class="{ on: ctx.detailPath.value === cell.path }"
-                    :title="ctx.detailPath.value === cell.path ? 'Tam değeri kapat' : 'Tam değeri aç'"
-                    @click.stop="ctx.toggleDetail(cell.path)"
-                  >{{ ctx.detailPath.value === cell.path ? '▴' : '⤢' }}</button>
-                  <button
-                    v-if="cell.refTarget"
-                    class="chip ref"
-                    :class="{ on: ctx.refPath.value === cell.path }"
-                    :title="`Referans: ${cell.refTarget.idField} → ${cell.refTarget.path}`"
-                    @click.stop="ctx.toggleRef(cell.path)"
-                  >↳</button>
+                </th>
+              </tr>
+              <tr v-if="records && filtersOpen" class="tr-filters">
+                <th v-if="framed" class="th-handle" />
+                <th class="th-lead" />
+                <th v-for="column in visibleColumns" :key="column.name">
+                  <input
+                    :ref="el => { filterInputs[column.name] = el as HTMLInputElement | null }"
+                    v-model="filters[column.name]"
+                    class="th-filter"
+                    type="text"
+                    placeholder="filtre"
+                    :class="{ filled: (filters[column.name] ?? '').length > 0 }"
+                    @click.stop
+                  />
+                </th>
+              </tr>
+            </thead>
 
-                  <!-- Tam deger: hucrenin icinde, satir yerinden oynamadan -->
-                  <div v-if="ctx.detailPath.value === cell.path" class="detail" @click.stop>
-                    <div class="detail-head">
-                      <span class="detail-meta">{{ valueMeta(cell.value) }}</span>
-                      <div class="gt-spacer" />
-                      <button class="gt-btn" @click="copyCellValue(cell)">
-                        {{ copied === 'değer' ? '✓ kopyalandı' : '⧉ kopyala' }}
-                      </button>
-                      <button class="gt-btn" title="Kapat" @click="ctx.toggleDetail(cell.path)">×</button>
-                    </div>
-                    <pre class="detail-body">{{ detailText(cell.value) }}</pre>
-                    <p v-if="clippedCount(cell.value) > 0" class="detail-clip">
-                      İlk {{ MAX_DETAIL_CHARS.toLocaleString('tr-TR') }} karakter gösteriliyor;
-                      kalan {{ clippedCount(cell.value).toLocaleString('tr-TR') }} karakter için kopyalayın.
-                    </p>
-                  </div>
+            <tbody>
+              <template v-for="row in shown" :key="row.key">
+                <tr
+                  class="tr"
+                  :class="{ selected: ctx.selectedPath.value === row.path }"
+                  :data-row-path="row.path"
+                >
+                  <!-- Tutamak: satirin menusu (tasarimdaki ⋮ kolonu) -->
+                  <td v-if="framed" class="td-handle" @click.stop="openMenu('row', row.path, $event)">⋮</td>
 
-                  <!-- Referans onizlemesi -->
-                  <div v-if="cell.refTarget && ctx.refPath.value === cell.path" class="refbox" @click.stop>
-                    <div class="refbox-head">
-                      <code class="refbox-path">{{ cell.refTarget.path.split('.').slice(1).join('.') }}</code>
-                      <button class="gt-btn" @click="ctx.focusPath(cell.refTarget!.path)">hedefe git</button>
-                    </div>
-                    <div
-                      v-for="field in previewFields(cell.refTarget.value)"
-                      :key="field.key"
-                      class="refbox-field"
-                    >
-                      <span class="refbox-key">{{ field.key }}</span>
-                      <span class="refbox-value" :class="typeClass(field.value)">{{ cellText(field.value) }}</span>
-                    </div>
-                  </div>
-                </template>
+                  <td class="td-lead" :class="{ hit: row.leadMatched }" @click="onLeadClick(row)">
+                    <span class="lead-text">
+                      <template v-for="(part, i) in parts(row.lead)" :key="i">
+                        <mark v-if="part.hit" class="hl">{{ part.text }}</mark>
+                        <template v-else>{{ part.text }}</template>
+                      </template>
+                    </span>
+                    <InfoBubble v-if="row.doc">
+                      <template #trigger>
+                        <span
+                          class="mark"
+                          :class="row.doc.matchKind === 'INFERRED' ? 'guess-doc' : 'has-doc'"
+                        >{{ row.doc.matchKind === 'INFERRED' ? '≈' : 'ⓘ' }}</span>
+                      </template>
+                      <FieldDocCard :field="row.doc" />
+                    </InfoBubble>
+                    <span
+                      v-else-if="shape === 'object' && ctx.schemaKnown.value"
+                      class="mark no-doc"
+                      title="Şemada karşılığı yok"
+                    >●</span>
+                    <button
+                      v-if="ctx.commentsAvailable.value"
+                      class="comment"
+                      :class="{ has: (ctx.comments?.countFor(row.path) ?? 0) > 0 }"
+                      :aria-label="`${row.lead} — yorumlar`"
+                      @click.stop="ctx.comments?.toggle(row.path)"
+                    >💬<template v-if="(ctx.comments?.countFor(row.path) ?? 0) > 0">{{ ctx.comments!.countFor(row.path) }}</template></button>
+                  </td>
 
-                <!-- Hucre menusu: kopyalama islerinin tek yeri -->
-                <button
-                  class="cell-menu"
-                  :title="`${cell.label} — hücre menüsü`"
-                  @click.stop="openMenu('cell', cell.path, $event)"
-                >⋯</button>
-              </td>
-            </tr>
+                  <td
+                    v-for="(cell, ci) in row.cells"
+                    :key="cell.path"
+                    class="td-cell"
+                    :class="[
+                      typeClass(cell.value),
+                      cell.tone ? `tone-${cell.tone}` : '',
+                      {
+                        nested: cell.container,
+                        num: cell.numeric,
+                        hit: cell.matched,
+                        missing: cell.missing,
+                        cursor: ctx.cursor.value === cell.path,
+                      },
+                    ]"
+                    :data-cell-path="cell.path"
+                    :data-table="path"
+                    :data-row="row.index"
+                    :data-col="ci"
+                    @click="onCellClick(cell)"
+                  >
+                    <!-- Kapsayici: [±] ad · acikken hucrenin icinde alt tablo -->
+                    <template v-if="cell.container">
+                      <span class="nest-btn" :class="{ empty: cell.count === 0 }">
+                        <span v-if="cell.count > 0" class="sign">
+                          [{{ ctx.isOpen(cell.path) ? '−' : '+' }}]
+                        </span>
+                        <span class="nest-label">
+                          {{ cell.label }}{{ cell.isArray ? `[${cell.count}]` : ' {}' }}
+                        </span>
+                      </span>
+                      <div v-if="cell.count > 0 && ctx.isOpen(cell.path)" class="nest-body" @click.stop>
+                        <GridTable :value="cell.value!" :path="cell.path" :depth="depth + 1" />
+                      </div>
+                    </template>
 
-            <!-- Kayit satirinin tamami: indeks hucresine tiklandiginda -->
-            <tr v-if="records && ctx.isOpen(row.path)" class="tr-extra">
-              <td :colspan="colspan">
-                <div class="row-open">
-                  <div class="nest-head">
-                    <button class="nest-close" title="Kapat" @click="ctx.toggle(row.path)">▾</button>
-                    <span class="nest-name">#{{ row.lead }}</span>
-                    <span class="nest-meta">satırın tamamı</span>
-                    <div class="gt-spacer" />
-                    <button class="nest-act" title="Satırı JSON olarak kopyala" @click="copyRow(row)">⧉</button>
-                  </div>
-                  <GridTable :value="row.item!" :path="row.path" :depth="depth + 1" />
-                </div>
-              </td>
-            </tr>
+                    <!-- Skaler deger -->
+                    <template v-else>
+                      <span class="cell-inner">
+                        <span class="val" :class="{ clipped: cell.long }">
+                          <template v-for="(part, i) in parts(cell.text)" :key="i">
+                            <mark v-if="part.hit" class="hl">{{ part.text }}</mark>
+                            <template v-else>{{ part.text }}</template>
+                          </template>
+                        </span>
+                        <button
+                          v-if="cell.long"
+                          class="cell-mark long"
+                          :class="{ on: ctx.detailPath.value === cell.path }"
+                          :title="ctx.detailPath.value === cell.path ? 'Tam değeri kapat' : 'Tam değeri aç'"
+                          @click.stop="ctx.toggleDetail(cell.path)"
+                        >{{ ctx.detailPath.value === cell.path ? '▴' : '⤢' }}</button>
+                        <button
+                          v-if="cell.refTarget"
+                          class="cell-mark ref"
+                          :class="{ on: ctx.refPath.value === cell.path }"
+                          :title="`Referans: ${cell.refTarget.idField} → ${cell.refTarget.path}`"
+                          @click.stop="ctx.toggleRef(cell.path)"
+                        >↳</button>
+                      </span>
 
-            <!-- Yorum zinciri -->
-            <tr v-if="ctx.commentsAvailable.value && ctx.comments?.openPath.value === row.path" class="tr-extra">
-              <td :colspan="colspan">
-                <CommentThread
-                  :path="row.path"
-                  :comments="ctx.comments.commentsFor(row.path)"
-                  :author="ctx.comments.author.value"
-                  :enabled="ctx.comments.enabled.value"
-                  :can-delete="ctx.comments.canDelete"
-                  @add="ctx.comments.add($event)"
-                  @remove="ctx.comments.remove($event)"
-                  @update:author="ctx.comments.author.value = $event"
-                  @close="ctx.comments.toggle(row.path)"
-                />
-              </td>
-            </tr>
-          </template>
+                      <!-- Tam deger: hucrenin icinde, satir yerinden oynamadan -->
+                      <div v-if="ctx.detailPath.value === cell.path" class="detail" @click.stop>
+                        <div class="detail-head">
+                          <span class="detail-meta">{{ valueMeta(cell.value) }}</span>
+                          <div class="spacer" />
+                          <button class="act" @click="copyCellValue(cell)">
+                            {{ copied === 'değer' ? '✓ kopyalandı' : '⧉ kopyala' }}
+                          </button>
+                          <button class="act" title="Kapat" @click="ctx.toggleDetail(cell.path)">×</button>
+                        </div>
+                        <pre class="detail-body">{{ detailText(cell.value) }}</pre>
+                        <p v-if="clippedCount(cell.value) > 0" class="detail-clip">
+                          İlk {{ MAX_DETAIL_CHARS.toLocaleString('tr-TR') }} karakter gösteriliyor;
+                          kalan {{ clippedCount(cell.value).toLocaleString('tr-TR') }} karakter için kopyalayın.
+                        </p>
+                      </div>
 
-          <tr v-if="rows.length === 0" class="tr-extra">
-            <td :colspan="colspan" class="empty">
-              {{ activeFilters.length > 0 || filtering ? 'Filtreyle eşleşen satır yok.' : 'Boş.' }}
-            </td>
-          </tr>
+                      <!-- Referans onizlemesi -->
+                      <div v-if="cell.refTarget && ctx.refPath.value === cell.path" class="refbox" @click.stop>
+                        <div class="refbox-head">
+                          <code class="refbox-path">{{ cell.refTarget.path.split('.').slice(1).join('.') }}</code>
+                          <button class="act" @click="ctx.focusPath(cell.refTarget!.path)">hedefe git</button>
+                        </div>
+                        <div
+                          v-for="field in previewFields(cell.refTarget.value)"
+                          :key="field.key"
+                          class="refbox-field"
+                        >
+                          <span class="refbox-key">{{ field.key }}</span>
+                          <span class="refbox-value" :class="typeClass(field.value)">{{ cellText(field.value) }}</span>
+                        </div>
+                      </div>
+                    </template>
 
-          <tr v-if="pending > 0" class="tr-extra">
-            <td :colspan="colspan" class="more">
-              {{ shown.length.toLocaleString('tr-TR') }} / {{ rows.length.toLocaleString('tr-TR') }} satır
-              <button class="gt-btn" @click="ctx.grow(path)">daha fazla göster</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+                    <button
+                      class="cell-menu"
+                      :title="`${cell.label} — hücre menüsü`"
+                      @click.stop="openMenu('cell', cell.path, $event)"
+                    >⋯</button>
+                  </td>
+                </tr>
+
+                <!-- Kayit satirinin tamami -->
+                <tr v-if="records && ctx.isOpen(row.path)" class="tr-extra">
+                  <td :colspan="colspan">
+                    <GridTable
+                      :value="row.item!"
+                      :path="row.path"
+                      :depth="depth + 1"
+                      :label="`#${row.lead}`"
+                      framed
+                    />
+                  </td>
+                </tr>
+
+                <!-- Yorum zinciri -->
+                <tr v-if="ctx.commentsAvailable.value && ctx.comments?.openPath.value === row.path" class="tr-extra">
+                  <td :colspan="colspan">
+                    <CommentThread
+                      :path="row.path"
+                      :comments="ctx.comments.commentsFor(row.path)"
+                      :author="ctx.comments.author.value"
+                      :enabled="ctx.comments.enabled.value"
+                      :can-delete="ctx.comments.canDelete"
+                      @add="ctx.comments.add($event)"
+                      @remove="ctx.comments.remove($event)"
+                      @update:author="ctx.comments.author.value = $event"
+                      @close="ctx.comments.toggle(row.path)"
+                    />
+                  </td>
+                </tr>
+              </template>
+
+              <tr v-if="rows.length === 0" class="tr-extra">
+                <td :colspan="colspan" class="note">
+                  {{ activeFilters.length > 0 || filtering ? 'Filtreyle eşleşen satır yok.' : 'Boş.' }}
+                </td>
+              </tr>
+
+              <!-- Alt bilgi: sayim, filtre, toplam (tasarimdaki not satiri) -->
+              <tr v-if="footNote || pending > 0" class="tr-foot">
+                <td :colspan="colspan" class="foot">
+                  <span class="foot-inner">
+                    <span v-if="footNote">{{ footNote }}</span>
+                    <template v-if="pending > 0">
+                      <span v-if="footNote" class="foot-sep">·</span>
+                      <span>{{ shown.length.toLocaleString('tr-TR') }} satır çizildi</span>
+                      <button class="act" @click="ctx.grow(path)">daha fazla göster</button>
+                    </template>
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Kapsayici alanlar: her biri kendi kartinda -->
+        <div v-if="objectEntries.cards.length > 0" class="cards">
+          <GridTable
+            v-for="card in objectEntries.cards"
+            :key="card.path"
+            :value="card.value"
+            :path="card.path"
+            :depth="depth + 1"
+            :label="card.key"
+            framed
+          />
+        </div>
+      </template>
     </div>
 
     <!-- Menuler: sabit konumlu katman, arkasinda kapatan bir yuzey -->
     <template v-if="menu">
       <div class="menu-backdrop" @click="closeMenu" @contextmenu.prevent="closeMenu" />
       <div class="menu" :style="{ top: `${menu.top}px`, left: `${menu.left}px` }">
-        <!-- Kolon menusu: siralama, filtre, istatistik, gizleme, kopyalama -->
         <template v-if="menu.kind === 'column'">
           <div class="menu-head">{{ menu.key }}</div>
           <button class="menu-item" @click="setSort(menu.key, 'asc')">↑ artan sırala</button>
@@ -703,7 +821,7 @@ function shortNumber(value: number): string {
             class="menu-item"
             @click="setSort(menu.key, null)"
           >× sıralamayı kaldır (JSON sırası)</button>
-          <button class="menu-item" @click="focusFilter(menu.key)">⌕ bu kolonu filtrele</button>
+          <button class="menu-item" @click="focusFilter(menu.key)">▽ bu kolonu filtrele</button>
           <div class="menu-sep" />
           <div v-if="menuStats" class="menu-stats">
             <div class="stat-row">
@@ -747,16 +865,14 @@ function shortNumber(value: number): string {
           <button class="menu-item" @click="hideColumn(menu.key)">⊘ kolonu gizle</button>
         </template>
 
-        <!-- Hucre menusu -->
         <template v-else-if="menu.kind === 'cell' && menuCell">
           <div class="menu-head">{{ menuCell.cell.label }}</div>
           <button class="menu-item" @click="copyCellValue(menuCell.cell)">⧉ değeri kopyala</button>
-          <button class="menu-item" @click="copyRow(menuCell.row)">⧉ satırı JSON olarak kopyala</button>
           <button class="menu-item" @click="copyPath(menuCell.cell.path)">⧉ yolu kopyala</button>
           <template v-if="menuCell.cell.container && menuCell.cell.count > 0">
             <div class="menu-sep" />
             <button class="menu-item" @click="ctx.toggle(menuCell.cell.path); closeMenu()">
-              {{ ctx.isOpen(menuCell.cell.path) ? '▴ hücreyi kapat' : '▾ hücrede aç' }}
+              {{ ctx.isOpen(menuCell.cell.path) ? '[−] hücreyi kapat' : '[+] hücrede aç' }}
             </button>
           </template>
           <template v-if="menuCell.cell.long">
@@ -767,99 +883,169 @@ function shortNumber(value: number): string {
           </template>
         </template>
 
-        <!-- Kolon secici -->
+        <template v-else-if="menu.kind === 'row' && menuRow">
+          <div class="menu-head">{{ records ? `satır #${menuRow.lead}` : menuRow.lead }}</div>
+          <button v-if="records" class="menu-item" @click="ctx.toggle(menuRow.path); closeMenu()">
+            {{ ctx.isOpen(menuRow.path) ? '[−] satırın tamamını kapat' : '[+] satırın tamamını aç' }}
+          </button>
+          <button class="menu-item" @click="copyRow(menuRow)">⧉ satırı JSON olarak kopyala</button>
+          <button class="menu-item" @click="copyPath(menuRow.path)">⧉ yolu kopyala</button>
+          <template v-if="ctx.commentsAvailable.value">
+            <div class="menu-sep" />
+            <button class="menu-item" @click="ctx.comments?.toggle(menuRow.path); closeMenu()">
+              💬 yorumlar
+            </button>
+          </template>
+        </template>
+
         <template v-else-if="menu.kind === 'columns'">
           <div class="menu-head">kolonlar</div>
           <div class="menu-cols">
             <label v-for="column in columnInfo.columns" :key="column.name" class="menu-col">
               <input
                 type="checkbox"
-                :checked="!ctx.hiddenColumns(props.path).has(column.name)"
-                @change="ctx.toggleColumn(props.path, column.name)"
+                :checked="!ctx.hiddenColumns(path).has(column.name)"
+                @change="ctx.toggleColumn(path, column.name)"
               />
               <span class="menu-col-name">{{ column.name }}</span>
               <span class="menu-col-fill">{{ column.filled }}/{{ records?.length ?? 0 }}</span>
             </label>
           </div>
           <div class="menu-sep" />
-          <button class="menu-item" @click="ctx.setHiddenColumns(props.path, []); closeMenu()">
+          <button class="menu-item" @click="ctx.setHiddenColumns(path, []); closeMenu()">
             hepsini göster
           </button>
           <button class="menu-item" @click="hideSparse">yarısından azında dolu olanları gizle</button>
         </template>
       </div>
     </template>
-  </div>
+  </component>
 </template>
 
 <style scoped>
-.gt { min-width: 0; }
-.gt-spacer { flex: 1; }
+/*
+ * Cerceveli kart: solda seviye rengini tasiyan 8px omurga, saginda govde.
+ * Derin ic ice yapida nerede oldugunu soyleyen sey bu — tasarimin en belirgin
+ * karari, uygulamada da oyle kaldi.
+ */
+.gt.card { display: flex; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary); min-width: 0; }
+.gt.bare { min-width: 0; }
+.spine { width: 8px; flex-shrink: 0; border-right: 1px solid var(--border-subtle); background: var(--bg-tertiary); }
+.d-1 > .spine { background: var(--accent); }
+.d-2 > .spine { background: var(--cyan); }
+.d-3 > .spine { background: var(--purple); }
+.d-4 > .spine { background: var(--green); }
+.body { flex: 1; min-width: 0; }
+.gt.card > .body { padding: 7px; }
+.spacer { flex: 1; }
 
-.gt-bar { display: flex; align-items: center; gap: 9px; padding: 4px 8px; background: var(--bg-secondary); border: 1px solid var(--border); border-bottom: none; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
-.gt-count { color: var(--purple); }
-.gt-dim { color: var(--text-muted); white-space: nowrap; }
-.gt-warn { color: var(--orange); }
-.gt-sort { color: var(--accent); white-space: nowrap; }
-.gt-ok { color: var(--green); white-space: nowrap; }
-.gt-btn { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 5px; padding: 1px 7px; white-space: nowrap; }
-.gt-btn:hover { color: var(--accent); border-color: var(--accent); }
-.gt-btn.on { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+.title-row { display: flex; align-items: center; gap: 8px; padding-bottom: 6px; }
+.title { display: flex; align-items: center; gap: 7px; min-width: 0; font-family: 'JetBrains Mono', monospace; }
+.sign { font-size: 11px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; flex-shrink: 0; }
+.title:hover .sign { color: var(--accent); border-color: var(--accent); }
+.chain-sep { color: var(--border); font-size: 10px; }
+.chain-name { font-size: 12px; color: var(--color-key); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chain-name.last { color: var(--text-primary); }
+.chain-name.hit { background: var(--match-bg); }
+.title-count { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.title-note { font-size: 11px; color: var(--accent); white-space: nowrap; }
+.title-ok { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--green); white-space: nowrap; }
+.act { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 5px; padding: 1px 8px; white-space: nowrap; }
+.act:hover { color: var(--accent); border-color: var(--accent); }
+.act.on { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 
 /* Genis kayit tablolari kendi icinde yatay kaydirilir; sayfa asla kaymaz. */
-.gt-scroll.scroll { overflow-x: auto; }
-.gt-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; background: var(--bg-primary); }
+.scroll.pan { overflow-x: auto; }
+/*
+ * Tablo icerigi kadar genis. Onceden `min-width: 100%` vardi ve otomatik
+ * yerlesim artan genisligi bos tutamak kolonuna dagitiyordu (255px'lik bos bir
+ * sutun). Nesne tablosunda deger kolonu zaten uzun metinle doluyor.
+ */
+.table { border-collapse: separate; border-spacing: 0; width: max-content; max-width: 100%; }
+.object > .body > .scroll > .table { width: 100%; }
+.gt.card .table { border: 1px solid var(--border); border-radius: 4px; }
+.gt.bare .table { border: 1px solid var(--border-subtle); margin-top: 5px; }
+/* Hucrenin icindeki tablo mini olculerde: kolon hizasini bozmadan sigsin. */
+.gt.bare .td-lead, .gt.bare .td-cell { padding: 2px 7px; font-size: 11px; }
+.gt.bare thead th { padding: 1px 6px; font-size: 9.5px; }
+.gt.bare .th-kind { display: none; }
+/* Hucre icindeki alt tablonun anahtarlari silik: tuval seviyesindeki kirmizi
+   anahtarlarla yarismasin (tasarim da boyle ayiriyor). */
+.gt.bare .td-lead { position: static; color: var(--text-secondary); }
 
 th, td { border-right: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); vertical-align: top; text-align: left; }
+th:last-child, td:last-child { border-right: none; }
+tbody tr:last-child > td { border-bottom: none; }
 
-thead th { background: var(--bg-secondary); padding: 3px 8px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
+thead th { background: var(--bg-secondary); padding: 3px 8px; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; color: var(--text-muted); white-space: nowrap; border-bottom: 1px solid var(--border); }
 /* Yalnizca kok tablonun basligi yapisir: kaydiran kutu goruntuleyicinin kendisi. */
-.gt-table.sticky thead th { position: sticky; top: 0; z-index: 3; }
-.th-row { display: flex; align-items: center; gap: 3px; }
+.table.sticky thead th { position: sticky; top: 0; z-index: 3; }
+.th-row { display: inline-flex; align-items: center; gap: 3px; }
+.th-handle { padding: 0; }
 /*
- * Anahtar/indeks kolonu icerigi kadar yer alir (`width: 1%`) ve yatay
- * kaydirmada yerinde durur: 11 kolonlu bir tabloda saga kayarken hangi satirda
- * oldugunu gosteren tek sey o.
+ * Tutamak ve anahtar kolonu icerigi kadar yer alir ve yatay kaydirmada yerinde
+ * durur: 11 kolonlu bir tabloda saga kayarken hangi satirda oldugunu gosteren
+ * tek sey o.
  */
-.th-lead { width: 1%; min-width: 42px; position: sticky; left: 0; z-index: 2; }
-.gt-table.sticky thead .th-lead { z-index: 4; }
+.col-handle { width: 22px; }
+/* Tabla tasarken kolonlar oransal daralir; tutamak icin taban genislik. */
+.th-handle, .td-handle { min-width: 20px; }
+.col-lead { width: 0.1%; }
+.th-handle, .th-lead { position: sticky; z-index: 2; background: var(--bg-secondary); }
+.th-handle { left: 0; }
+.th-lead { left: 22px; min-width: 34px; }
+.table.sticky thead .th-handle, .table.sticky thead .th-lead { z-index: 4; }
 .th-col { max-width: 260px; }
-.th-sort { display: inline-flex; align-items: baseline; gap: 4px; max-width: 200px; font-family: inherit; font-size: inherit; font-weight: inherit; text-transform: none; letter-spacing: 0; color: var(--text-secondary); }
+.th-sort { font-family: inherit; font-size: 11px; font-weight: 700; color: var(--text-secondary); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .th-sort:hover, .th-sort.active { color: var(--accent); }
 .th-sort.hit { color: var(--orange); }
-.th-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.th-arrow { font-size: 8px; }
-.th-funnel, .th-menu { font-size: 10px; color: var(--text-muted); opacity: .45; padding: 0 2px; border-radius: 3px; }
+.th-arrow { font-size: 8px; color: var(--accent); }
+.th-funnel, .th-menu { font-size: 9px; color: var(--text-muted); opacity: .5; padding: 0 2px; border-radius: 3px; }
 .th-col:hover .th-funnel, .th-col:hover .th-menu { opacity: 1; }
 .th-funnel:hover, .th-menu:hover { color: var(--accent); background: var(--accent-dim); }
 .th-funnel.on { opacity: 1; color: var(--accent); }
-.th-kind { display: block; font-size: 9px; font-weight: 400; color: var(--text-muted); text-transform: none; letter-spacing: 0; }
-.tr-filters th { position: static; padding: 0 4px 3px; }
-.th-filter { width: 100%; min-width: 62px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 4px; outline: none; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; padding: 1px 5px; }
+.th-menu { font-size: 10px; }
+.th-kind { display: block; font-size: 9px; font-weight: 400; color: var(--text-muted); }
+.tr-filters th { position: static; background: var(--bg-primary); padding: 3px 5px; }
+.tr-filters .th-handle, .tr-filters .th-lead { position: sticky; background: var(--bg-primary); }
+.th-filter { width: 100%; min-width: 62px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; outline: none; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; padding: 2px 6px; }
 .th-filter.filled, .th-filter:focus { border-color: var(--accent); }
 
 .tr:hover > td { background: var(--bg-secondary); }
 .tr.selected > td { background: var(--accent-wash); }
-.tr.selected > .td-lead { box-shadow: inset 2px 0 0 var(--accent); }
+.tr.selected > .td-handle { box-shadow: inset 2px 0 0 var(--accent); }
 
-.td-lead { padding: 3px 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--color-key); white-space: nowrap; cursor: pointer; width: 1%; position: sticky; left: 0; z-index: 1; background: var(--bg-primary); }
+.td-handle { width: 22px; padding: 4px 0; text-align: center; font-size: 11px; line-height: 1; color: var(--text-muted); cursor: pointer; position: sticky; left: 0; z-index: 1; background: var(--bg-primary); }
+.td-handle:hover { color: var(--accent); background: var(--accent-dim); }
+.td-lead { padding: 5px 7px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--color-key); white-space: nowrap; cursor: pointer; width: 1%; position: sticky; left: 22px; z-index: 1; background: var(--bg-primary); }
 .td-lead.hit { background: var(--match-bg); }
-.lead-text { font-weight: 500; }
-/* Kayit/liste tablosunda indeks kolonu silik ve saga dayali: goz kolonlara gider. */
-.records > .gt-scroll > .gt-table > tbody > tr > .td-lead,
-.list > .gt-scroll > .gt-table > tbody > tr > .td-lead { color: var(--text-muted); text-align: right; }
+/*
+ * Indeks kolonunun hizasi yalnizca *kendi* tablosuna: secici dogrudan cocuga
+ * baglandi, yoksa hucre icindeki nesne tablosunun anahtarlari da saga
+ * dayaniyordu (ic ice tablolar hucrenin icinde duruyor).
+ */
+.records > .body > .scroll > .table > tbody > tr > .td-lead,
+.list > .body > .scroll > .table > tbody > tr > .td-lead { color: var(--text-muted); text-align: right; }
 
 /*
- * Hucre icerigi tek satirda kalir: rozet (uzun deger / referans) alt satira
+ * Hucre icerigi tek satirda kalir: isaret (uzun deger / referans) alt satira
  * kaymasin, kolon genislesin. Satir yukseklikleri boyle esit kaliyor.
  */
-.td-cell { position: relative; padding: 3px 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; max-width: 460px; cursor: pointer; white-space: nowrap; }
+.td-cell { position: relative; padding: 5px 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; max-width: 460px; cursor: pointer; white-space: nowrap; }
 .td-cell.num { text-align: right; }
 .td-cell.hit { background: var(--match-bg); }
 .td-cell.missing { background: var(--bg-secondary); }
 /* Klavye imleci: hangi hucrede oldugunu her zaman gosterir. */
 .td-cell.cursor { outline: 2px solid var(--accent); outline-offset: -2px; }
-.val { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+/*
+ * Deger ve isaretleri tek satirda tutan kutu: deger kirpilir, isaretler
+ * (uzun deger / referans) kirpilmaz. Onceden isaretler degerin arkasindan
+ * hucrenin disina tasiyordu.
+ */
+.cell-inner { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+.td-cell.num .cell-inner { justify-content: flex-end; }
+.val { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cell-mark, .comment { flex-shrink: 0; }
 .val.clipped { cursor: zoom-in; }
 .v-string .val { color: var(--color-string); }
 .v-number .val { color: var(--color-number); }
@@ -870,56 +1056,33 @@ thead th { background: var(--bg-secondary); padding: 3px 8px; font-family: 'JetB
 .tone-off .val { color: var(--text-muted); }
 .hl { background: var(--match-bg); color: var(--orange); border-radius: 2px; padding: 0 1px; }
 
-/*
- * Hucre menusu yalnizca *uzerinde durulan* hucrede gorunur. Secici `>` ile
- * dogrudan cocuga baglandi: ic ice tablolar hucrenin *icinde* durdugu icin
- * `:hover .cell-menu` dis hucreye gelindiginde icteki butun dugmeleri de
- * gosteriyordu. Sayisal hucrelerde dugme sola geciyor — sayi saga dayali,
- * son hanenin ustune binmesin.
- */
-.cell-menu { position: absolute; top: 1px; right: 1px; font-size: 11px; line-height: 1; color: var(--text-muted); opacity: 0; padding: 1px 3px; border-radius: 3px; background: var(--bg-secondary); }
-.td-cell.num > .cell-menu { left: 1px; right: auto; }
-.td-cell:hover > .cell-menu { opacity: .8; }
-.cell-menu:hover { opacity: 1 !important; color: var(--accent); background: var(--accent-dim); }
+/* Ic ice hucre: `[+] TotalPrice {}` — tasarimdaki isaret kutusu ve silik ad. */
+.nest-btn { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.nest-label { font-size: 11.5px; color: var(--text-muted); }
+.td-cell.nested:hover .nest-label { color: var(--text-secondary); }
+.nest-btn.empty .nest-label { opacity: .6; }
+.nest-body { margin-top: 5px; cursor: default; white-space: normal; }
 
-.nest-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--purple); background: var(--bg-object); border-radius: 10px; padding: 0 7px; white-space: nowrap; }
-.td-cell.nested:hover > .nest-chip { background: var(--purple-wash); }
-.nest-chip.empty { color: var(--text-muted); background: var(--bg-tertiary); }
-.caret { font-size: 9px; }
-.nest-brace { opacity: .55; }
-.nest-summary { font-size: 10.5px; }
-/*
- * Alt tablo hucrenin icinde aciliyor: kullanici baktigi tabloyu kaybetmiyor.
- * Bant basligi hangi dugumun icinde oldugunu soyluyor, soldaki cizginin rengi
- * kaci derinde oldugunu.
- */
-.nest-body { margin: 4px 0 2px; padding-left: 7px; border-left: 2px solid var(--purple); cursor: default; white-space: normal; }
-.d-1 > .gt-scroll .nest-body { border-left-color: var(--accent); }
-.d-2 > .gt-scroll .nest-body { border-left-color: var(--cyan); }
-.d-3 > .gt-scroll .nest-body { border-left-color: var(--green); }
-.d-4 > .gt-scroll .nest-body { border-left-color: var(--orange); }
-.nest-head { display: flex; align-items: center; gap: 7px; padding: 2px 6px 3px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
-.nest-close { font-size: 9px; color: var(--text-muted); padding: 0 3px; border-radius: 3px; }
-.nest-close:hover { color: var(--accent); background: var(--accent-dim); }
-.nest-name { color: var(--color-key); font-weight: 600; }
-.nest-meta { color: var(--text-muted); }
-.nest-act { font-size: 11px; color: var(--text-muted); padding: 0 4px; border-radius: 3px; }
-.nest-act:hover { color: var(--accent); background: var(--accent-dim); }
-
-.chip { font-size: 10px; line-height: 1.6; padding: 0 5px; border-radius: 8px; margin-left: 5px; white-space: nowrap; }
-.chip.long { color: var(--cyan); background: var(--bg-tertiary); }
-.chip.long:hover, .chip.long.on { color: var(--accent); background: var(--accent-dim); }
-.chip.ref { color: var(--accent); background: var(--accent-dim); }
-.chip.ref:hover, .chip.ref.on { background: var(--accent-strong); }
-.chip.comment { color: var(--text-muted); opacity: .4; }
-.chip.comment:hover { opacity: 1; }
-.chip.comment.has { opacity: 1; color: var(--purple); background: var(--bg-object); }
+.cell-mark { font-size: 10px; margin-left: 5px; padding: 0 3px; border-radius: 3px; white-space: nowrap; }
+.cell-mark.long { color: var(--cyan); }
+.cell-mark.long:hover, .cell-mark.long.on { color: var(--accent); background: var(--accent-dim); }
+.cell-mark.ref { color: var(--accent); font-size: 11px; }
+.cell-mark.ref:hover, .cell-mark.ref.on { background: var(--accent-dim); }
+.comment { font-size: 10.5px; margin-left: 5px; color: var(--text-muted); opacity: .4; padding: 0 4px; border-radius: 8px; }
+.comment:hover { opacity: 1; }
+.comment.has { opacity: 1; color: var(--purple); background: var(--bg-object); }
 
 .mark { margin-left: 5px; font-size: 9px; opacity: .75; }
 .mark.has-doc { color: var(--accent); cursor: pointer; }
 .mark.guess-doc { color: var(--cyan); cursor: pointer; font-size: 11px; }
 .mark.no-doc { color: var(--orange); }
 .mark:hover { opacity: 1; }
+
+.gt.bare .cell-menu { font-size: 10px; }
+.cell-menu { position: absolute; top: 1px; right: 1px; font-size: 11px; line-height: 1; color: var(--text-muted); opacity: 0; padding: 1px 3px; border-radius: 3px; background: var(--bg-secondary); }
+.td-cell.num > .cell-menu { left: 1px; right: auto; }
+.td-cell:hover > .cell-menu { opacity: .8; }
+.cell-menu:hover { opacity: 1 !important; color: var(--accent); background: var(--accent-dim); }
 
 .detail { margin: 5px 0 3px; border-left: 2px solid var(--cyan); background: var(--bg-secondary); border-radius: 0 6px 6px 0; padding: 5px 9px; cursor: default; white-space: normal; }
 .detail-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
@@ -933,20 +1096,26 @@ thead th { background: var(--bg-secondary); padding: 3px 8px; font-family: 'JetB
 .refbox-field { display: flex; gap: 9px; font-size: 11.5px; padding: 1px 0; }
 .refbox-key { color: var(--color-key); min-width: 104px; }
 
-.tr-extra > td { padding: 5px 8px; background: var(--bg-secondary); }
-.row-open { border-left: 2px solid var(--purple); padding-left: 7px; }
-.empty { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
-.more { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
-.more .gt-btn { margin-left: 9px; }
+.tr-extra > td { padding: 6px 8px; background: var(--bg-secondary); }
+.tr-foot > td { padding: 4px 8px; background: var(--bg-primary); }
+.foot { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); }
+.foot-inner { display: flex; align-items: center; gap: 8px; }
+.foot-sep { opacity: .5; }
+.note { padding: 6px 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
+
+/* Kapsayici alanlarin kartlari: dikey yigin, tasarimdaki 8px araliki. */
+.cards { display: flex; flex-direction: column; gap: 8px; }
+.scroll + .cards { margin-top: 8px; }
 
 /* Sik yerlesim: ayni ekranda gorunur satir sayisi ~%40 artiyor. */
 .gt.dense .td-lead, .gt.dense .td-cell { padding: 1px 6px; font-size: 11.5px; }
+.gt.dense .td-handle { padding: 1px 0; }
 .gt.dense thead th { padding: 2px 6px; }
 .gt.dense .th-kind { display: none; }
 
 /* --- Menuler --------------------------------------------------------------- */
 .menu-backdrop { position: fixed; inset: 0; z-index: 60; }
-.menu { position: fixed; z-index: 61; width: 272px; max-height: 70vh; overflow-y: auto; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 12px 32px rgba(0, 0, 0, .35); padding: 5px; font-family: 'JetBrains Mono', monospace; }
+.menu { position: fixed; z-index: 61; width: 272px; max-height: 70vh; overflow-y: auto; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-popover); padding: 5px; font-family: 'JetBrains Mono', monospace; }
 .menu-head { padding: 4px 8px 6px; font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; overflow: hidden; text-overflow: ellipsis; }
 .menu-item { display: block; width: 100%; text-align: left; font-family: inherit; font-size: 11.5px; color: var(--text-primary); padding: 5px 8px; border-radius: 5px; }
 .menu-item:hover { background: var(--accent-dim); color: var(--accent); }
@@ -959,7 +1128,7 @@ thead th { background: var(--bg-secondary); padding: 3px 8px; font-family: 'JetB
 .stat-top { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
 .stat-bar { display: grid; grid-template-columns: 1fr 54px auto; align-items: center; gap: 6px; font-size: 10.5px; }
 .stat-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); }
-.stat-track { height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden; }
+.stat-track { height: 4px; background: var(--bg-tertiary); border-radius: 2px; overflow: hidden; }
 /* Tek renk, tek anlam: yuksek deger daha dolu bir cubuk. */
 .stat-fill { display: block; height: 100%; background: var(--accent); }
 .stat-count { color: var(--text-muted); }

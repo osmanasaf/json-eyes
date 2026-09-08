@@ -69,7 +69,9 @@ const version = ref(0)
 function touch() { version.value++ }
 
 function reset() {
-  expanded.value = autoOpenPaths(props.data, props.rootKey)
+  // Kok kartin kendisi de acilabilir bir dugum (tasarimdaki `[−]` basligi);
+  // acilista acik geliyor.
+  expanded.value = new Set([props.rootKey, ...autoOpenPaths(props.data, props.rootKey)])
   windows.value = new Map()
   hidden.value = new Map()
   detailPath.value = null
@@ -232,6 +234,7 @@ provide(GRID, context)
 
 function expandAll() {
   const all = autoOpenPaths(props.data, props.rootKey, { maxDepth: 99, budget: EXPAND_BUDGET })
+  all.add(props.rootKey)
   // Elle acilmis sayilir: aramanin bitmesi "tümünü aç"i geri almamali.
   userOpened.value = new Set(all)
   expanded.value = all
@@ -242,7 +245,8 @@ function expandAll() {
 }
 
 function collapseAll() {
-  expanded.value = new Set()
+  // Kok kart acik kalir: kapanınca ekranda tek bir baslik satiri kalirdi.
+  expanded.value = new Set([props.rootKey])
   windows.value = new Map()
   detailPath.value = null
   refPath.value = null
@@ -275,7 +279,7 @@ watch([version, () => props.searchTerm, () => props.filterMatches], async () => 
   const root = scrollEl.value
   emit('stats', {
     rows: rowElements().length,
-    tables: root ? root.querySelectorAll('.gt-table').length : 0,
+    tables: root ? root.querySelectorAll('.table').length : 0,
   })
 }, { immediate: true })
 
@@ -393,8 +397,11 @@ function ascend() {
   }
   toggle(table)
   void nextTick(() => {
+    // Ust seviye bir *kart* olabilir (hucre degil); o zaman imlec dusuruluyor,
+    // yoksa artik cizilmeyen bir hucreyi isaret etmeye devam ederdi.
     const parent = cellElements().find(element => element.dataset.cellPath === table)
-    placeCursor(parent)
+    if (parent) placeCursor(parent)
+    else cursor.value = null
   })
 }
 
@@ -485,7 +492,7 @@ defineExpose({ moveSelection, expandAll, collapseAll })
         {{ rootShape === 'records' ? 'kayıt tablosu' : rootShape === 'object' ? 'nesne' : rootShape === 'list' ? 'dizi' : 'değer' }}
       </span>
       <span class="head-summary">{{ rootSummary }}</span>
-      <span class="head-hint">hücreye tıkla → içinde açılır · oklarla gezin · Enter aç · Esc üst seviye</span>
+      <span class="head-hint">[+] hücrede açar · oklarla gezin · Enter aç · Esc üst seviye</span>
       <span v-if="copyNote" class="head-ok">✓ {{ copyNote }}</span>
       <span v-if="expandNote" class="head-note">{{ expandNote }}</span>
       <div class="head-spacer" />
@@ -509,7 +516,7 @@ defineExpose({ moveSelection, expandAll, collapseAll })
       <p v-if="rootShape === 'scalar'" class="note">
         Bu JSON bir nesne veya dizi değil: <code>{{ String(data) }}</code>
       </p>
-      <GridTable v-else :value="data" :path="rootKey" :depth="0" />
+      <GridTable v-else :value="data" :path="rootKey" :depth="0" framed />
     </div>
   </div>
 </template>
@@ -537,7 +544,7 @@ defineExpose({ moveSelection, expandAll, collapseAll })
  * tablolari da yatayda burada kayiyor. `tabindex` klavye icin: oklar sayfayi
  * degil imleci oynatiyor.
  */
-.grid-body { flex: 1; min-height: 0; overflow: auto; outline: none; }
+.grid-body { flex: 1; min-height: 0; overflow: auto; outline: none; padding: 10px; }
 .grid-body:focus-visible { box-shadow: inset 0 0 0 1px var(--accent-strong); }
 
 .note { padding: 14px 16px; font-size: 12px; color: var(--text-muted); }

@@ -1,5 +1,12 @@
 # Handoff: JSON EYES — JSON görüntüleyici (Grid odaklı UX yenilemesi)
 
+> **Bu dizinde iki tasarım var.** `JSON Eyes - Full Flow.dc.html` ilk tur (Tur 5)
+> referansı; bu README onu anlatıyor. `JSON Eyes v3.dc.html` sonraki tur:
+> görünüm anahtarı yalnızca görünüm taşır (Tree · Grid · Kolon), XML bir girdi
+> biçimi, karşılaştırma ikinci bir girdi ve grid **omurgalı çerçeve kartları**
+> ile çiziliyor. Uygulanan hâli depo kökündeki README'nin "Grid" maddesinde.
+> Her ikisi de `support.js` ile açılır (aynı dosya).
+
 ## Overview
 
 `JSON EYES`, IATA NDC JSON yanıtlarını (ör. `IATA_OrderViewRS`) inceleyen developer / QA / iş analisti ekipleri için bir JSON görüntüleyicidir. Mevcut uygulama Vue 3 + Vite (`frontend/`) ile yazılmıştır: sol JSON editörü, orta Tree/Grid görüntüleyici, sağ IATA XSD paneli, paylaşım linki ve alan bazlı yorumlar.

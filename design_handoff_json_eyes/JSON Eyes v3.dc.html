@@ -1,0 +1,707 @@
+<!--
+  JSON Eyes v3 — tasarim referansi.
+
+  Kaynak: Claude Design projesi (artifact paketinden cikarildi). Paketleyici
+  yazi tipi dosyalarini ve support.js'i uuid'lere cevirmisti; burada support.js
+  yeniden ./support.js olarak baglandi (ayni dosya, bu dizinde duruyor) ve
+  gomulu @font-face bloklari yerine Google Fonts baglantisi konuldu. Icerik —
+  duzen, olculer, renkler, metinler — oldugu gibi.
+
+  Grid bu dosyadaki modele gore uygulandi (bkz. depo kokundeki README,
+  "Grid" maddesi): omurgali cerceve kartlari, `[±]` isaret kutulari, kayit
+  tablosunda tutamak/# kolonlari, kolon basliginda huni, alt bilgi satiri.
+-->
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #0d1117; }
+  a { color: #58a6ff; text-decoration: none; }
+  a:hover { color: #79c0ff; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+</style>
+</helmet>
+
+<div style="width:1440px;height:900px;display:flex;flex-direction:column;overflow:hidden;background:#0d1117;color:#e6edf3;font-family:Inter,system-ui,sans-serif;line-height:1.5">
+
+  <header style="display:flex;align-items:center;gap:12px;padding:0 14px;height:44px;background:#161b22;border-bottom:1px solid #30363d;flex-shrink:0">
+    <div style="display:flex;align-items:center;gap:9px;flex-shrink:0">
+      <svg width="21" height="21" sc-camel-view-box="0 0 24 24">
+        <ellipse cx="12" cy="12" rx="9" ry="5.6" fill="none" stroke="#58a6ff" stroke-width="1.8"></ellipse>
+        <circle cx="12" cy="12" r="2.9" fill="#58a6ff"></circle>
+      </svg>
+      <span style="font-size:14px;font-weight:600;white-space:nowrap">JSON <span style="color:#58a6ff">EYES</span></span>
+    </div>
+    <div style="width:1px;height:18px;background:#30363d"></div>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#e6edf3;white-space:nowrap">orderview-prod.json</span>
+    <span style="width:6px;height:6px;border-radius:50%;background:#3fb950"></span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6e7681;white-space:nowrap">{{ nodeLabel }}</span>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:8px;width:300px;background:#0d1117;border:1px solid {{ searchBorder }};border-radius:7px;padding:6px 10px">
+      <span style="color:#6e7681;font-size:12px">⌕</span>
+      <input value="{{ query }}" sc-camel-on-input="{{ onQuery }}" placeholder="Alan veya değer ara" style="flex:1;min-width:0;background:transparent;border:none;outline:none;color:#e6edf3;font-family:'JetBrains Mono',monospace;font-size:12px">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:{{ hitColor }};white-space:nowrap">{{ hitLabel }}</span>
+    </div>
+    <button sc-camel-on-click="{{ toggleTheme }}" style="font-size:13px;line-height:1;color:#6e7681;border:1px solid #30363d;border-radius:7px;width:28px;height:28px;background:none;cursor:pointer">⋯</button>
+    <button style="font-size:12.5px;font-weight:600;color:#0d1117;background:#58a6ff;border-radius:7px;padding:6px 14px;border:none;font-family:inherit;cursor:pointer">Paylaş</button>
+  </header>
+
+  <div style="display:flex;flex:1;min-height:0">
+
+    <section style="flex:0 0 {{ paneWidth }};min-width:0;display:flex;flex-direction:column;background:#161b22;border-right:1px solid #30363d;min-height:0;overflow:hidden">
+      <sc-if value="{{ paneClosed }}" hint-placeholder-val="{{ false }}">
+        <button sc-camel-on-click="{{ collapsePane }}" style="flex:1;background:none;border:none;color:#6e7681;display:flex;flex-direction:column;align-items:center;gap:9px;padding-top:11px;cursor:pointer;font-family:inherit">
+          <span style="font-size:13px">›</span>
+          <span style="font-size:10.5px;font-weight:700;letter-spacing:.6px;writing-mode:vertical-rl">GİRDİ</span>
+        </button>
+      </sc-if>
+      <sc-if value="{{ paneOpen }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;align-items:center;gap:5px;height:34px;padding:0 8px;border-bottom:1px solid #21262d;flex-shrink:0">
+        <button sc-camel-on-click="{{ collapsePane }}" title="Girdi panelini kapat" style="flex-shrink:0;font-size:14px;line-height:1;color:#6e7681;background:none;border:1px solid #30363d;border-radius:5px;width:20px;height:20px;cursor:pointer">‹</button>
+        <span style="flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#e6edf3;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">orderview-prod.json</span>
+        <div style="flex:1"></div>
+        <button style="flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b949e;border:1px solid #30363d;border-radius:5px;padding:2px 8px;background:none;cursor:pointer">Biçim</button>
+        <button title="Örnek · Küçült · Doğrula · Temizle" style="flex-shrink:0;font-size:13px;line-height:1;color:#8b949e;border:1px solid #30363d;border-radius:5px;width:22px;height:20px;background:none;cursor:pointer">⋯</button>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:7px;height:34px;padding:0 8px;border-bottom:1px solid #21262d;flex-shrink:0">
+        <span style="font-size:11px;color:#6e7681;white-space:nowrap">Girdi tipi</span>
+        <div style="display:flex;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:2px">
+          <button sc-camel-on-click="{{ setJson }}" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{ jsonTabColor }};background:{{ jsonTabBg }};border:none;border-radius:4px;padding:2px 10px;cursor:pointer">JSON</button>
+          <button sc-camel-on-click="{{ setXml }}" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{ xmlTabColor }};background:{{ xmlTabBg }};border:none;border-radius:4px;padding:2px 10px;cursor:pointer">XML</button>
+        </div>
+        <div style="width:1px;height:15px;background:#21262d"></div>
+        <button sc-camel-on-click="{{ setDiff }}" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{ diffBtnColor }};border:1px solid {{ diffBtnBorder }};background:{{ diffBtnBg }};border-radius:5px;padding:2px 9px;cursor:pointer">⇄ Fark</button>
+        <button sc-camel-on-click="{{ setGrid }}" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{ gridBtnColor }};border:1px solid {{ gridBtnBorder }};background:{{ gridBtnBg }};border-radius:5px;padding:2px 9px;cursor:pointer">▦ Grid</button>
+        <div style="flex:1"></div>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6e7681;white-space:nowrap">{{ modeNote }}</span>
+      </div>
+
+      <div style="flex:1;min-height:0;overflow:auto;padding:6px 0;background:#0d1117">
+        <sc-for list="{{ lines }}" as="l" hint-placeholder-count="30">
+          <div style="display:flex;gap:10px;min-height:20px;align-items:center;background:{{ l.bg }};box-shadow:{{ l.mark }};padding-right:14px;min-width:max-content">
+            <span style="width:36px;flex-shrink:0;text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px;color:{{ l.numColor }}">{{ l.n }}</span>
+            <span style="flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:{{ l.color }};white-space:pre">{{ l.text }}</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="height:28px;flex-shrink:0;display:flex;align-items:center;gap:8px;padding:0 10px;border-top:1px solid #21262d">
+        <span style="width:5px;height:5px;border-radius:50%;background:#3fb950"></span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8b949e">Geçerli JSON · 42 ms</span>
+        <div style="flex:1"></div>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#58a6ff">{{ syncNote }}</span>
+      </div>
+      </sc-if>
+    </section>
+
+    <section style="flex:1 1 auto;min-width:620px;display:flex;flex-direction:column;background:#0d1117;min-height:0">
+
+      <div style="display:flex;align-items:center;gap:9px;height:34px;padding:0 12px;background:#161b22;border-bottom:1px solid #30363d;flex-shrink:0;white-space:nowrap">
+        <span style="font-size:10.5px;font-weight:700;letter-spacing:.6px;color:#6e7681">{{ paneTitle }}</span>
+        <div style="width:1px;height:15px;background:#30363d"></div>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#8b949e;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ crumb }}</span>
+        <div style="flex:1"></div>
+        <button sc-camel-on-click="{{ toggleFilters }}" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{ filtBtnColor }};border:1px solid {{ filtBtnBorder }};background:{{ filtBtnBg }};border-radius:5px;padding:2px 9px;cursor:pointer">▽ Kolon filtresi</button>
+        <button sc-camel-on-click="{{ expandAll }}" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b949e;border:1px solid #30363d;border-radius:5px;padding:2px 9px;background:none;cursor:pointer">Tümünü aç</button>
+        <button sc-camel-on-click="{{ collapseAll }}" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b949e;border:1px solid #30363d;border-radius:5px;padding:2px 9px;background:none;cursor:pointer">Kapat</button>
+      </div>
+
+      <sc-if value="{{ isGrid }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;min-height:0;overflow:auto;padding:12px">
+
+          <div style="display:flex;border:1px solid #30363d;border-radius:6px;background:#0d1117">
+            <div style="width:8px;flex-shrink:0;border-right:1px solid #21262d;background:#21262d"></div>
+            <div style="flex:1;min-width:0;padding:8px">
+              <button sc-camel-on-click="{{ toggleRoot }}" style="display:flex;align-items:center;gap:8px;background:none;border:none;cursor:pointer;font-family:inherit;padding:0 0 6px">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b949e;border:1px solid #30363d;border-radius:3px;padding:0 5px">{{ rootSign }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#ff7b72">IATA_OrderViewRS</span>
+                <span style="color:#30363d;font-size:10px">›</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#e6edf3">Response</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6e7681">{ 2 alan }</span>
+              </button>
+
+              <sc-if value="{{ rootOpen }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;flex-direction:column;gap:8px">
+
+                  <div style="display:flex;border:1px solid #30363d;border-radius:6px">
+                    <div style="width:8px;flex-shrink:0;border-right:1px solid #21262d;background:#58a6ff"></div>
+                    <div style="flex:1;min-width:0;padding:7px;overflow:auto">
+                      <button sc-camel-on-click="{{ toggleOrder }}" style="display:flex;align-items:center;gap:8px;background:none;border:none;cursor:pointer;font-family:inherit;padding:0 0 7px">
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b949e;border:1px solid #30363d;border-radius:3px;padding:0 5px">{{ orderSign }}</span>
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#ff7b72">Order</span>
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#e6edf3">[{{ rowCount }}]</span>
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6e7681">{{ orderNote }}</span>
+                      </button>
+
+                      <sc-if value="{{ orderOpen }}" hint-placeholder-val="{{ true }}">
+                        <sc-raw-table style="border-collapse:collapse;border:1px solid #30363d">
+                          <sc-raw-thead>
+                            <sc-raw-tr>
+                              <sc-raw-th style="background:#161b22;border-right:1px solid #21262d;border-bottom:1px solid #30363d;width:22px;height:28px"></sc-raw-th>
+                              <sc-raw-th style="background:#161b22;border-right:1px solid #21262d;border-bottom:1px solid #30363d;width:30px;height:28px;text-align:right;padding:0 7px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:#6e7681">#</sc-raw-th>
+                              <sc-for list="{{ cols }}" as="c" hint-placeholder-count="6">
+                                <sc-raw-th style="background:#161b22;border-right:1px solid #21262d;border-bottom:1px solid #30363d;height:28px;padding:0 8px;text-align:left;white-space:nowrap">
+                                  <span style="display:inline-flex;align-items:center;gap:4px">
+                                    <button sc-camel-on-click="{{ c.onSort }}" title="{{ c.kind }} — sırala" style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:{{ c.color }};background:none;border:none;padding:0;cursor:pointer">{{ c.name }}</button>
+                                    <span style="font-size:8px;color:#58a6ff">{{ c.arrow }}</span>
+                                    <button sc-camel-on-click="{{ toggleFilters }}" title="Kolon filtresi" style="font-size:9px;color:{{ c.funnel }};background:none;border:none;padding:0;cursor:pointer">▽</button>
+                                  </span>
+                                </sc-raw-th>
+                              </sc-for>
+                            </sc-raw-tr>
+                            <sc-if value="{{ filtersOpen }}" hint-placeholder-val="{{ false }}">
+                              <sc-raw-tr>
+                                <sc-raw-th style="background:#0d1117;border-right:1px solid #21262d;border-bottom:1px solid #30363d"></sc-raw-th>
+                                <sc-raw-th style="background:#0d1117;border-right:1px solid #21262d;border-bottom:1px solid #30363d"></sc-raw-th>
+                                <sc-for list="{{ cols }}" as="c" hint-placeholder-count="6">
+                                  <sc-raw-th style="background:#0d1117;border-right:1px solid #21262d;border-bottom:1px solid #30363d;padding:3px 5px">
+                                    <input value="{{ c.filter }}" data-col="{{ c.name }}" sc-camel-on-input="{{ onFilter }}" placeholder="filtre" style="width:100%;min-width:60px;background:#161b22;border:1px solid {{ c.filterBorder }};border-radius:4px;outline:none;color:#e6edf3;font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:2px 6px">
+                                  </sc-raw-th>
+                                </sc-for>
+                              </sc-raw-tr>
+                            </sc-if>
+                          </sc-raw-thead>
+                          <sc-raw-tbody>
+                            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
+                              <sc-raw-tr style="background:{{ r.bg }}">
+                                <sc-raw-td style="border-right:1px solid #21262d;border-bottom:1px solid #21262d;text-align:center;vertical-align:top;padding:5px 0;font-size:11px;color:#6e7681;cursor:grab">⋮</sc-raw-td>
+                                <sc-raw-td sc-camel-on-click="{{ r.onSelect }}" style="border-right:1px solid #21262d;border-bottom:1px solid #21262d;text-align:right;vertical-align:top;padding:5px 7px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#6e7681;cursor:pointer">{{ r.idx }}</sc-raw-td>
+                                <sc-raw-td sc-camel-on-click="{{ r.onSelect }}" style="border-right:1px solid #21262d;border-bottom:1px solid #21262d;vertical-align:top;padding:5px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#a5d6ff;white-space:nowrap;cursor:pointer">{{ r.id }}</sc-raw-td>
+                                <sc-raw-td sc-camel-on-click="{{ r.onSelect }}" style="border-right:1px solid #21262d;border-bottom:1px solid #21262d;vertical-align:top;padding:5px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#a5d6ff;cursor:pointer">{{ r.owner }}</sc-raw-td>
+                                <sc-raw-td sc-camel-on-click="{{ r.onSelect }}" style="border-right:1px solid #21262d;border-bottom:1px solid #21262d;vertical-align:top;padding:5px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:{{ r.statusColor }};white-space:nowrap;cursor:pointer">{{ r.status }}</sc-raw-td>
+
+                                <sc-raw-td style="border-right:1px solid #21262d;border-bottom:1px solid #21262d;vertical-align:top;padding:5px 8px">
+                                  <button sc-camel-on-click="{{ r.onPrice }}" style="display:flex;align-items:center;gap:6px;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;white-space:nowrap">
+                                    <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8b949e;border:1px solid #30363d;border-radius:3px;padding:0 4px">{{ r.priceSign }}</span>
+                                    <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#6e7681">TotalPrice {}</span>
+                                  </button>
+                                  <sc-if value="{{ r.priceOpen }}" hint-placeholder-val="{{ false }}">
+                                    <sc-raw-table style="border-collapse:collapse;border:1px solid #21262d;margin-top:5px">
+                                      <sc-raw-tbody>
+                                        <sc-raw-tr>
+                                          <sc-raw-td style="border-right:1px solid #21262d;border-bottom:1px solid #21262d;padding:2px 7px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b949e;white-space:nowrap">TotalAmount</sc-raw-td>
+                                          <sc-raw-td style="border-bottom:1px solid #21262d;padding:2px 7px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#f78166;text-align:right;white-space:nowrap">{{ r.amountRaw }}</sc-raw-td>
+                                        </sc-raw-tr>
+                                        <sc-raw-tr>
+                                          <sc-raw-td style="border-right:1px solid #21262d;padding:2px 7px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b949e;white-space:nowrap">CurCode</sc-raw-td>
+                                          <sc-raw-td style="padding:2px 7px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#a5d6ff;white-space:nowrap">{{ r.curQuoted }}</sc-raw-td>
+                                        </sc-raw-tr>
+                                      </sc-raw-tbody>
+                                    </sc-raw-table>
+                                  </sc-if>
+                                </sc-raw-td>
+
+                                <sc-raw-td style="border-right:1px solid #21262d;border-bottom:1px solid #21262d;vertical-align:top;padding:5px 8px">
+                                  <button sc-camel-on-click="{{ r.onItems }}" style="display:flex;align-items:center;gap:6px;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;white-space:nowrap">
+                                    <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8b949e;border:1px solid #30363d;border-radius:3px;padding:0 4px">{{ r.itemsSign }}</span>
+                                    <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#6e7681">OrderItem[{{ r.itemCount }}]</span>
+                                  </button>
+                                  <sc-if value="{{ r.itemsOpen }}" hint-placeholder-val="{{ false }}">
+                                    <sc-raw-table style="border-collapse:collapse;border:1px solid #21262d;margin-top:5px">
+                                      <sc-raw-thead>
+                                        <sc-raw-tr>
+                                          <sc-raw-th title="OrderItemID" style="background:#161b22;border-right:1px solid #21262d;border-bottom:1px solid #21262d;padding:1px 6px;text-align:left;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8b949e;white-space:nowrap">ID</sc-raw-th>
+                                          <sc-raw-th title="Amount" style="background:#161b22;border-right:1px solid #21262d;border-bottom:1px solid #21262d;padding:1px 6px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8b949e">Tutar</sc-raw-th>
+                                          <sc-raw-th title="ServiceRefID" style="background:#161b22;border-bottom:1px solid #21262d;padding:1px 6px;text-align:left;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#8b949e;white-space:nowrap">Servis</sc-raw-th>
+                                        </sc-raw-tr>
+                                      </sc-raw-thead>
+                                      <sc-raw-tbody>
+                                        <sc-for list="{{ r.items }}" as="s" hint-placeholder-count="3">
+                                          <sc-raw-tr>
+                                            <sc-raw-td style="border-right:1px solid #21262d;border-bottom:1px solid #21262d;padding:1px 6px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#a5d6ff;white-space:nowrap">{{ s.id }}</sc-raw-td>
+                                            <sc-raw-td style="border-right:1px solid #21262d;border-bottom:1px solid #21262d;padding:1px 6px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px;color:#f78166;white-space:nowrap">{{ s.amount }}</sc-raw-td>
+                                            <sc-raw-td style="border-bottom:1px solid #21262d;padding:1px 6px;font-family:'JetBrains Mono',monospace;font-size:11px;color:{{ s.refColor }};white-space:nowrap">{{ s.ref }}</sc-raw-td>
+                                          </sc-raw-tr>
+                                        </sc-for>
+                                      </sc-raw-tbody>
+                                    </sc-raw-table>
+                                  </sc-if>
+                                </sc-raw-td>
+
+                                <sc-raw-td sc-camel-on-click="{{ r.onSelect }}" style="border-bottom:1px solid #21262d;vertical-align:top;padding:5px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:{{ r.paxColor }};white-space:nowrap;cursor:pointer">{{ r.pax }} <span style="color:#58a6ff;font-size:10px">{{ r.refMark }}</span></sc-raw-td>
+                              </sc-raw-tr>
+                            </sc-for>
+                            <sc-raw-tr>
+                              <sc-raw-td colspan="8" style="padding:4px 8px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6e7681">{{ tableNote }}</sc-raw-td>
+                            </sc-raw-tr>
+                          </sc-raw-tbody>
+                        </sc-raw-table>
+                      </sc-if>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;border:1px solid #30363d;border-radius:6px">
+                    <div style="width:8px;flex-shrink:0;border-right:1px solid #21262d;background:#30363d"></div>
+                    <div style="flex:1;min-width:0;padding:7px">
+                      <button sc-camel-on-click="{{ toggleWarning }}" style="display:flex;align-items:center;gap:8px;background:none;border:none;cursor:pointer;font-family:inherit;padding:0">
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b949e;border:1px solid #30363d;border-radius:3px;padding:0 5px">{{ warnSign }}</span>
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#ff7b72">Warning</span>
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#e6edf3">[1]</span>
+                        <span style="font-size:9px;color:#d29922">●</span>
+                      </button>
+                      <sc-if value="{{ warnOpen }}" hint-placeholder-val="{{ false }}">
+                        <sc-raw-table style="border-collapse:collapse;border:1px solid #21262d;margin-top:7px">
+                          <sc-raw-thead>
+                            <sc-raw-tr>
+                              <sc-raw-th style="background:#161b22;border-right:1px solid #21262d;border-bottom:1px solid #21262d;padding:2px 7px;width:24px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#6e7681">#</sc-raw-th>
+                              <sc-raw-th style="background:#161b22;border-bottom:1px solid #21262d;padding:2px 7px;text-align:left;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:#8b949e">DescText</sc-raw-th>
+                            </sc-raw-tr>
+                          </sc-raw-thead>
+                          <sc-raw-tbody>
+                            <sc-raw-tr>
+                              <sc-raw-td style="border-right:1px solid #21262d;padding:2px 7px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6e7681">0</sc-raw-td>
+                              <sc-raw-td style="padding:2px 7px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#a5d6ff">"Partial availability for segment 2"</sc-raw-td>
+                            </sc-raw-tr>
+                          </sc-raw-tbody>
+                        </sc-raw-table>
+                      </sc-if>
+                    </div>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isDiff }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;flex:1;min-height:0">
+          <div style="display:flex;align-items:center;gap:14px;height:36px;padding:0 12px;border-bottom:1px solid #21262d;flex-shrink:0">
+            <span style="display:flex;align-items:baseline;gap:5px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;color:#3fb950">12</span><span style="font-size:11.5px;color:#6e7681">eklendi</span></span>
+            <span style="display:flex;align-items:baseline;gap:5px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;color:#ff7b72">3</span><span style="font-size:11.5px;color:#6e7681">silindi</span></span>
+            <span style="display:flex;align-items:baseline;gap:5px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;color:#d29922">28</span><span style="font-size:11.5px;color:#6e7681">değişti</span></span>
+            <span style="display:flex;align-items:baseline;gap:5px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;color:#79c0ff">2</span><span style="font-size:11.5px;color:#6e7681">taşındı</span></span>
+            <div style="width:1px;height:16px;background:#21262d"></div>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#8b949e;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">B: orderview-uat.json · diziler kimliğe göre eşleşti (Order → OrderID)</span>
+            <div style="flex:1"></div>
+            <button sc-camel-on-click="{{ toggleOnlyChanges }}" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:{{ onlyBtnColor }};border:1px solid {{ onlyBtnBorder }};background:{{ onlyBtnBg }};border-radius:5px;padding:2px 9px;cursor:pointer">yalnız değişenler</button>
+            <button sc-camel-on-click="{{ setGrid }}" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b949e;border:1px solid #30363d;border-radius:5px;padding:2px 9px;background:none;cursor:pointer">× kapat</button>
+          </div>
+          <div style="flex:1;min-height:0;overflow:auto;padding:6px 0 16px">
+            <sc-for list="{{ diffRows }}" as="d" hint-placeholder-count="14">
+              <div style="display:flex;align-items:center;gap:9px;min-height:28px;padding:2px 12px 2px 0;background:{{ d.bg }}">
+                <span style="width:3px;align-self:stretch;background:{{ d.gutter }};flex-shrink:0"></span>
+                <span style="width:{{ d.indent }};flex-shrink:0"></span>
+                <span style="width:11px;font-size:9px;color:#6e7681;flex-shrink:0">{{ d.caret }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:{{ d.keyColor }};font-weight:500;white-space:nowrap">{{ d.key }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b949e;white-space:nowrap">{{ d.label }}</span>
+                <span style="display:flex;align-items:center;gap:7px;min-width:0">
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:{{ d.oldColor }};background:{{ d.oldBg }};border-radius:3px;padding:0 5px;white-space:nowrap">{{ d.old }}</span>
+                  <span style="font-size:11px;color:#6e7681">{{ d.arrow }}</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:{{ d.newColor }};background:{{ d.newBg }};border-radius:3px;padding:0 5px;white-space:nowrap">{{ d.new }}</span>
+                </span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6e7681;white-space:nowrap">{{ d.note }}</span>
+                <div style="flex:1"></div>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#3fb950">{{ d.cAdded }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#ff7b72">{{ d.cRemoved }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#d29922">{{ d.cChanged }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#79c0ff">{{ d.cMoved }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isXml }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;min-height:0;display:flex">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;border-right:1px solid #21262d">
+            <div style="height:28px;display:flex;align-items:center;padding:0 12px;border-bottom:1px solid #21262d;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6e7681">XML GİRDİ</div>
+            <div style="flex:1;min-height:0;overflow:auto;padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#8b949e;white-space:pre">{{ xmlText }}</div>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+            <div style="height:28px;display:flex;align-items:center;gap:9px;padding:0 12px;border-bottom:1px solid #21262d">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6e7681">ÇEVRİLEN JSON</span>
+              <div style="flex:1"></div>
+              <button sc-camel-on-click="{{ setGrid }}" style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#0d1117;background:#58a6ff;border:none;border-radius:5px;padding:2px 9px;cursor:pointer">Grid'e yükle</button>
+            </div>
+            <div style="flex:1;min-height:0;overflow:auto;padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#a5d6ff;white-space:pre">{{ xmlJson }}</div>
+          </div>
+        </div>
+      </sc-if>
+
+    </section>
+
+    <aside style="flex:0 0 244px;background:#161b22;border-left:1px solid #30363d;display:flex;flex-direction:column;min-height:0">
+      <div style="display:flex;align-items:center;height:34px;flex-shrink:0;border-bottom:1px solid #21262d;padding:0 12px;gap:8px">
+        <span style="font-size:10.5px;font-weight:700;letter-spacing:.6px;color:#6e7681">IATA</span>
+        <div style="flex:1"></div>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#3fb950">%86</span>
+      </div>
+      <div style="padding:13px 14px;border-bottom:1px solid #21262d;flex-shrink:0">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#ff7b72">{{ selName }}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8b949e;border:1px solid #30363d;border-radius:5px;padding:2px 7px">{{ selType }}</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#3fb950;border:1px solid rgba(63,185,80,.35);border-radius:5px;padding:2px 7px">şemada var</span>
+        </div>
+        <p style="margin:10px 0 0;font-size:12.5px;color:#8b949e;line-height:1.55;text-wrap:pretty">{{ selDoc }}</p>
+        <div style="margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6e7681;word-break:break-all">{{ selPath }}</div>
+      </div>
+      <div style="flex:1;min-height:0;overflow:auto;padding:12px 14px">
+        <div style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:#6e7681;margin-bottom:10px">TotalAmount dağılımı</div>
+        <sc-for list="{{ dist }}" as="v" hint-placeholder-count="5">
+          <div style="margin-bottom:8px">
+            <div style="display:flex;align-items:baseline;gap:8px">
+              <span style="flex:1;min-width:0;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#f78166;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ v.text }}</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8b949e">{{ v.cur }}</span>
+            </div>
+            <div style="height:4px;background:#21262d;border-radius:2px;overflow:hidden;margin-top:4px">
+              <div style="height:100%;background:#58a6ff;width:{{ v.width }}"></div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="flex-shrink:0;border-top:1px solid #21262d;padding:9px 14px;font-size:11px;color:#6e7681">
+        <span style="color:#58a6ff">ⓘ</span> var · <span style="color:#79c0ff">≈</span> tahmini · <span style="color:#d29922">●</span> yok
+      </div>
+    </aside>
+  </div>
+
+  <footer style="display:flex;align-items:center;gap:16px;height:26px;padding:0 14px;background:#161b22;border-top:1px solid #30363d;flex-shrink:0">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6e7681">{{ statusLeft }}</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6e7681">{{ statusMid }}</span>
+    <div style="flex:1"></div>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6e7681">satıra tıkla → editör o alana kayar</span>
+  </footer>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{}">
+const ORDERS = [
+  { i: 0, id: 'ORD100001', owner: 'TK', status: 'OPENED', amount: 1250.50, cur: 'EUR', pax: 'PAX1', items: [['OI1', 1100.5, 'SVC2'], ['OI2', 150, null]] },
+  { i: 1, id: 'ORD100002', owner: 'TK', status: 'PENDING', amount: 842.00, cur: 'EUR', pax: 'PAX2', items: [['OI1', 842, 'SVC1']] },
+  { i: 2, id: 'ORD100003', owner: 'LH', status: 'CLOSED', amount: 2310.75, cur: 'USD', pax: 'PAX3', items: [['OI1', 2310.75, 'SVC5']] },
+  { i: 3, id: 'ORD100004', owner: 'TK', status: 'OPENED', amount: 18450.00, cur: 'TRY', pax: 'PAX4', items: [['OI1', 16200, 'SVC7'], ['OI2', 1850, 'SVC3'], ['OI3', 400, null]] },
+  { i: 4, id: 'ORD100005', owner: 'AF', status: 'OPENED', amount: 655.20, cur: 'EUR', pax: 'PAX5', items: [['OI1', 655.2, 'SVC4']] },
+  { i: 5, id: 'ORD100006', owner: 'TK', status: 'PENDING', amount: 1980.00, cur: 'EUR', pax: 'PAX6', items: [['OI1', 1800, 'SVC6'], ['OI2', 180, null]] },
+  { i: 6, id: 'ORD100007', owner: 'QR', status: 'CLOSED', amount: 4120.90, cur: 'USD', pax: 'PAX7', items: [['OI1', 4120.9, 'SVC8']] },
+  { i: 7, id: 'ORD100008', owner: 'TK', status: 'OPENED', amount: 399.99, cur: 'EUR', pax: '', items: [['OI1', 399.99, null]] },
+];
+
+const COLS = [
+  { name: 'OrderID', kind: 'str', w: '98px' },
+  { name: 'OwnerCode', kind: 'str', w: '74px' },
+  { name: 'StatusCode', kind: 'str', w: '88px' },
+  { name: 'TotalPrice', kind: 'obj', w: '118px' },
+  { name: 'OrderItem', kind: 'arr', w: '126px' },
+  { name: 'PaxRefID', kind: 'ref', w: '86px' },
+];
+
+const TONE = { OPENED: '#3fb950', PENDING: '#d29922', CLOSED: '#6e7681' };
+
+/** Editor metnini veriden uretiyoruz: her satir hangi siparise ait, biliniyor. */
+function buildLines() {
+  const out = [];
+  const push = (text, ord) => out.push({ text, ord });
+  push('{', null);
+  push('  "IATA_OrderViewRS": {', null);
+  push('    "Response": {', null);
+  push('      "Order": [', null);
+  ORDERS.forEach((o, n) => {
+    push('        {', o.i);
+    push(`          "OrderID": "${o.id}",`, o.i);
+    push(`          "OwnerCode": "${o.owner}",`, o.i);
+    push(`          "StatusCode": "${o.status}",`, o.i);
+    push('          "TotalPrice": {', o.i);
+    push(`            "TotalAmount": ${o.amount.toFixed(2)},`, o.i);
+    push(`            "CurCode": "${o.cur}"`, o.i);
+    push('          },', o.i);
+    push('          "OrderItem": [', o.i);
+    o.items.forEach((it, k) => {
+      const ref = it[2] === null ? 'null' : `"${it[2]}"`;
+      const tail = k === o.items.length - 1 ? '' : ',';
+      push(`            { "OrderItemID": "${it[0]}", "Amount": ${it[1].toFixed(2)}, "ServiceRefID": ${ref} }${tail}`, o.i);
+    });
+    push('          ],', o.i);
+    push(`          "PaxRefID": ${o.pax ? `"${o.pax}"` : 'null'}`, o.i);
+    push(`        }${n === ORDERS.length - 1 ? '' : ','}`, o.i);
+  });
+  push('      ],', null);
+  push('      "Warning": [', null);
+  push('        { "DescText": "Partial availability for segment 2" }', null);
+  push('      ]', null);
+  push('    }', null);
+  push('  }', null);
+  push('}', null);
+  return out;
+}
+
+const LINES = buildLines();
+
+class Component extends DCLogic {
+  state = {
+    mode: 'grid',
+    rootOpen: true,
+    orderOpen: true,
+    warnOpen: false,
+    price: {},
+    items: { 3: true },
+    sortCol: null,
+    sortDir: 'asc',
+    filters: {},
+    filtersOpen: false,
+    sel: 3,
+    query: '',
+    onlyChanges: true,
+    paneOpen: true,
+  };
+
+  set(patch) { this.setState(patch); }
+
+  toggleIn(bag, key) {
+    const next = { ...this.state[bag] };
+    next[key] = !next[key];
+    this.setState({ [bag]: next });
+  }
+
+  visibleOrders() {
+    const { filters, sortCol, sortDir, query } = this.state;
+    let list = ORDERS.slice();
+    const get = (o, col) => {
+      if (col === 'OrderID') return o.id;
+      if (col === 'OwnerCode') return o.owner;
+      if (col === 'StatusCode') return o.status;
+      if (col === 'TotalPrice') return o.amount;
+      if (col === 'OrderItem') return o.items.length;
+      if (col === 'PaxRefID') return o.pax;
+      return '';
+    };
+    for (const [col, text] of Object.entries(filters)) {
+      const needle = String(text || '').trim().toLowerCase();
+      if (!needle) continue;
+      list = list.filter((o) => String(get(o, col)).toLowerCase().includes(needle));
+    }
+    const q = this.state.query.trim().toLowerCase();
+    if (q) {
+      list = list.filter((o) => [o.id, o.owner, o.status, o.cur, o.pax, String(o.amount)]
+        .some((v) => String(v).toLowerCase().includes(q)));
+    }
+    if (sortCol) {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      list.sort((a, b) => {
+        const x = get(a, sortCol); const y = get(b, sortCol);
+        if (typeof x === 'number' && typeof y === 'number') return (x - y) * dir;
+        return String(x).localeCompare(String(y), 'tr') * dir;
+      });
+    }
+    return list;
+  }
+
+  renderVals() {
+    const s = this.state;
+    const money = (n) => n.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const list = this.visibleOrders();
+    const selOrder = ORDERS.find((o) => o.i === s.sel) ?? null;
+
+    const rows = list.map((o) => ({
+      idx: o.i,
+      id: o.id,
+      owner: o.owner,
+      status: o.status,
+      statusColor: TONE[o.status],
+      amountRaw: o.amount.toFixed(2),
+      curQuoted: `"${o.cur}"`,
+      itemCount: o.items.length,
+      pax: o.pax || 'null',
+      paxColor: o.pax ? '#a5d6ff' : '#6e7681',
+      refMark: o.pax ? '↳' : '',
+      priceOpen: s.price[o.i] === true,
+      priceSign: s.price[o.i] ? '[-]' : '[+]',
+      itemsOpen: s.items[o.i] === true,
+      itemsSign: s.items[o.i] ? '[-]' : '[+]',
+      items: o.items.map((it, k) => ({
+        i: k,
+        id: `"${it[0]}"`,
+        amount: it[1].toFixed(2),
+        ref: it[2] === null ? 'null' : `"${it[2]}"`,
+        refColor: it[2] === null ? '#6e7681' : '#a5d6ff',
+      })),
+      bg: o.i === s.sel ? 'rgba(88,166,255,.10)' : 'transparent',
+      onSelect: () => this.set({ sel: o.i }),
+      onPrice: () => this.toggleIn('price', o.i),
+      onItems: () => this.toggleIn('items', o.i),
+    }));
+
+    const cols = COLS.map((c) => ({
+      ...c,
+      color: s.sortCol === c.name ? '#58a6ff' : '#8b949e',
+      arrow: s.sortCol === c.name ? (s.sortDir === 'asc' ? '▲' : '▼') : '',
+      funnel: (s.filters[c.name] || '').trim() ? '#58a6ff' : '#6e7681',
+      filter: s.filters[c.name] ?? '',
+      filterBorder: (s.filters[c.name] || '').trim() ? '#58a6ff' : '#30363d',
+      onSort: () => {
+        if (s.sortCol !== c.name) this.set({ sortCol: c.name, sortDir: 'asc' });
+        else if (s.sortDir === 'asc') this.set({ sortDir: 'desc' });
+        else this.set({ sortCol: null, sortDir: 'asc' });
+      },
+    }));
+
+    const q = s.query.trim().toLowerCase();
+    const lines = LINES.map((l, k) => {
+      const on = selOrder !== null && l.ord === selOrder.i;
+      const hit = q.length > 0 && l.text.toLowerCase().includes(q);
+      return {
+        n: k + 1,
+        text: l.text,
+        bg: on ? 'rgba(88,166,255,.10)' : hit ? 'rgba(255,220,0,.10)' : 'transparent',
+        mark: on ? 'inset 2px 0 0 #58a6ff' : 'none',
+        numColor: on ? '#58a6ff' : '#30363d',
+        color: on ? '#e6edf3' : '#8b949e',
+      };
+    });
+
+    const selLines = lines.filter((l) => l.mark !== 'none');
+    const activeFilters = Object.values(s.filters).filter((v) => String(v || '').trim()).length;
+
+    const G = { added: '#3fb950', removed: '#ff7b72', changed: '#d29922', moved: '#79c0ff', same: '#21262d' };
+    const blank = { old: '', new: '', arrow: '', oldColor: '#8b949e', newColor: '#8b949e', oldBg: 'transparent', newBg: 'transparent', cAdded: '', cRemoved: '', cChanged: '', cMoved: '' };
+    const d = (o) => ({ caret: '', label: '', note: '', keyColor: '#ff7b72', bg: 'transparent', ...blank, ...o, indent: `${(o.depth || 0) * 18}px` });
+    let diffRows = [
+      d({ depth: 0, caret: '▾', key: 'Response', gutter: G.changed, cAdded: '+12', cRemoved: '−3', cChanged: '~28', cMoved: '⇄2' }),
+      d({ depth: 1, caret: '▾', key: 'Order', label: '8 → 9 kayıt', gutter: G.changed, cAdded: '+1', cChanged: '~2', cMoved: '⇄1' }),
+      d({ depth: 2, caret: '▾', key: '2', label: 'ORD100003', gutter: G.changed, cChanged: '~2', bg: 'rgba(210,153,34,.06)' }),
+      d({ depth: 3, key: 'StatusCode', gutter: G.changed, old: '"OPENED"', new: '"CLOSED"', arrow: '→', oldColor: '#ff7b72', oldBg: 'rgba(255,123,114,.12)', newColor: '#3fb950', newBg: 'rgba(63,185,80,.14)' }),
+      d({ depth: 3, key: 'TotalPrice.TotalAmount', gutter: G.changed, old: '2310.75', new: '2450.00', arrow: '→', oldColor: '#ff7b72', oldBg: 'rgba(255,123,114,.12)', newColor: '#3fb950', newBg: 'rgba(63,185,80,.14)', note: '+139,25 (%6,0)' }),
+      d({ depth: 2, caret: '▸', key: '8', label: 'ORD100009', gutter: G.added, new: 'yeni kayıt · 7 alan', newColor: '#3fb950', newBg: 'rgba(63,185,80,.14)' }),
+      d({ depth: 2, caret: '▸', key: '5', label: 'ORD100006', gutter: G.moved, note: 'sıra 5 → 2 · içerik aynı' }),
+      d({ depth: 2, key: '6 değişmeyen kayıt', gutter: G.same, keyColor: '#6e7681', note: 'göstermek için tıkla', unchanged: true }),
+      d({ depth: 1, caret: '▾', key: 'DataLists', gutter: G.changed, cChanged: '~1' }),
+      d({ depth: 2, caret: '▾', key: 'PaxList', label: '6 kayıt', gutter: G.changed, cChanged: '~1' }),
+      d({ depth: 3, key: 'Surname', label: 'PaxList[2] · PAX3', gutter: G.changed, old: '"Koc"', new: '"Koç"', arrow: '→', oldColor: '#ff7b72', oldBg: 'rgba(255,123,114,.12)', newColor: '#3fb950', newBg: 'rgba(63,185,80,.14)', note: 'yalnızca 1 karakter' }),
+      d({ depth: 2, key: '3 değişmeyen liste', gutter: G.same, keyColor: '#6e7681', note: 'göstermek için tıkla', unchanged: true }),
+      d({ depth: 1, caret: '▸', key: 'Warning', label: '1 öğe', gutter: G.removed, old: 'silindi · "Partial availability…"', oldColor: '#ff7b72', oldBg: 'rgba(255,123,114,.12)' }),
+      d({ depth: 1, caret: '▾', key: 'PaymentInfo', gutter: G.added, cAdded: '+2' }),
+      d({ depth: 2, key: 'Method', gutter: G.added, new: '"CreditCard"', newColor: '#3fb950', newBg: 'rgba(63,185,80,.14)' }),
+      d({ depth: 2, key: 'TotalAmount', gutter: G.added, new: '32459.34', newColor: '#3fb950', newBg: 'rgba(63,185,80,.14)' }),
+    ];
+    if (!s.onlyChanges) {
+      diffRows = diffRows.map((r) => (r.unchanged ? { ...r, keyColor: '#8b949e', note: 'açık' } : r));
+    } else {
+      diffRows = diffRows.filter((r) => r.gutter !== G.same || r.unchanged);
+    }
+
+    const maxAmount = Math.max(...ORDERS.map((o) => o.amount));
+
+    const on = (cond, a, b) => (cond ? a : b);
+
+    return {
+      // kabuk
+      nodeLabel: `${LINES.length} satır · 8 kayıt`,
+      paneWidth: s.paneOpen ? '360px' : '28px',
+      paneOpen: s.paneOpen,
+      paneClosed: !s.paneOpen,
+      collapsePane: () => this.set({ paneOpen: !s.paneOpen }),
+      query: s.query,
+      onQuery: (e) => this.set({ query: e.target.value }),
+      searchBorder: s.query.trim() ? '#58a6ff' : '#30363d',
+      hitLabel: s.query.trim() ? `${list.length}/8` : '⌘K',
+      hitColor: s.query.trim() ? (list.length ? '#3fb950' : '#ff7b72') : '#6e7681',
+      toggleTheme: () => {},
+
+      // girdi paneli: mod dugmeleri burada
+      isGrid: s.mode === 'grid',
+      isDiff: s.mode === 'diff',
+      isXml: s.mode === 'xml',
+      setGrid: () => this.set({ mode: 'grid' }),
+      setDiff: () => this.set({ mode: 'diff' }),
+      setXml: () => this.set({ mode: 'xml' }),
+      setJson: () => this.set({ mode: 'grid' }),
+      jsonTabColor: on(s.mode !== 'xml', '#e6edf3', '#6e7681'),
+      jsonTabBg: on(s.mode !== 'xml', '#21262d', 'transparent'),
+      xmlTabColor: on(s.mode === 'xml', '#e6edf3', '#6e7681'),
+      xmlTabBg: on(s.mode === 'xml', '#21262d', 'transparent'),
+      diffBtnColor: on(s.mode === 'diff', '#58a6ff', '#8b949e'),
+      diffBtnBorder: on(s.mode === 'diff', '#58a6ff', '#30363d'),
+      diffBtnBg: on(s.mode === 'diff', 'rgba(88,166,255,.15)', 'transparent'),
+      gridBtnColor: on(s.mode === 'grid', '#58a6ff', '#8b949e'),
+      gridBtnBorder: on(s.mode === 'grid', '#58a6ff', '#30363d'),
+      gridBtnBg: on(s.mode === 'grid', 'rgba(88,166,255,.15)', 'transparent'),
+      modeNote: s.mode === 'grid' ? 'grid açık' : s.mode === 'diff' ? 'fark açık' : 'XML → JSON',
+
+      // editor
+      lines,
+      syncNote: selOrder ? `satır ${selLines[0]?.n ?? '—'}–${selLines[selLines.length - 1]?.n ?? '—'} seçili` : 'seçim yok',
+
+      // grid
+      paneTitle: s.mode === 'grid' ? 'GRID' : s.mode === 'diff' ? 'FARK' : 'XML',
+      crumb: selOrder ? `IATA_OrderViewRS.Response.Order[${selOrder.i}]` : 'IATA_OrderViewRS.Response',
+      rootOpen: s.rootOpen,
+      rootSign: s.rootOpen ? '[-]' : '[+]',
+      toggleRoot: () => this.set({ rootOpen: !s.rootOpen }),
+      orderOpen: s.orderOpen,
+      orderSign: s.orderOpen ? '[-]' : '[+]',
+      toggleOrder: () => this.set({ orderOpen: !s.orderOpen }),
+      warnOpen: s.warnOpen,
+      warnSign: s.warnOpen ? '[-]' : '[+]',
+      toggleWarning: () => this.set({ warnOpen: !s.warnOpen }),
+      orderNote: s.sortCol ? `${s.sortCol} ${s.sortDir === 'asc' ? '↑' : '↓'}` : 'JSON sırası',
+      rowCount: list.length,
+      cols,
+      rows,
+      filtersOpen: s.filtersOpen,
+      toggleFilters: () => this.set({ filtersOpen: !s.filtersOpen }),
+      onFilter: (e) => {
+        const col = e.target.dataset.col;
+        this.setState({ filters: { ...this.state.filters, [col]: e.target.value } });
+      },
+      expandAll: () => this.setState({
+        rootOpen: true, orderOpen: true, warnOpen: true,
+        price: Object.fromEntries(ORDERS.map((o) => [o.i, true])),
+        items: Object.fromEntries(ORDERS.map((o) => [o.i, true])),
+      }),
+      collapseAll: () => this.setState({ rootOpen: false, orderOpen: false, warnOpen: false, price: {}, items: {} }),
+      tableNote: `${list.length} / 8 kayıt${activeFilters ? ` · ${activeFilters} kolon filtresi` : ''} · Σ ${money(list.reduce((a, o) => a + o.amount, 0))}`,
+
+      // fark
+      diffRows,
+      onlyBtnColor: on(s.onlyChanges, '#58a6ff', '#8b949e'),
+      onlyBtnBorder: on(s.onlyChanges, '#58a6ff', '#30363d'),
+      onlyBtnBg: on(s.onlyChanges, 'rgba(88,166,255,.15)', 'transparent'),
+      toggleOnlyChanges: () => this.set({ onlyChanges: !s.onlyChanges }),
+
+      // xml
+      xmlText: '<IATA_OrderViewRS>\n  <Response>\n    <Order>\n      <OrderID>ORD100001</OrderID>\n      <OwnerCode>TK</OwnerCode>\n      <TotalPrice>\n        <TotalAmount>1250.50</TotalAmount>\n        <CurCode>EUR</CurCode>\n      </TotalPrice>\n    </Order>\n  </Response>\n</IATA_OrderViewRS>',
+      xmlJson: '{\n  "IATA_OrderViewRS": {\n    "Response": {\n      "Order": {\n        "OrderID": "ORD100001",\n        "OwnerCode": "TK",\n        "TotalPrice": {\n          "TotalAmount": "1250.50",\n          "CurCode": "EUR"\n        }\n      }\n    }\n  }\n}',
+
+      // sag panel
+      selName: selOrder ? 'TotalAmount' : 'Response',
+      selType: selOrder ? 'CurrencyAmountOptional_Type' : 'ResponseType',
+      selDoc: selOrder
+        ? 'Siparişin ödenecek son bedeli. Vergi, ücret ve indirimler dahildir; para birimi kardeş CurCode alanından okunur.'
+        : 'Yanıt gövdesi: sipariş listesi, veri listeleri ve uyarılar.',
+      selPath: selOrder ? `Response.Order[${selOrder.i}].TotalPrice.TotalAmount` : 'Response',
+      dist: ORDERS.slice().sort((a, b) => b.amount - a.amount).map((o) => ({
+        text: money(o.amount), cur: o.cur, width: `${Math.max(4, (o.amount / maxAmount) * 100)}%`,
+      })),
+
+      statusLeft: `${LINES.length} satır kaynak · 8 kayıt · ${list.length} görünür`,
+      statusMid: selOrder ? `seçili ${selOrder.id}` : 'seçim yok',
+    };
+  }
+}
+
+</script>
+
+
+<div id="__claude_design_branding"><style>#__claude_design_branding{position:fixed;right:16px;bottom:16px;z-index:2147483646;display:flex;align-items:center;gap:7px;height:30px;padding:0 5px 0 10px;border-radius:999px;font-family:"Anthropic Sans",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;font-size:12.5px;font-weight:400;line-height:1;letter-spacing:normal;text-transform:none;color:#141413;background:rgba(255,255,255,.86);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);box-shadow:0 0 0 .5px rgba(31,30,29,.14),0 2px 10px rgba(0,0,0,.09)}
+#__claude_design_branding *{box-sizing:border-box;margin:0}
+#__claude_design_branding a{color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+#__claude_design_branding a:hover span{text-decoration:underline}
+#__claude_design_branding svg{flex:none}
+#__claude_design_branding a svg{color:#D97757}
+#__claude_design_branding button{width:20px;height:20px;padding:0;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:currentColor;opacity:.55;border:0;background:none;cursor:pointer;flex:none;font:inherit;transition:opacity .14s}
+#__claude_design_branding button:hover{opacity:1;background:rgba(127,127,127,.22)}
+@media print{#__claude_design_branding{display:none}}</style><a href="https://claude.com/product/design" target="_blank" rel="noopener noreferrer"><svg width="14" height="14" viewBox="0 0 20 21" fill="none" aria-hidden="true"><path fill="currentColor" d="M9.99902 0C15.5258 0.000170936 19.999 4.50643 19.999 10.0547C19.999 11.7656 19.5863 12.9976 18.7861 13.8203C17.9924 14.6362 16.9465 14.9138 15.9854 15.0078C15.05 15.0993 14.0097 15.0262 13.2549 15.0186C12.8524 15.0145 12.5177 15.0267 12.2441 15.0703C11.9682 15.1144 11.8143 15.1813 11.7305 15.2432C11.4745 15.4322 11.3353 15.7121 11.2656 16.1602C11.2303 16.3875 11.2168 16.6362 11.209 16.9131C11.2017 17.1715 11.1986 17.4893 11.1807 17.7705C11.1469 18.2975 11.0495 19.0865 10.4199 19.5908C9.7846 20.0996 8.88652 20.1057 7.85449 19.877C7.36399 19.7682 6.88652 19.6232 6.42578 19.4453C2.66989 17.9949 0.000187748 14.3414 0 10.0547C0 4.50643 4.47223 0.000171048 9.99902 0ZM9.99902 1.60547C5.36781 1.60564 1.60547 5.38391 1.60547 10.0547C1.60566 13.6582 3.84823 16.7296 7.00391 17.9482C7.39027 18.0974 7.79085 18.2184 8.20215 18.3096C9.1375 18.5169 9.384 18.3633 9.41602 18.3379C9.4524 18.3087 9.54558 18.1915 9.5791 17.668C9.5947 17.4239 9.59473 17.1786 9.60352 16.8672C9.61179 16.5742 9.62831 16.2435 9.67969 15.9131C9.78359 15.2455 10.0474 14.4906 10.7764 13.9521C11.1479 13.6778 11.5842 13.5493 11.9912 13.4844C12.4007 13.4191 12.8434 13.4088 13.2705 13.4131C14.1753 13.4222 15.0071 13.4905 15.8291 13.4102C16.6257 13.3322 17.2249 13.1235 17.6357 12.7012C18.0401 12.2855 18.3935 11.5261 18.3936 10.0547C18.3936 5.38391 14.6302 1.60564 9.99902 1.60547ZM5.11621 9.86719C5.86386 9.91468 6.45486 10.5348 6.45508 11.2939C6.45506 12.0838 5.81519 12.7245 5.02539 12.7246C4.28481 12.7246 3.67573 12.1617 3.60254 11.4404L3.59473 11.2939L3.60156 11.1533C3.66942 10.4596 4.23282 9.91186 4.93359 9.86719H5.11621ZM14.9814 7.19141C15.729 7.23889 16.3199 7.85919 16.3203 8.61816C16.3203 9.40801 15.6804 10.0487 14.8906 10.0488C14.1501 10.0487 13.5409 9.48586 13.4678 8.76465L13.46 8.61816L13.4668 8.47754C13.5348 7.78403 14.0983 7.23618 14.7988 7.19141H14.9814ZM6.4541 4.93457C7.20161 4.9822 7.79275 5.60231 7.79297 6.36133C7.79288 7.151 7.15291 7.7917 6.36328 7.79199C5.62274 7.79199 5.01369 7.22903 4.94043 6.50781L4.93262 6.36133L4.93945 6.2207C5.00731 5.52698 5.5707 4.97922 6.27148 4.93457H6.4541ZM11.3867 3.59668C12.1343 3.64419 12.7253 4.26436 12.7256 5.02344C12.7256 5.81326 12.0857 6.45393 11.2959 6.4541C10.5553 6.4541 9.94622 5.89123 9.87305 5.16992L9.86523 5.02344L9.87207 4.88281C9.93996 4.18912 10.5033 3.64133 11.2041 3.59668H11.3867Z"></path></svg><span>Made with Claude Design</span></a><button type="button" aria-label="Dismiss" onclick="this.parentElement.remove()"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg></button></div></body></html>
