@@ -69,9 +69,7 @@ const version = ref(0)
 function touch() { version.value++ }
 
 function reset() {
-  // Kok kartin kendisi de acilabilir bir dugum (tasarimdaki `[−]` basligi);
-  // acilista acik geliyor.
-  expanded.value = new Set([props.rootKey, ...autoOpenPaths(props.data, props.rootKey)])
+  expanded.value = autoOpenPaths(props.data, props.rootKey)
   windows.value = new Map()
   hidden.value = new Map()
   detailPath.value = null
@@ -234,7 +232,6 @@ provide(GRID, context)
 
 function expandAll() {
   const all = autoOpenPaths(props.data, props.rootKey, { maxDepth: 99, budget: EXPAND_BUDGET })
-  all.add(props.rootKey)
   // Elle acilmis sayilir: aramanin bitmesi "tümünü aç"i geri almamali.
   userOpened.value = new Set(all)
   expanded.value = all
@@ -245,8 +242,7 @@ function expandAll() {
 }
 
 function collapseAll() {
-  // Kok kart acik kalir: kapanınca ekranda tek bir baslik satiri kalirdi.
-  expanded.value = new Set([props.rootKey])
+  expanded.value = new Set()
   windows.value = new Map()
   detailPath.value = null
   refPath.value = null
@@ -516,7 +512,7 @@ defineExpose({ moveSelection, expandAll, collapseAll })
       <p v-if="rootShape === 'scalar'" class="note">
         Bu JSON bir nesne veya dizi değil: <code>{{ String(data) }}</code>
       </p>
-      <GridTable v-else :value="data" :path="rootKey" :depth="0" framed />
+      <GridTable v-else :value="data" :path="rootKey" :depth="0" />
     </div>
   </div>
 </template>

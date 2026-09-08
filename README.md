@@ -96,21 +96,18 @@ yeni bir tema eklemek `:root[data-theme='...']` bloğu yazmaktan ibarettir.
 ## Özellikler
 
 - **Tree**: JSON sözdizimi görünümü, yerinde aç/kapa, alan başına XSD tooltip'i
-- **Grid**: **omurgalı çerçeve kartları + iç içe tablolar**
-  ([JSON Eyes v3 tasarımı](design_handoff_json_eyes/JSON%20Eyes%20v3.dc.html)).
-  Her kapsayıcı, solunda seviye rengini taşıyan 8px omurgası olan bir kart;
-  başlığı `[±]` işaret kutusu + adın zinciri + özet:
-  `[−] IATA_OrderViewRS › Response { 5 alan }`. Tek alanlı sarmalayıcı zincirler
-  tek başlıkta birleşir — NDC yanıtları beş seviye sarmalayıcıyla gelir, her biri
-  ayrı kart olsa ekranın yarısı çerçeve olurdu.
-  Veri ise tablo, biçimi düğümün şeklinden gelir: nesnenin **skaler** alanları
-  `anahtar | değer` tablosunda, **kapsayıcı** alanları kendi kartlarında;
+- **Grid**: **jsongrid düzeni** — anahtar solda kendi sütununda, değeri
+  sağındaki hücrede; değer bir kapsayıcıysa hücre önce `[±] Ad{}` başlığını,
+  açıkken de o düğümün tablosunu **kendi içinde** taşır. Her seviye kendi
+  çerçevesini çizer, iç içe geçen tablolar merdiven gibi dizilir ve her hücrenin
+  hangi anahtara ait olduğu her zaman solunda yazar.
+  Tablo biçimi düğümün şeklinden gelir: nesne → `anahtar | değer`;
   **nesne dizisi → kayıt tablosu** (tutamak + `#` + kolonlar, kolonlar öğelerin
   anahtarlarının birleşimi); diğer diziler → `# | değer`.
-  Kayıt tablosunda iç içe bir değer `[+] TotalPrice {}` ile **hücrenin içinde**
-  açılır — kolon hizası bozulmaz, bakılan tablo kaybolmaz. (Eskiden grid
-  girintili düz bir satır listesiydi ve nesne dizileri o modele sığmadığı için
-  "Tablo" ayrı bir görünüm olmak zorunda kalmıştı; artık öyle bir mod yok.)
+  Kolon hizası bozulmaz, bakılan tablo kaybolmaz — hiçbir tıklama görünümü
+  değiştirmez. (Eskiden grid girintili düz bir satır listesiydi ve nesne dizileri
+  o modele sığmadığı için "Tablo" ayrı bir görünüm olmak zorunda kalmıştı;
+  artık öyle bir mod yok.)
   - Kayıt tablosunda: başlığa tıklayarak sıralama (artan ⇄ azalan ⇄ JSON sırası),
     kolon başına `contains` filtresi (AND ile birleşir), CSV indirme, satır sayısı /
     kolon sayısı / seçili sıralama / sayısal kolon toplamı şeridi. Kolon başlığı
@@ -136,8 +133,9 @@ yeni bir tema eklemek `:root[data-theme='...']` bloğu yazmaktan ibarettir.
     ve en sık beş değerin dağılımı. `⚙ kolonlar` ile kolon seçici, "yarısından azında
     dolu olanları gizle" kısayolu.
   - **Hücre menüsü** (`⋯`): değeri, satırı JSON olarak ya da yolu kopyalar.
-  - **Satır tutamağı** (`⋮`): satırın tamamını kart olarak açar, satırı JSON
-    olarak ya da yolunu kopyalar, yorumları getirir.
+  - **Tablo menüsü** (köşedeki `…`): filtre satırı, kolon seçici, CSV.
+  - **Satır tutamağı** (`⋮`): satırın tamamını açar, satırı JSON olarak ya da
+    yolunu kopyalar, yorumları getirir.
   - **Alt bilgi satırı**: `1.200 / 1.200 kayıt · 2 kolon filtresi · Σ TotalAmount = …`
     — sayım ve toplam tablonun altında, tasarımdaki yerinde.
   - **Sık/rahat yerleşim** düğmesi: aynı ekranda görünen satır sayısını artırır.
