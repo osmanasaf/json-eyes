@@ -1,3 +1,5 @@
+import type { ViewMode } from '../types'
+
 /**
  * Tarayici depolamasi. Urun "JSON Sarp" adiyla yayina girdigi icin eski anahtarlar
  * hala kullanicilarin tarayicisinda duruyor; yeni anahtar bossa oradan tasiniyor
@@ -81,6 +83,23 @@ export function readTheme(): Theme {
 
 export function writeTheme(theme: Theme) {
   writeStored(THEME_KEY, theme)
+}
+
+const VIEW_KEY = 'view'
+
+/**
+ * Kayitli gorunum. Varsayilan **Kolon**: bir paylasim linkini acan kisi once
+ * belgenin seviyelerini gormeli, kolon kolon inebilmeli — grid'in genis
+ * tablolari ilk karsilasmada agir geliyor. Kullanicinin son secimi
+ * hatirlaniyor; kendi tercihini her acilista yeniden yapmasi gerekmiyor.
+ */
+export function readViewMode(): ViewMode {
+  const stored = readStored(VIEW_KEY)
+  return stored === 'tree' || stored === 'grid' || stored === 'columns' ? stored : 'columns'
+}
+
+export function writeViewMode(mode: ViewMode) {
+  writeStored(VIEW_KEY, mode)
 }
 
 export function formatSize(chars: number): string {

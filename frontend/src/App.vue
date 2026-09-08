@@ -10,7 +10,10 @@ import { buildRefIndex, EMPTY_REF_INDEX } from './utils/references'
 import { tryRepair } from './utils/repair'
 import { collectFieldValues } from './utils/related'
 import { buildTextIndex, lineOfOffset, EMPTY_TEXT_INDEX, type JsonTextIndex } from './utils/textIndex'
-import { pushRecent, readRecents, readTheme, writeTheme, type RecentFile, type Theme } from './utils/storage'
+import {
+  pushRecent, readRecents, readTheme, readViewMode, writeTheme, writeViewMode,
+  type RecentFile, type Theme,
+} from './utils/storage'
 import JsonTree from './components/JsonTree.vue'
 import JsonGrid from './components/JsonGrid.vue'
 import ColumnView from './components/ColumnView.vue'
@@ -46,7 +49,11 @@ const ROOT_KEY = 'json'
 // Uygulama bos durumla acilir (tasarimin 1. ekrani); ornek oradan yuklenir.
 const rawInput = ref('')
 const fileName = ref<string | null>(null)
-const viewMode = ref<ViewMode>('grid')
+/**
+ * Acilis gorunumu **Kolon**: paylasim linkini acan kisi once belgenin
+ * seviyelerini gorur ve kolon kolon iner. Secim tarayicida saklaniyor.
+ */
+const viewMode = ref<ViewMode>(readViewMode())
 /**
  * Karsilastirma acik mi. Fark artik bir "mod" degil: ikinci bir girdi
  * verildiginde goruntuleyici karsilastirmayi gosteriyor, kapatinca secili
@@ -730,6 +737,16 @@ function onKeydown(event: KeyboardEvent) {
 
 const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'girdi.json' : ''))
 
+watch(viewMode, writeViewMode)
+
+/**
+ * Grid ilk kez secildiginde kurulur, sonra mount'ta kalir (`v-show`): acilmis
+ * dallar ve pencereleme korunsun. Acilis gorunumu Kolon oldugu icin, hic
+ * girilmeyen bir grid'in DOM'unu kurmanin da anlami yok.
+ */
+const gridUsed = ref(viewMode.value === 'grid')
+watch(viewMode, (mode) => { if (mode === 'grid') gridUsed.value = true })
+
 /** Baglam seridi ve yan panel yalnizca belgeyi gosteren gorunumlerde anlamli. */
 const docView = computed(() => !comparing.value)
 </script>
@@ -983,6 +1000,7 @@ const docView = computed(() => !comparing.value)
           </div>
 
           <JsonGrid
+            v-if="gridUsed"
             v-show="!comparing && viewMode === 'grid'"
             ref="gridRef"
             :data="parsed!"

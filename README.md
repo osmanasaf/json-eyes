@@ -65,7 +65,10 @@ durum çubuğu. Boş durumda girdi paneli, bağlam şeridi ve IATA paneli gizlen
 yalnızca bırakma alanı ve "Son açılanlar" görünür.
 
 **Görünüm anahtarı yalnızca görünüm taşır: Tree · Grid · Kolon.** Aynı belgeye nasıl
-bakıldığını seçer. Belgenin *nereden geldiği* girdi panelinin işi:
+bakıldığını seçer; **açılış görünümü Kolon** (paylaşım linkini açan kişi önce
+belgenin seviyelerini görür, kolon kolon iner) ve kullanıcının son seçimi
+tarayıcıda saklanır. Grid ilk kez seçildiğinde kurulur — 4,4 MB'lık bir belgede
+açılış 6,5 s'den 2,5 s'ye indi. Belgenin *nereden geldiği* girdi panelinin işi:
 
 | | nerede | ne |
 |---|---|---|
