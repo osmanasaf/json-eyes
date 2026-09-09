@@ -11,7 +11,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   autoOpenPaths, cellText, columnStats, filterOpenable, gridShape, highlightParts, isLongValue,
-  isRecordArray, previewFields, recordColumns, sortRecords, summaryOf, toCsv, valueAtPath,
+  isRecordArray, previewFields, recordColumns, sortRecords, statusTone, summaryOf, toCsv,
+  valueAtPath,
 } from './.grid.bundle.mjs'
 
 const order = (id, status, amount) => ({
@@ -231,4 +232,16 @@ test('kolon istatistigi ic ice degerleri ozetle sayar', () => {
   const stats = columnStats(items, 'P')
   // "1 alan" iki kez, "2 öğe" bir kez: yapisal dagilim gorunur.
   assert.deepEqual(stats.top, [{ value: '1 alan', count: 2 }, { value: '2 öğe', count: 1 }])
+})
+
+test('hucre tonu: durum sozlugu yalnizca durum kolonlarinda calisir', () => {
+  assert.equal(statusTone('StatusCode', 'OPENED'), 'ok')
+  assert.equal(statusTone('StatusCode', 'PENDING'), 'warn')
+  assert.equal(statusTone('OrderState', 'CLOSED'), 'off')
+  assert.equal(statusTone('StatusCode', 'IN_PROGRESS'), 'warn')
+  // Bilinmeyen durum degeri boyanmaz; uydurma bir anlam yuklemek yaniltir.
+  assert.equal(statusTone('StatusCode', 'REPRICED'), null)
+  // Durum kolonu olmayan bir alandaki "OPEN" metni durum degildir.
+  assert.equal(statusTone('DescText', 'OPEN'), null)
+  assert.equal(statusTone('StatusCode', 42), null)
 })

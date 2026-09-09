@@ -64,11 +64,10 @@ solda 292px girdi paneli, ortada görüntüleyici, sağda 240px IATA paneli, alt
 durum çubuğu. Boş durumda girdi paneli, bağlam şeridi ve IATA paneli gizlenir;
 yalnızca bırakma alanı ve "Son açılanlar" görünür.
 
-**Görünüm anahtarı yalnızca görünüm taşır: Tree · Grid · Kolon.** Aynı belgeye nasıl
-bakıldığını seçer; **açılış görünümü Kolon** (paylaşım linkini açan kişi önce
-belgenin seviyelerini görür, kolon kolon iner) ve kullanıcının son seçimi
-tarayıcıda saklanır. Grid ilk kez seçildiğinde kurulur — 4,4 MB'lık bir belgede
-açılış 6,5 s'den 2,5 s'ye indi. Belgenin *nereden geldiği* girdi panelinin işi:
+**Görünüm anahtarı yalnızca görünüm taşır: Tree · Grid.** Aynı belgeye nasıl
+bakıldığını seçer; **açılış görünümü Grid** (ürünün ana ekranı: belgeyi
+Alan · Tip · Değer olarak tarayıp alan bulmak) ve kullanıcının son seçimi tarayıcıda
+saklanır. Belgenin *nereden geldiği* girdi panelinin işi:
 
 | | nerede | ne |
 |---|---|---|
@@ -78,12 +77,12 @@ açılış 6,5 s'den 2,5 s'ye indi. Belgenin *nereden geldiği* girdi panelinin 
 Eskiden ikisi de görünüm anahtarındaydı (`Tree · Grid · Kolon · Tablo · Fark · XML`);
 anahtar altı düğmeye çıkınca "bakış açısı" ile "girdi" aynı yere karışmış oldu.
 
+Bağlam şeridinin sağ ucunda iki denetim daha var: **satır yoğunluğu** (`sık · orta ·
+seyrek` — dikey padding 4 / 6 / 9 px) ve **İç içe / Tablo** segmenti; ikincisi nesne
+dizilerinin grid içinde tabloya dönüp dönmeyeceğini seçer.
+
 **Klavye**: `Ctrl+K` / `Ctrl+F` görünüm filtresine odaklanır, `Enter` / `Shift+Enter`
 eşleşmeler arasında gezer, `J` / `K` satır seçimini kaydırır, `Esc` aramayı temizler.
-Grid'e tıklandığında klavye tabloyu sürer: `↑ ↓ ← →` (ya da `k j h l`) hücreler
-arasında, `Home` / `End` satır başı ve sonu, `PgUp` / `PgDn` onar satır, `Enter`
-hücreyi açar/kapatır, `Esc` önce açtığın hücreyi sonra içinde bulunduğun tabloyu
-kapatır, `c` değeri, `C` dalı JSON olarak, `y` yolu kopyalar.
 
 **Logo** ana sayfaya (boş durum) döner. Üzerinde çalışılan JSON önce "Son açılanlar"a
 yazılır, tek tıkla geri alınır.
@@ -96,49 +95,33 @@ yeni bir tema eklemek `:root[data-theme='...']` bloğu yazmaktan ibarettir.
 ## Özellikler
 
 - **Tree**: JSON sözdizimi görünümü, yerinde aç/kapa, alan başına XSD tooltip'i
-- **Grid**: **jsongrid düzeni** — anahtar solda kendi sütununda, değeri
-  sağındaki hücrede; değer bir kapsayıcıysa hücre önce `[±] Ad{}` başlığını,
-  açıkken de o düğümün tablosunu **kendi içinde** taşır. Her seviye kendi
-  çerçevesini çizer, iç içe geçen tablolar merdiven gibi dizilir ve her hücrenin
-  hangi anahtara ait olduğu her zaman solunda yazar.
-  Tablo biçimi düğümün şeklinden gelir: nesne → `anahtar | değer`;
-  **nesne dizisi → kayıt tablosu** (tutamak + `#` + kolonlar, kolonlar öğelerin
-  anahtarlarının birleşimi); diğer diziler → `# | değer`.
-  Kolon hizası bozulmaz, bakılan tablo kaybolmaz — hiçbir tıklama görünümü
-  değiştirmez. (Eskiden grid girintili düz bir satır listesiydi ve nesne dizileri
-  o modele sığmadığı için "Tablo" ayrı bir görünüm olmak zorunda kalmıştı;
-  artık öyle bir mod yok.)
-  - Kayıt tablosunda: başlığa tıklayarak sıralama (artan ⇄ azalan ⇄ JSON sırası),
-    kolon başına `contains` filtresi (AND ile birleşir), CSV indirme, satır sayısı /
-    kolon sayısı / seçili sıralama / sayısal kolon toplamı şeridi. Kolon başlığı
-    alanın XSD açıklamasını da taşır ve `4/1200` gibi bir not eksik alanları söyler.
-  - `#` hücresine tıklamak satırın tamamını altta bir tablo olarak açar.
+- **Grid**: üç kolon — **Alan · Tip · Değer**. Derinlik girintiyle (18px/seviye)
+  anlatılır; alan adının yanında şema işareti (`ⓘ` şemada var, `●` yok), Tip
+  kolonunda tip rozeti, Değer kolonunda değerin kendisi ile satır sonunda referans
+  rozeti ve 💬 yorum düğmesi durur. Satıra tıklamak dalı açar/kapatır ve o satırı
+  seçer (bağlam şeridi, IATA paneli ve editördeki satır işareti seçimi izler).
+  - **Sanallaştırma**: ağaç önce düz bir satır listesine indirgenir
+    ([utils/rows.ts](frontend/src/utils/rows.ts)), sonra yalnızca görünen pencere
+    çizilir. 20.000 kayıtlık bir `Order[]` açıkken DOM'da ~35 satır durur; alt durum
+    çubuğu kaç satırın render edildiğini yazar. (Eskiden grid özyinelemeli iç içe
+    tablolar çiziyordu ve her tablo kendi 200 satırlık penceresini yönetiyordu.)
+  - **Satır altı şeritleri**: referans önizlemesi, yorum zinciri ve dizi tablosu
+    satırın hemen altında açılır — üçü de aynı listenin öğesi olduğu için
+    sanallaştırmaya dahildir.
+  - **Diziler**: `İç içe / Tablo` segmenti açıkken nesne dizileri satırın altında
+    tabloya döner (ilk 5 kayıt, sıralanabilir başlıklar). "tam tabloyu aç" dizinin
+    tam tablosunu getirir: kolon başına `contains` filtresi (AND ile birleşir),
+    başlığa tıklayarak sıralama, CSV indirme, sanal scroll ve alt şeritte kayıt
+    sayısı / sayısal kolon toplamı / sıralama / seçili kayıt.
+  - **Hücre renkleri**: durum kolonlarında (`StatusCode`, `OrderState` …) açık yeşil,
+    bekleyen turuncu, kapalı gri; `*RefID` alanları camgöbeği; sayılar sağa yaslı.
+    Durum sözlüğü yalnızca adı durum belirten kolonlarda uygulanır — "OPEN" yazan
+    herhangi bir metin kendini durum sanmaz.
   - Açılışta ilk üç seviye ve tek alanlı sarmalayıcı zincirler (`IATA_OrderViewRS >
-    Response > Order`) kendiliğinden açılır; kayıt satırları açılmaz (alanları zaten
-    kolon olarak görünüyor). "tümünü aç" 800 tabloda durur ve bunu söyler — iç içe
-    tablolar gerçek DOM üretiyor.
-  - Her tablo kendi penceresini yönetir: 200 satır çizilir, "daha fazla göster"
-    büyütür. Alt durum çubuğu çizilen satır ve açık tablo sayısını gösterir.
+    Response > Order`) kendiliğinden açılır; kayıt satırları açılmaz (alanları
+    tabloda zaten kolon olarak görünüyor).
   - 40'tan fazla farklı anahtarı olan dizilerde en seyrek dolan kolonlar gizlenir ve
     kaç kolonun gizlendiği şeritte yazılır — sessizce alan düşürmek yok.
-  - **Klavye imleci**: hücreye tıklayınca imleç oraya oturur, oklarla hücre hücre
-    gezinilir (yukarı/aşağı aynı kolonda kalır), `Enter` açar, `Esc` bir üst seviyeye
-    döner. İmleç seçimi de taşır: bağlam şeridi, IATA paneli ve editördeki satır
-    işareti imleci izler.
-  - **Donmuş anahtar kolonu**: 11 kolonlu bir tabloda sağa kayarken hangi satırda
-    olduğunu gösteren tek şey o; `#`/anahtar kolonu yerinde durur.
-  - **Kolon menüsü** (`⋮`): sıralama, o kolona filtre (`⌕` hunisi tek tıkla), kolonu
-    gizleme, kolonun değerlerini kopyalama ve **kolon istatistiği** — kaç farklı
-    değer, kaç kayıtta alan yok, sayısal kolonlarda en küçük/en büyük/toplam/ortalama
-    ve en sık beş değerin dağılımı. `⚙ kolonlar` ile kolon seçici, "yarısından azında
-    dolu olanları gizle" kısayolu.
-  - **Hücre menüsü** (`⋯`): değeri, satırı JSON olarak ya da yolu kopyalar.
-  - **Tablo menüsü** (köşedeki `…`): filtre satırı, kolon seçici, CSV.
-  - **Satır tutamağı** (`⋮`): satırın tamamını açar, satırı JSON olarak ya da
-    yolunu kopyalar, yorumları getirir.
-  - **Alt bilgi satırı**: `1.200 / 1.200 kayıt · 2 kolon filtresi · Σ TotalAmount = …`
-    — sayım ve toplam tablonun altında, tasarımdaki yerinde.
-  - **Sık/rahat yerleşim** düğmesi: aynı ekranda görünen satır sayısını artırır.
 - **Otomatik düzeltme**: geçersiz JSON'da "Otomatik düzelt ve dene" yorum satırlarını,
   sondaki fazla virgülleri ve tek tırnaklı metinleri onarır; onarım da ayrıştırılamazsa
   metne dokunulmaz.
@@ -151,8 +134,10 @@ yeni bir tema eklemek `:root[data-theme='...']` bloğu yazmaktan ibarettir.
   dizi hâlindeki referanslar (`PaxRefID: ["PAX1","PAX2"]`) de tek tek çözülür.
 - **Arama**: anahtar ve değerlerde arar, eşleşme sayısını gösterir, eşleşmeler arasında
   Enter / Shift+Enter (veya ↑ ↓) ile gezinir ve eşleşen düğüme giden yolu otomatik açar.
-  "yalnız eşleşen" ile ağaç yalnızca eşleşmelere ve onlara giden yola indirgenir;
-  grid'de eşleşme alt dalda ise satır soluk vurguyla korunur, böylece drill-down yolu kaybolmaz.
+  Filtre derin çalışır: görünüm eşleşen alanlara **ve onlara giden yola** indirgenir,
+  eşleşmenin belgedeki yeri kaybolmaz. Filtre açıkken eşleşmeye giden dallar
+  kendiliğinden açık sayılır; filtre kapanınca kullanıcının kendi açtığı dallar geri
+  gelir.
 - **Paylaş**: JSON sunucuya kaydedilir, `/?s=<id>` kısa linki üretilir.
   Paylaşımların ömrü `jsonsarp.share.retention-days` kadardır (varsayılan 60 gün);
   süresi dolanlar yorumlarıyla birlikte silinir, linkleri 404 döner. Ömür olmasaydı
@@ -166,8 +151,9 @@ yeni bir tema eklemek `:root[data-theme='...']` bloğu yazmaktan ibarettir.
   Yorum JSON yoluna sabitlenir — paylaşılan JSON değişmediği için bağ kalıcıdır.
   İsim tarayıcıda saklanır (giriş yok); yorumu bırakan kişi kendi yorumunu silebilir.
   Paylaşırken "Yorum" kutusuyla yorumlar kapatılabilir.
-- **Büyük JSON**: çok elemanlı düğümler sayfa sayfa gösterilir ("N satır daha göster");
-  arama eşleşmesi sayfa sınırının ötesindeyse otomatik olarak açılır.
+- **Büyük JSON**: grid ve dizi tablosu sanallaştırılmıştır — kaç satır olursa olsun
+  yalnızca görünen pencere çizilir. Arama sonucuna ya da bir referans hedefine
+  atlamak listeyi o satıra kaydırır.
 - **IATA**: JSON mesaj tipi otomatik tespit edilir; her alan için XSD'deki **tip adı**
   (ör. `ID_Type`) ve açıklama gösterilir. Eşleştirme yol tabanlıdır: NDC'de `DescText`,
   `TypeCode`, `RefID` gibi adlar onlarca tipte farklı anlam taşıdığı için açıklama
@@ -397,7 +383,7 @@ almak gerekir.
 
 ```bash
 cd backend && mvn test     # XSD indeksleme ve alan eşleştirme (gerçek IATA şemaları)
-cd frontend && npm test    # fark motoru + XML çevirici + grid modeli (36 test)
+cd frontend && npm test    # fark motoru + XML çevirici + grid ve satır modeli (48 test)
 cd cli && npm test         # CLI: derlenmiş paket, sahte API sunucusuna karşı
 ```
 
@@ -408,7 +394,8 @@ json-sarp/
 ├── frontend/          Vue 3 + Vite + TypeScript
 │   └── src/
 │       ├── App.vue                 uygulama kabuğu (header, breadcrumb, durum çubuğu)
-│       ├── components/             EditorPane (JSON/XML) · JsonGrid + GridTable · DiffView
+│       ├── components/             EditorPane (JSON/XML) · JsonGrid · ArrayTable · DiffView
+│       ├── utils/rows.ts           grid'in düz satır listesi (sanallaştırmanın modeli)
 │       └── utils/grid.ts           tablo modeli: şekil, kolonlar, açılış bütçesi, CSV
 ├── backend/           Spring Boot + H2 + XSD indeksleyici
 │   └── src/main/resources/xsd/     IATA 24.4 şemaları (52 dosya)

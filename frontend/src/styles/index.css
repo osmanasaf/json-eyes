@@ -77,8 +77,18 @@
   --iata-w: 240px;
   /* Grid'de derinlik basina girinti ve satir yogunlugu. */
   --indent: 18px;
+  --row-pad-x: 12px;
   --row-pad-y: 6px;
+  /* Grid'in uc kolonu; baslik ve satirlar ayni sablonu paylasir. */
+  --grid-cols: minmax(300px, 1fr) 84px minmax(220px, 1.4fr);
 }
+
+/*
+ * Satir yogunlugu. Yatay padding uc yogunlukta da 12px; degisen yalnizca
+ * dikey nefes. Kok elemandaki `data-density` ile secilir.
+ */
+:root[data-density='compact'] { --row-pad-y: 4px; }
+:root[data-density='comfortable'] { --row-pad-y: 9px; }
 
 /*
  * Aydinlik tema (tasarimin Tur 2 paleti). Acik zeminde ayni alfa degerleri

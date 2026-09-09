@@ -2,24 +2,24 @@
 import { computed, nextTick, onMounted, onBeforeUnmount, provide, ref, shallowRef, watch } from 'vue'
 import { COMMENTS, SELECT_FIELD } from './utils/injection'
 import { useComments } from './composables/useComments'
-import type { AnnotateResponse, JsonValue, ViewMode } from './types'
+import type { AnnotateResponse, Density, JsonObject, JsonValue, ViewMode } from './types'
 import { annotateJson, createShare, getShare } from './api'
 import { countNodes, describeParseError, findNodePath, parseJson, toSchemaPath } from './utils/json'
 import { buildSearchIndex, EMPTY_SEARCH } from './utils/search'
 import { buildRefIndex, EMPTY_REF_INDEX } from './utils/references'
 import { tryRepair } from './utils/repair'
-import { collectFieldValues } from './utils/related'
 import { buildTextIndex, lineOfOffset, EMPTY_TEXT_INDEX, type JsonTextIndex } from './utils/textIndex'
+import { isRecordArray, valueAtPath } from './utils/grid'
 import {
-  pushRecent, readRecents, readTheme, readViewMode, writeTheme, writeViewMode,
+  pushRecent, readArrayTableMode, readDensity, readRecents, readTheme, readViewMode,
+  writeArrayTableMode, writeDensity, writeTheme, writeViewMode,
   type RecentFile, type Theme,
 } from './utils/storage'
 import JsonTree from './components/JsonTree.vue'
 import JsonGrid from './components/JsonGrid.vue'
-import ColumnView from './components/ColumnView.vue'
 import DiffView from './components/DiffView.vue'
+import ArrayTable from './components/ArrayTable.vue'
 import IataPanel from './components/IataPanel.vue'
-import FieldValuesPanel from './components/FieldValuesPanel.vue'
 import EditorPane from './components/EditorPane.vue'
 import EmptyState from './components/EmptyState.vue'
 
@@ -50,10 +50,37 @@ const ROOT_KEY = 'json'
 const rawInput = ref('')
 const fileName = ref<string | null>(null)
 /**
- * Acilis gorunumu **Kolon**: paylasim linkini acan kisi once belgenin
- * seviyelerini gorur ve kolon kolon iner. Secim tarayicida saklaniyor.
+ * Acilis gorunumu **Grid**: tasarimin ana ekrani o. Secim tarayicida saklaniyor.
  */
 const viewMode = ref<ViewMode>(readViewMode())
+
+/**
+ * Nesne dizileri grid'in icinde tabloya donussun mu — baglam seridindeki
+ * "Iç içe / Tablo" segmenti. Tablonun tamami (kolon filtresi, CSV, toplamlar)
+ * o tablodaki "tam tabloyu aç" ile aciliyor.
+ */
+const arrayTableMode = ref(readArrayTableMode())
+watch(arrayTableMode, writeArrayTableMode)
+
+/** Tam ekran acilmis dizi tablosunun yolu; null ise grid gorunuyor. */
+const tablePath = ref<string | null>(null)
+
+/** Satir yogunlugu; tasarimin uc kademesi kok elemandaki data-density ile. */
+const density = ref<Density>(readDensity())
+watch(density, (value) => {
+  document.documentElement.dataset.density = value
+  writeDensity(value)
+}, { immediate: true })
+
+const DENSITY_ORDER: Density[] = ['compact', 'normal', 'comfortable']
+const DENSITY_LABEL: Record<Density, string> = {
+  compact: 'sık', normal: 'orta', comfortable: 'seyrek',
+}
+
+function cycleDensity() {
+  const next = (DENSITY_ORDER.indexOf(density.value) + 1) % DENSITY_ORDER.length
+  density.value = DENSITY_ORDER[next]
+}
 /**
  * Karsilastirma acik mi. Fark artik bir "mod" degil: ikinci bir girdi
  * verildiginde goruntuleyici karsilastirmayi gosteriyor, kapatinca secili
@@ -63,7 +90,6 @@ const viewMode = ref<ViewMode>(readViewMode())
 const comparing = ref(false)
 const searchInput = ref('')
 const searchTerm = ref('')
-const filterMatches = ref(false)
 const activeIndex = ref(0)
 const editorVisible = ref(true)
 const iataVisible = ref(true)
@@ -109,7 +135,6 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const filterInputRef = ref<HTMLInputElement | null>(null)
 const editorRef = ref<InstanceType<typeof EditorPane> | null>(null)
 const gridRef = ref<InstanceType<typeof JsonGrid> | null>(null)
-const columnRef = ref<InstanceType<typeof ColumnView> | null>(null)
 
 // Her tus vurusunda tum belgeyi ayristirmamak icin girisi geciktiriyoruz;
 // paylasim/dosya yukleme gibi programatik degisikliklerde aninda uygulanir.
@@ -281,19 +306,6 @@ watch(parsedInput, (text) => {
   else setTimeout(prewarm, 300)
 })
 
-/**
- * Secili alanin belge genelindeki degerleri. Yalnizca panel acikken hesaplanir;
- * tarama eslesmeyen dallari budadigi icin secim degistikce yeniden calisabilir.
- */
-const fieldValuesOpen = ref(true)
-
-const fieldValues = computed(() => {
-  if (!fieldValuesOpen.value || !iataVisible.value) return null
-  const path = selectedNodePath.value
-  if (!path || parsed.value === null || path === ROOT_KEY) return null
-  return collectFieldValues(parsed.value, ROOT_KEY, path)
-})
-
 /** Editorde secili alanin kacinci satirda oldugu; alt durum cubugunda gosterilir. */
 const syncLineLabel = computed(() => {
   const range = syncRange.value
@@ -341,10 +353,29 @@ async function copySelectedPath() {
 }
 
 function setViewMode(mode: ViewMode) {
-  // Gorunum secmek karsilastirmayi kapatir: anahtar yalnizca belgeye bakis acisi.
+  // Gorunum secmek karsilastirmayi ve acik tabloyu kapatir: anahtar yalnizca
+  // belgeye bakis acisi.
   comparing.value = false
+  tablePath.value = null
   viewMode.value = mode
 }
+
+/**
+ * Bir dizinin tam tablosu (Ekran 4). Grid'in icindeki onizleme tablosundan
+ * "tam tabloyu aç" ile aciliyor; kapaninca grid ayni yerde kaliyor.
+ */
+function openTable(path: string) {
+  tablePath.value = path
+  selectedNodePath.value = path
+}
+
+/** Acik tablonun kayitlari; yol artik bir dizi degilse tablo kendiliginden kapanir. */
+const tableItems = computed<JsonObject[] | null>(() => {
+  const path = tablePath.value
+  if (!path || parsed.value === null) return null
+  const value = valueAtPath(parsed.value, ROOT_KEY, path)
+  return value !== undefined && isRecordArray(value) ? value : null
+})
 
 /** IATA panelindeki XSD yolunu goruntuleyicideki dugume cevirip oraya atlar. */
 function focusUnmatched(schemaPath: string) {
@@ -356,8 +387,9 @@ function focusUnmatched(schemaPath: string) {
 }
 
 function focusOnPath(path: string) {
-  // Karsilastirmadan bir dugume gidilirse belge gorunumune donuluyor.
+  // Karsilastirmadan ya da tablodan bir dugume gidilirse belge gorunumune donuluyor.
   comparing.value = false
+  tablePath.value = null
   selectedNodePath.value = path
   focusRequest.value = { path, seq: ++focusSeq }
 }
@@ -386,8 +418,8 @@ function goToMatch(step: number) {
   if (matchCount.value === 0) return
   activeIndex.value = (activeIndex.value + step + matchCount.value) % matchCount.value
   const path = searchIndex.value.matches[activeIndex.value]
-  // Agac kendi eslesmesini zaten aciyor; grid ve kolon gorunumu odaklanir.
-  if (path && (viewMode.value === 'grid' || viewMode.value === 'columns')) focusOnPath(path)
+  // Agac kendi eslesmesini zaten aciyor; grid odaklanir.
+  if (path && viewMode.value === 'grid') focusOnPath(path)
 }
 
 function clearSearch() {
@@ -680,7 +712,7 @@ async function handleShare() {
 
 // --- Alt durum cubugu --------------------------------------------------------
 
-const gridStats = ref({ rows: 0, tables: 0 })
+const gridStats = ref({ rows: 0, rendered: 0 })
 
 // --- Klavye ------------------------------------------------------------------
 
@@ -704,26 +736,6 @@ function onKeydown(event: KeyboardEvent) {
   }
   if (isTypingTarget(event.target) || meta || event.altKey) return
 
-  // Kolon gorunumunde ok tuslari sutunlar arasinda gezinir (Finder gibi).
-  if (viewMode.value === 'columns') {
-    const view = columnRef.value
-    if (!view) return
-    if (event.key === 'ArrowDown' || event.key === 'j' || event.key === 'J') {
-      event.preventDefault()
-      view.moveSelection(1)
-    } else if (event.key === 'ArrowUp' || event.key === 'k' || event.key === 'K') {
-      event.preventDefault()
-      view.moveSelection(-1)
-    } else if (event.key === 'ArrowRight' || event.key === 'l' || event.key === 'Enter') {
-      event.preventDefault()
-      view.descend()
-    } else if (event.key === 'ArrowLeft' || event.key === 'h') {
-      event.preventDefault()
-      view.ascend()
-    }
-    return
-  }
-
   if (event.key === 'j' || event.key === 'J') {
     event.preventDefault()
     gridRef.value?.moveSelection(1)
@@ -739,16 +751,11 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 
 watch(viewMode, writeViewMode)
 
-/**
- * Grid ilk kez secildiginde kurulur, sonra mount'ta kalir (`v-show`): acilmis
- * dallar ve pencereleme korunsun. Acilis gorunumu Kolon oldugu icin, hic
- * girilmeyen bir grid'in DOM'unu kurmanin da anlami yok.
- */
-const gridUsed = ref(viewMode.value === 'grid')
-watch(viewMode, (mode) => { if (mode === 'grid') gridUsed.value = true })
-
 /** Baglam seridi ve yan panel yalnizca belgeyi gosteren gorunumlerde anlamli. */
 const docView = computed(() => !comparing.value)
+
+/** Grid sanallastirildigi icin mount'ta tutmaya gerek yok; tek kaynak `viewMode`. */
+const gridActive = computed(() => !comparing.value && tablePath.value === null && viewMode.value === 'grid')
 </script>
 
 <template>
@@ -799,13 +806,6 @@ const docView = computed(() => !comparing.value)
       <div class="mode-switch">
         <button class="mode" :class="{ active: viewMode === 'tree' }" @click="setViewMode('tree')">Tree</button>
         <button class="mode" :class="{ active: viewMode === 'grid' }" @click="setViewMode('grid')">Grid</button>
-        <button
-          class="mode"
-          :class="{ active: viewMode === 'columns' }"
-          :disabled="!hasData"
-          title="Kolon görünümü — her seviye bir sütun, oklarla gezinme"
-          @click="setViewMode('columns')"
-        >Kolon</button>
       </div>
 
       <div v-if="!isShared" class="share-wrap">
@@ -883,19 +883,53 @@ const docView = computed(() => !comparing.value)
         />
         <span class="filter-hint" :class="{ empty: searchTerm && matchCount === 0 }">{{ filterHint }}</span>
       </div>
+      <!-- Agacin tamamini ac / koke don; ust sinir grid tarafinda ve asilirsa soyleniyor. -->
       <button
-        class="only-matches"
-        :class="{ active: filterMatches }"
-        :disabled="!searchTerm"
-        title="Yalnızca eşleşen alanları ve onlara giden yolu göster"
-        @click="filterMatches = !filterMatches"
-      >yalnız eşleşen</button>
+        v-if="gridActive"
+        class="tree-btn"
+        title="Tüm dalları aç"
+        @click="gridRef?.expandAll()"
+      >⤢ tümünü aç</button>
+      <button
+        v-if="gridActive"
+        class="tree-btn"
+        title="Tüm dalları kapat"
+        @click="gridRef?.collapseAll()"
+      >⤡ kapat</button>
+
+      <button
+        class="density-btn"
+        :title="`Satır yoğunluğu: ${DENSITY_LABEL[density]} — değiştir`"
+        @click="cycleDensity"
+      >⇕ {{ DENSITY_LABEL[density] }}</button>
+
+      <!--
+        Tasarimin "İç içe / Tablo" segmenti: nesne dizileri grid'in icinde
+        tabloya donussun mu. Tablonun tamami oradaki "tam tabloyu aç" ile.
+      -->
+      <div class="table-switch">
+        <button
+          class="seg"
+          :class="{ active: !arrayTableMode }"
+          @click="arrayTableMode = false"
+        >İç içe</button>
+        <button
+          class="seg table"
+          :class="{ active: arrayTableMode }"
+          title="Nesne dizilerini yerinde tabloya çevir"
+          @click="arrayTableMode = true"
+        >Tablo</button>
+      </div>
     </div>
 
     <div class="workspace">
-      <!-- Sol: JSON editoru (paylasilan gorunumde hic render edilmez) -->
+      <!--
+        Sol: JSON editoru. Paylasilan gorunumde hic render edilmez; bos
+        durumda da yok — o ekranda verilecek tek karar var, ikinci bir yuzey
+        onu bolerdi (tasarimin 1. ekrani).
+      -->
       <EditorPane
-        v-if="editorVisible && !isShared"
+        v-if="editorVisible && !isShared && (hasData || parseError)"
         ref="editorRef"
         v-model="rawInput"
         :parse-error="parseError"
@@ -920,7 +954,7 @@ const docView = computed(() => !comparing.value)
       <!-- Kapali panelleri geri acan kenar seritleri; kucuk bir dugmeden cok
            daha gorunur ve panelin nerede oldugunu da gosterir. -->
       <button
-        v-if="!editorVisible && !isShared"
+        v-if="!editorVisible && !isShared && (hasData || parseError)"
         class="rail left"
         title="Editörü aç"
         @click="toggleEditor"
@@ -951,11 +985,6 @@ const docView = computed(() => !comparing.value)
           @drop="handleDrop"
         />
 
-        <!--
-          Grid mount'ta kalir (v-show): Tablo veya Tree'ye gecip geri donuldugunde
-          acilmis dallar ve sayfalama korunsun diye. Diger iki gorunum ise
-          maliyetli olduklari icin yalnizca secildiklerinde kurulur.
-        -->
         <template v-else>
           <!--
             Karsilastirma: ikinci bir girdi verildiginde goruntuleyici alanini
@@ -973,18 +1002,19 @@ const docView = computed(() => !comparing.value)
             @close="comparing = false"
           />
 
-          <ColumnView
-            v-if="!comparing && viewMode === 'columns'"
-            ref="columnRef"
-            :data="parsed!"
+          <!-- Dizi tablosu: grid'in onizleme tablosundan acilir, kapaninca grid geri gelir. -->
+          <ArrayTable
+            v-else-if="tableItems"
+            :items="tableItems"
+            :path="tablePath!"
             :root-key="ROOT_KEY"
             :selected-path="selectedNodePath"
-            :doc-lookup="docLookup"
-            :search-term="searchTerm"
+            @select="selectedNodePath = $event"
             @focus-path="focusOnPath"
+            @close="tablePath = null"
           />
 
-          <div v-else-if="!comparing && viewMode === 'tree'" class="tree-scroll">
+          <div v-else-if="viewMode === 'tree'" class="tree-scroll">
             <JsonTree
               :data="parsed!"
               :root-key="ROOT_KEY"
@@ -992,7 +1022,7 @@ const docView = computed(() => !comparing.value)
               :doc-lookup="docLookup"
               :search="searchIndex"
               :active-path="activePath"
-              :filter-matches="filterMatches"
+              :filter-matches="true"
               :ref-index="refIndex"
               :focus-request="focusRequest"
               @focus-path="focusOnPath"
@@ -1000,20 +1030,20 @@ const docView = computed(() => !comparing.value)
           </div>
 
           <JsonGrid
-            v-if="gridUsed"
-            v-show="!comparing && viewMode === 'grid'"
+            v-else
             ref="gridRef"
             :data="parsed!"
             :root-key="ROOT_KEY"
             :search-term="searchTerm"
             :doc-lookup="docLookup"
-            :filter-matches="filterMatches"
             :ref-index="refIndex"
             :search="searchIndex"
             :focus-request="focusRequest"
             :selected-path="selectedNodePath"
             :schema-known="schemaKnown"
+            :array-table="arrayTableMode"
             @focus-path="focusOnPath"
+            @open-table="openTable"
             @stats="gridStats = $event"
           />
         </template>
@@ -1027,38 +1057,25 @@ const docView = computed(() => !comparing.value)
         @click="toggleIata"
       ><span class="rail-glyph">‹</span><span class="rail-label">IATA</span></button>
 
-      <div v-if="iataVisible && hasData && docView" class="side-col">
-        <IataPanel
-          :annotation="annotation"
-          :loading="annotationLoading"
-          :error="annotationError"
-          :selected-path="selectedSchemaPath"
-          @focus-path="focusUnmatched"
-          @collapse="toggleIata"
-        />
-        <!-- Secili alanin belgedeki tum degerleri; NDC'de dagilima bakmak ilk adim. -->
-        <FieldValuesPanel
-          v-if="fieldValuesOpen"
-          :stats="fieldValues"
-          :has-selection="selectedNodePath !== null && selectedNodePath !== ROOT_KEY"
-          @focus-path="focusOnPath"
-          @collapse="fieldValuesOpen = false"
-        />
-        <button v-else class="values-reopen" @click="fieldValuesOpen = true">▴ Alan değerleri</button>
-      </div>
+      <IataPanel
+        v-if="iataVisible && hasData && docView"
+        :annotation="annotation"
+        :loading="annotationLoading"
+        :error="annotationError"
+        :selected-path="selectedSchemaPath"
+        @focus-path="focusUnmatched"
+        @collapse="toggleIata"
+      />
     </div>
 
     <footer class="status-bar">
       <span v-if="hasData" class="stat">{{ nodeCount.toLocaleString('tr-TR') }} node</span>
       <span v-if="hasData" class="stat">ayrıştırma {{ Math.round(parseState.ms) }} ms</span>
-      <span v-if="!comparing && viewMode === 'grid'" class="stat">{{ gridStats.rows }} satır · {{ gridStats.tables }} tablo açık</span>
+      <span v-if="gridActive" class="stat">{{ gridStats.rendered }} satır render</span>
       <span v-if="syncLineLabel" class="stat accent">⌁ {{ syncLineLabel }}</span>
       <span v-if="annotation?.messageType" class="stat">{{ annotation.messageType }} %{{ matchPercent }}</span>
       <div class="status-spacer" />
-      <span class="stat">
-        Ctrl+K komutlar · Ctrl+F filtre ·
-        {{ viewMode === 'columns' ? '↑↓ kardeş, →← seviye' : 'J/K satır' }}
-      </span>
+      <span class="stat">Ctrl+K komutlar · Ctrl+F filtre · J/K satır</span>
     </footer>
 
     <input ref="fileInputRef" type="file" accept=".json,.xml,application/json,text/xml,application/xml" hidden @change="handleFile" />
@@ -1152,10 +1169,18 @@ const docView = computed(() => !comparing.value)
 .filter-input { width: 190px; background: transparent; border: none; outline: none; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 5px 0; }
 .filter-hint { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
 .filter-hint.empty { color: var(--red); }
-.only-matches { font-size: 11px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; white-space: nowrap; flex-shrink: 0; }
-.only-matches:hover:not(:disabled) { color: var(--text-primary); }
-.only-matches.active { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
-.only-matches:disabled { opacity: .4; cursor: not-allowed; }
+
+.tree-btn { font-size: 11px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; white-space: nowrap; flex-shrink: 0; }
+.tree-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+.density-btn { font-size: 11px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; white-space: nowrap; flex-shrink: 0; }
+.density-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+.table-switch { display: flex; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 7px; padding: 2px; gap: 2px; flex-shrink: 0; }
+.seg { padding: 3px 9px; border-radius: 5px; font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+.seg:hover { color: var(--text-primary); }
+.seg.active { background: var(--bg-tertiary); color: var(--text-primary); }
+.seg.table.active { background: var(--green-wash); color: var(--green); }
 
 /* --- Calisma alani --------------------------------------------------------- */
 .workspace { display: flex; flex: 1; min-height: 0; }
@@ -1179,11 +1204,6 @@ const docView = computed(() => !comparing.value)
 .status-spacer { flex: 1; }
 
 /* Sag sutun: IATA paneli ustte esner, alan degerleri altta kendi payini alir. */
-.side-col { display: flex; flex-direction: column; width: var(--iata-w); flex-shrink: 0; min-height: 0; }
-.side-col > :first-child { flex: 1 1 auto; min-height: 0; }
-.side-col > .values-panel { flex: 0 1 auto; max-height: 52%; }
-.values-reopen { flex-shrink: 0; font-size: 11px; color: var(--text-muted); background: var(--bg-secondary); border-top: 1px solid var(--border); padding: 7px 12px; text-align: left; }
-.values-reopen:hover { color: var(--accent); }
 
 /* Kapali panelin kenar seridi: dikey yazili, tiklanabilir ince bir sutun. */
 .rail { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 10px; width: 26px; flex-shrink: 0; padding-top: 10px; background: var(--bg-secondary); color: var(--text-muted); }

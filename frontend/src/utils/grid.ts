@@ -162,6 +162,33 @@ export function highlightParts(text: string, term: string): Array<{ text: string
   return parts
 }
 
+/**
+ * Hucrenin anlam rengi. Tasarim tabloda uc seyi renkle ayiriyor: durum
+ * kodlari (acik / bekleyen / kapali), referans alanlari ve sayilar.
+ *
+ * Durum sozlugu yalnizca adi durum belirten kolonlarda uygulaniyor
+ * (`StatusCode`, `OrderState` ...); yoksa "OPEN" yazan herhangi bir metin
+ * kendini durum sanip yesile boyanirdi.
+ */
+export type CellTone = 'ok' | 'warn' | 'off' | null
+
+const STATUS_OK = new Set(['OPENED', 'OPEN', 'OK', 'ACTIVE', 'CONFIRMED', 'SUCCESS', 'ISSUED'])
+const STATUS_WARN = new Set(['PENDING', 'PARTIAL', 'WARNING', 'HOLD', 'ONHOLD', 'INPROGRESS'])
+const STATUS_OFF = new Set(['CLOSED', 'CANCELLED', 'CANCELED', 'EXPIRED', 'INACTIVE', 'VOID', 'REJECTED'])
+
+export function isStatusColumn(name: string): boolean {
+  return /status|state/i.test(name)
+}
+
+export function statusTone(column: string, value: JsonValue | undefined): CellTone {
+  if (typeof value !== 'string' || !isStatusColumn(column)) return null
+  const token = value.trim().toUpperCase().replace(/[\s_-]/g, '')
+  if (STATUS_OK.has(token)) return 'ok'
+  if (STATUS_WARN.has(token)) return 'warn'
+  if (STATUS_OFF.has(token)) return 'off'
+  return null
+}
+
 /** Kolon sirasi; kayit tablosu basligina tiklanarak degisir. */
 export interface SortState { column: string; dir: 'asc' | 'desc' }
 

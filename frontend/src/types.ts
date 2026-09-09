@@ -7,7 +7,13 @@ export type JsonValue = JsonPrimitive | JsonObject | JsonArray
  * Gorunum: ayni belgeye nasil bakildigi. Karsilastirma ve XML burada yok —
  * biri ikinci bir girdi, digeri bir girdi bicimi; ikisi de girdi tarafinda.
  */
-export type ViewMode = 'tree' | 'grid' | 'columns'
+export type ViewMode = 'tree' | 'grid'
+
+/**
+ * Satir yogunlugu. Tasarim ucunu de veriyor: dikey padding 4 / 6 / 9 px,
+ * yatay padding her uc yogunlukta 12px.
+ */
+export type Density = 'compact' | 'normal' | 'comfortable'
 
 export interface ParseResult {
   data: JsonValue | null
