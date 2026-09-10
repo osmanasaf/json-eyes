@@ -172,8 +172,19 @@ function expandable(value: JsonValue | undefined): boolean {
 /** Derinlik butcesi doldu mu; dolduysa hucre acilmaz, dugume gecilir. */
 const atDepthLimit = computed(() => props.depth >= MAX_CELL_DEPTH)
 
-function onCellClick(row: Row, column: string) {
+/**
+ * Hucre secimi. `stopPropagation` sart: ic tablolar dis hucrenin *icinde*
+ * cizildigi icin olay yukari kabariyor ve dis hucre secimi eziyordu — en
+ * icteki hucre kazanmali.
+ */
+function onCellClick(row: Row, column: string, event: Event) {
+  event.stopPropagation()
   grid.select(cellPath(row, column))
+}
+
+function onRowHeadClick(row: Row, event: Event) {
+  event.stopPropagation()
+  grid.select(row.path)
 }
 
 function onToggle(path: string, event: Event) {
@@ -291,7 +302,7 @@ function rowLabel(row: Row): string {
         class="rowhead"
         :class="{ sel: selected(row.path), key: isObject }"
         :style="headWidth ? { width: `${headWidth}px` } : undefined"
-        @click="grid.select(row.path)"
+        @click="onRowHeadClick(row, $event)"
       >{{ rowLabel(row) }}</span>
 
       <template v-if="isRecords">
@@ -305,7 +316,7 @@ function rowLabel(row: Row): string {
             num: column.numeric,
           }]"
           :style="columnStyle(column)"
-          @click="onCellClick(row, column.name)"
+          @click="onCellClick(row, column.name, $event)"
         >
           <template v-if="expandable(valueOf(row, column.name))">
             <button
@@ -347,7 +358,7 @@ function rowLabel(row: Row): string {
         class="td"
         :class="[toneOf(row.value), { sel: selected(row.path), open: grid.isOpen(row.path) }]"
         :style="valueColumn ? columnStyle(valueColumn) : undefined"
-        @click="grid.select(row.path)"
+        @click="onRowHeadClick(row, $event)"
       >
         <template v-if="expandable(row.value)">
           <button v-if="atDepthLimit" class="jump" @click="onJump(row.path, $event)">

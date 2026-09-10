@@ -24,6 +24,7 @@ import JsonGrid from './components/JsonGrid.vue'
 import ColumnView from './components/ColumnView.vue'
 import DiffView from './components/DiffView.vue'
 import IataPanel from './components/IataPanel.vue'
+import CommentThread from './components/CommentThread.vue'
 import InputPanel from './components/InputPanel.vue'
 import EmptyState from './components/EmptyState.vue'
 
@@ -218,19 +219,18 @@ let focusSeq = 0
 // --- Yorumlar ----------------------------------------------------------------
 
 const comments = useComments(sharedId)
-const openThreadPath = ref<string | null>(null)
+
+/** Secili alanin yorumlari; sag panelin en altindaki liste bunu ciziyor. */
+const commentsForSelection = computed(() =>
+  selectedNodePath.value ? comments.byPath.value.get(selectedNodePath.value) ?? [] : [],
+)
 
 provide(COMMENTS, {
   // Yorumlar bir paylasima baglidir; yerel JSON'da yorum yoktur.
   available: computed(() => isShared.value),
   enabled: comments.enabled,
-  openPath: openThreadPath,
   author: comments.author,
-  commentsFor: (path: string) => comments.byPath.value.get(path) ?? [],
   countFor: (path: string) => comments.byPath.value.get(path)?.length ?? 0,
-  toggle: (path: string) => {
-    openThreadPath.value = openThreadPath.value === path ? null : path
-  },
   add: (payload) => { void comments.add(payload.path, payload.body, payload.parentId) },
   remove: (id: number) => { void comments.remove(id) },
   canDelete: comments.canDelete,
@@ -1219,7 +1219,21 @@ const docView = computed(() => !comparing.value)
         @focus-path="onSideFocus"
         @close-ref="refTarget = null"
         @collapse="toggleIata"
-      />
+      >
+        <!-- Yorumlar yalnizca paylasilan gorunumde ve paylasim acikken. -->
+        <template v-if="isShared" #comments>
+          <CommentThread
+            :path="selectedNodePath"
+            :comments="commentsForSelection"
+            :author="comments.author.value"
+            :enabled="comments.enabled.value"
+            :can-delete="comments.canDelete"
+            @add="payload => comments.add(payload.path, payload.body, payload.parentId)"
+            @remove="id => comments.remove(id)"
+            @update:author="value => comments.author.value = value"
+          />
+        </template>
+      </IataPanel>
     </div>
 
     <footer class="footer">

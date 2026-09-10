@@ -7,7 +7,6 @@ import { childPath, type SearchIndex } from '../utils/search'
 import { effectiveFieldName, isRefField, resolveRef, type RefIndex, type RefTarget } from '../utils/references'
 import InfoBubble from './InfoBubble.vue'
 import FieldDocCard from './FieldDocCard.vue'
-import CommentThread from './CommentThread.vue'
 import JsonTreeNode from './JsonTreeNode.vue'
 
 const props = defineProps<{
@@ -192,7 +191,6 @@ const commentsAvailable = computed(
   () => comments?.available.value === true && !props.insidePreview && props.keyName !== undefined,
 )
 const commentCount = computed(() => comments?.countFor(currentPath.value) ?? 0)
-const threadOpen = computed(() => comments?.openPath.value === currentPath.value)
 
 function toggle() {
   if (isExpandable.value) expanded.value = !expanded.value
@@ -260,29 +258,13 @@ function primitiveDisplay(value: JsonValue): string {
         @click.stop="togglePreview"
       >↳ referans</button>
 
-      <button
-        v-if="commentsAvailable"
-        class="comment-btn"
-        :class="{ has: commentCount > 0, open: threadOpen }"
-        :title="commentCount > 0 ? `${commentCount} yorum` : 'Yorum ekle'"
-        @click.stop="comments?.toggle(currentPath)"
-      >💬<span v-if="commentCount > 0" class="comment-count">{{ commentCount }}</span></button>
+      <span
+        v-if="commentsAvailable && commentCount > 0"
+        class="comment-count"
+        :title="`${commentCount} yorum — sağ panelde`"
+      >{{ commentCount }} yorum</span>
 
       <button class="copy" title="Kopyala" @click.stop="copyValue">{{ copied ? '✓' : '⧉' }}</button>
-    </div>
-
-    <div v-if="threadOpen && comments" class="thread-wrap" :style="{ marginLeft: `${(depth + 1) * 20}px` }">
-      <CommentThread
-        :path="currentPath"
-        :comments="comments.commentsFor(currentPath)"
-        :author="comments.author.value"
-        :enabled="comments.enabled.value"
-        :can-delete="comments.canDelete"
-        @add="comments.add($event)"
-        @remove="comments.remove($event)"
-        @update:author="comments.author.value = $event"
-        @close="comments.toggle(currentPath)"
-      />
     </div>
 
     <!-- Referansin isaret ettigi nesne, satirin altinda yerinde acilir. -->
@@ -403,13 +385,9 @@ function primitiveDisplay(value: JsonValue): string {
 .children { position: relative; }
 .more-btn { font-size: 11px; color: var(--accent); background: var(--accent-soft); padding: 2px 10px; border-radius: 5px; }
 .more-btn:hover { background: var(--accent-line); }
-.comment-btn { opacity: 0; display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 7px; border-radius: 11px; font-size: 10px; color: var(--ink-5); margin-left: 6px; flex-shrink: 0; }
-.comment-btn:hover { background: var(--bg-inset); color: var(--ink); }
 /* Yorumu olan satirlarda rozet her zaman gorunur. */
-.comment-btn.has, .comment-btn.open { opacity: 1; color: var(--accent); background: var(--accent-soft); }
 .row:hover .comment-btn { opacity: 1; }
-.comment-count { font-weight: 600; }
-.thread-wrap { max-width: 620px; }
+.comment-count { font-size: 10px; color: var(--accent); margin-left: 8px; white-space: nowrap; flex-shrink: 0; }
 
 .copy { opacity: 0; width: 22px; height: 22px; border-radius: 4px; color: var(--ink-5); margin-left: 6px; font-size: 11px; }
 .copy:hover { background: var(--bg-inset); color: var(--ink); }

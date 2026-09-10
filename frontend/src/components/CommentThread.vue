@@ -2,8 +2,19 @@
 import { computed, ref } from 'vue'
 import type { Comment } from '../types'
 
+/**
+ * Alan bazli yorumlar.
+ *
+ * Tasarim yorumlari **sag panelin en altina** aldi: yorum bir alan hakkindaki
+ * konusma, o alanin dokumantasyonunun yaninda duruyor. Onceden satirin altinda
+ * aciliyordu ve grid'i itiyordu.
+ *
+ * Kimlik dogrulamasi yok: ad tarayicida saklanir, silme yetkisi sunucunun
+ * olusturma aninda dondugu jetonla saglanir.
+ */
 const props = defineProps<{
-  path: string
+  /** Yorumlarin bagli oldugu dugum yolu. */
+  path: string | null
   comments: Comment[]
   author: string
   enabled: boolean
@@ -14,19 +25,11 @@ const emit = defineEmits<{
   add: [payload: { path: string; body: string; parentId: number | null }]
   remove: [id: number]
   'update:author': [name: string]
-  close: []
 }>()
 
 const draft = ref('')
-const replyTo = ref<number | null>(null)
-/** Ad girisi yalnizca gerektiginde acilir; sonraki yorumlarda tarayicidan gelir. */
+/** Ad girisi yalnizca gerektiginde acilir; sonrakilerde tarayicidan gelir. */
 const editingName = ref(props.author.trim().length === 0)
-
-const roots = computed(() => props.comments.filter(comment => comment.parentId === null))
-
-function repliesOf(id: number): Comment[] {
-  return props.comments.filter(comment => comment.parentId === id)
-}
 
 const nameModel = computed({
   get: () => props.author,
@@ -34,23 +37,17 @@ const nameModel = computed({
 })
 
 const canSubmit = computed(
-  () => draft.value.trim().length > 0 && props.author.trim().length > 0,
+  () => props.path !== null && draft.value.trim().length > 0 && props.author.trim().length > 0,
 )
 
+/** Baslikta son iki yol parcasi: hangi alana yazildigi tek bakista belli. */
+const scope = computed(() => (props.path ? props.path.split('.').slice(-2).join('.') : ''))
+
 function submit() {
-  if (!canSubmit.value) return
-  emit('add', { path: props.path, body: draft.value.trim(), parentId: replyTo.value })
+  if (!canSubmit.value || props.path === null) return
+  emit('add', { path: props.path, body: draft.value.trim(), parentId: null })
   draft.value = ''
-  replyTo.value = null
   editingName.value = false
-}
-
-function startReply(id: number) {
-  replyTo.value = replyTo.value === id ? null : id
-}
-
-function initial(name: string): string {
-  return name.trim().slice(0, 1).toUpperCase() || '?'
 }
 
 function formatDate(iso: string): string {
@@ -60,98 +57,84 @@ function formatDate(iso: string): string {
 </script>
 
 <template>
-  <div class="thread">
-    <div v-for="root in roots" :key="root.id" class="group">
-      <article class="comment">
-        <span class="avatar">{{ initial(root.author) }}</span>
-        <div class="body">
-          <div class="meta">
-            <span class="author">{{ root.author }}</span>
-            <time class="time">{{ formatDate(root.createdAt) }}</time>
-            <button v-if="enabled" class="action" @click="startReply(root.id)">
-              {{ replyTo === root.id ? 'vazgeç' : 'yanıtla' }}
-            </button>
-            <button v-if="canDelete(root.id)" class="action danger" @click="emit('remove', root.id)">sil</button>
-          </div>
-          <p class="text">{{ root.body }}</p>
-        </div>
-      </article>
+  <div class="threads">
+    <p class="head">
+      <span class="label">yorumlar</span>
+      <span v-if="scope" class="scope">{{ scope }}</span>
+    </p>
 
-      <article v-for="reply in repliesOf(root.id)" :key="reply.id" class="comment reply">
-        <span class="avatar">{{ initial(reply.author) }}</span>
-        <div class="body">
-          <div class="meta">
-            <span class="author">{{ reply.author }}</span>
-            <time class="time">{{ formatDate(reply.createdAt) }}</time>
-            <button v-if="canDelete(reply.id)" class="action danger" @click="emit('remove', reply.id)">sil</button>
-          </div>
-          <p class="text">{{ reply.body }}</p>
-        </div>
-      </article>
-    </div>
+    <article v-for="comment in comments" :key="comment.id" class="comment">
+      <p class="meta">
+        <span class="author">{{ comment.author }}</span>
+        <time class="time">{{ formatDate(comment.createdAt) }}</time>
+        <button v-if="canDelete(comment.id)" class="del" @click="emit('remove', comment.id)">sil</button>
+      </p>
+      <p class="body">{{ comment.body }}</p>
+    </article>
 
-    <p v-if="comments.length === 0" class="empty">Bu alana ilk yorumu siz bırakın.</p>
+    <p v-if="comments.length === 0" class="empty">
+      {{ path ? 'Bu alana ilk yorumu siz bırakın.' : 'Bir alan seçin.' }}
+    </p>
 
     <template v-if="enabled">
-      <p v-if="replyTo !== null" class="reply-hint">
-        Yanıt yazıyorsunuz
-        <button class="action" @click="replyTo = null">iptal</button>
-      </p>
+      <input
+        v-if="editingName"
+        v-model="nameModel"
+        class="input name"
+        type="text"
+        maxlength="60"
+        placeholder="adınız"
+      />
+      <button v-else class="who" @click="editingName = true">{{ author }} olarak</button>
       <form class="form" @submit.prevent="submit">
-        <input
-          v-if="editingName"
-          v-model="nameModel"
-          class="input name"
-          type="text"
-          maxlength="60"
-          placeholder="Adınız"
-        />
-        <button v-else type="button" class="who" @click="editingName = true">{{ author }} olarak</button>
         <input
           v-model="draft"
           class="input"
           type="text"
           maxlength="4000"
-          placeholder="Bu alana yorum yaz…"
+          :disabled="!path"
+          placeholder="bu alana yorum yaz…"
         />
-        <button type="submit" class="send" :disabled="!canSubmit">Gönder</button>
+        <button type="submit" class="send" :disabled="!canSubmit">gönder</button>
       </form>
     </template>
     <p v-else class="empty">Bu paylaşım yorumlara kapalı.</p>
-
-    <button class="close" title="Kapat" @click="emit('close')">×</button>
   </div>
 </template>
 
 <style scoped>
-.thread { position: relative; border-left: 2px solid var(--accent); background: var(--accent-sel-bg); border-radius: 0 6px 6px 0; padding: 9px 12px; }
+.threads { display: flex; flex-direction: column; gap: 8px; }
 
-.group { margin-bottom: 4px; }
-.comment { display: flex; gap: 9px; margin-bottom: 9px; }
-.comment.reply { margin-left: 18px; }
-.avatar { width: 22px; height: 22px; border-radius: 50%; background: var(--accent-line); color: var(--accent); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.body { min-width: 0; flex: 1; }
+.head { display: flex; align-items: baseline; gap: 8px; }
+.label { font-size: 11px; color: var(--ink-4); }
+.scope { font-size: 10.5px; color: var(--ink-5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Her yorum sol cizgisiyle ayrilir; avatar yok, ad ve zaman yeter. */
+.comment { border-left: 1px solid var(--line-strong); padding: 0 9px; }
 .meta { display: flex; align-items: baseline; gap: 8px; }
-.author { font-size: 11.5px; font-weight: 600; color: var(--ink); }
+.author { font-size: 11px; color: var(--ink); }
 .time { font-size: 10.5px; color: var(--ink-5); }
-.action { font-size: 10.5px; color: var(--accent); padding: 0 4px; border-radius: 4px; }
-.action:hover { background: var(--accent-soft); }
-.action.danger { color: var(--removed); }
-.action.danger:hover { background: var(--removed-line); }
-.text { font-size: 12px; color: var(--ink-2); line-height: 1.45; text-wrap: pretty; white-space: pre-wrap; word-break: break-word; }
+.del { margin-left: auto; font-size: 10.5px; color: var(--ink-5); }
+.del:hover { color: var(--removed); }
+.body { font-size: 11.5px; color: var(--ink-2); line-height: 1.5; text-wrap: pretty; white-space: pre-wrap; word-break: break-word; }
 
-.empty { font-size: 11.5px; color: var(--ink-5); }
-.reply-hint { font-size: 11px; color: var(--ink-5); margin-top: 4px; }
+.empty { font-size: 11px; color: var(--ink-4); }
 
-.form { display: flex; gap: 7px; margin-top: 6px; }
-.input { flex: 1; min-width: 0; background: var(--bg-app); border: 1px solid var(--line); border-radius: 6px; outline: none; color: var(--ink); font-size: 12px; padding: 6px 9px; }
+.form { display: flex; gap: 7px; }
+.input {
+  flex: 1; min-width: 0; box-sizing: border-box; background: var(--bg-data);
+  border: 1px solid var(--line); border-radius: var(--radius); outline: none;
+  font-size: 11px; padding: 5px 8px;
+}
 .input:focus { border-color: var(--accent); }
-.input.name { flex: 0 0 120px; }
-.who { font-size: 11px; color: var(--ink-5); white-space: nowrap; padding: 0 4px; }
-.who:hover { color: var(--accent); }
-.send { font-size: 12px; font-weight: 600; color: var(--bg-app); background: var(--accent); border-radius: 6px; padding: 6px 14px; white-space: nowrap; }
+.input:disabled { opacity: .5; cursor: not-allowed; }
+.input.name { flex: none; width: 100%; }
+.who { font-size: 10.5px; color: var(--ink-5); text-align: left; }
+.who:hover { color: var(--ink-2); }
+.send {
+  font-size: 11px; color: var(--on-accent); background: var(--accent);
+  border-radius: var(--radius); padding: 5px 12px; white-space: nowrap;
+}
+.send:hover:not(:disabled) { background: var(--accent-hover); }
 .send:disabled { opacity: .4; cursor: not-allowed; }
-
-.close { position: absolute; top: 6px; right: 8px; color: var(--ink-5); font-size: 15px; line-height: 1; }
-.close:hover { color: var(--ink); }
 </style>
