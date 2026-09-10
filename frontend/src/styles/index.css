@@ -5,155 +5,184 @@
 }
 
 /*
- * Iki tema tek token setiyle yasar: bilesenler asla ham renk yazmaz, hepsi
- * asagidaki degiskenlerden okur. Tema `:root[data-theme]` ile degisir.
+ * Tek token seti, iki tema. Bilesenler asla ham renk yazmaz; hepsi asagidaki
+ * degiskenlerden okur, tema `:root[data-theme]` ile degisir.
+ *
+ * Roller yuzey / cizgi / murekkep / anlam diye ayrilmistir:
+ *   --bg-*    yuzeyler      (uygulama zemini, panel, veri alani)
+ *   --line-*  cizgiler      (cerceve, ayirici, hucre)
+ *   --ink-*   murekkep      (metin, koyudan aciga 1..5)
+ *   anlam     accent, added / removed / changed, tip renkleri
+ *
+ * Aydinlik tema tasarimin kendi paletidir (sicak kagit); karanlik tema ayni
+ * rollerin koyu karsiligidir.
  */
 :root,
-:root[data-theme='dark'] {
-  color-scheme: dark;
-
-  --bg-primary: #0d1117;
-  --bg-secondary: #161b22;
-  --bg-tertiary: #21262d;
-  --bg-hover: #30363d;
-  --border: #30363d;
-  --border-subtle: #21262d;
-  --text-primary: #e6edf3;
-  --text-secondary: #8b949e;
-  --text-muted: #6e7681;
-  --accent: #58a6ff;
-  --green: #3fb950;
-  --orange: #d29922;
-  --purple: #bc8cff;
-  --red: #ff7b72;
-  --pink: #f78166;
-  --cyan: #79c0ff;
-  --color-null: #6e7681;
-  --color-bool: #79c0ff;
-  --color-number: #f78166;
-  --color-string: #a5d6ff;
-  --color-key: #ff7b72;
-  --color-bracket: #e6edf3;
-  --color-index: #8b949e;
-
-  /* JSON tip rozetlerinin zeminleri; metin renkleri yukaridaki --color-* ile ayni. */
-  --bg-string: rgba(165, 214, 255, 0.12);
-  --bg-number: rgba(247, 129, 102, 0.12);
-  --bg-bool: rgba(121, 192, 255, 0.12);
-  --bg-null: rgba(110, 118, 129, 0.12);
-  --bg-object: rgba(188, 140, 255, 0.12);
-  --bg-array: rgba(63, 185, 80, 0.12);
-
-  /* Aksan tonlari: soft = kutu zemini, wash = secili satir, dim = rozet, strong = hover. */
-  --accent-soft: rgba(88, 166, 255, 0.05);
-  --accent-wash: rgba(88, 166, 255, 0.10);
-  --accent-dim: rgba(88, 166, 255, 0.15);
-  --accent-strong: rgba(88, 166, 255, 0.28);
-  --purple-soft: rgba(188, 140, 255, 0.05);
-  --purple-wash: rgba(188, 140, 255, 0.10);
-  --purple-dim: rgba(188, 140, 255, 0.12);
-  --purple-avatar: rgba(188, 140, 255, 0.20);
-  --green-wash: rgba(63, 185, 80, 0.14);
-  --orange-dim: rgba(210, 153, 34, 0.14);
-  --red-soft: rgba(255, 123, 114, 0.06);
-  --red-wash: rgba(255, 123, 114, 0.10);
-  --red-dim: rgba(255, 123, 114, 0.12);
-
-  /* Arama vurgusu ve tablo zebrasi. */
-  --match-soft: rgba(255, 220, 0, 0.04);
-  --match-bg: rgba(255, 220, 0, 0.10);
-  --match-strong: rgba(255, 220, 0, 0.18);
-  --match-ring: rgba(255, 220, 0, 0.45);
-  --mark-bg: rgba(255, 220, 0, 0.30);
-  --mark-text: #ffd700;
-  --row-zebra: rgba(255, 255, 255, 0.012);
-  --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.45);
-
-  /* Kabuk olculeri; tasarimin sabit degerleri tek yerden yonetilir. */
-  --header-h: 56px;
-  --crumbs-h: 38px;
-  --status-h: 30px;
-  --editor-w: 292px;
-  --iata-w: 240px;
-  /* Grid'de derinlik basina girinti ve satir yogunlugu. */
-  --indent: 18px;
-  --row-pad-y: 6px;
-}
-
-/*
- * Aydinlik tema (tasarimin Tur 2 paleti). Acik zeminde ayni alfa degerleri
- * kayboldugu icin ton zeminleri biraz daha koyu tutuluyor.
- */
 :root[data-theme='light'] {
   color-scheme: light;
 
-  --bg-primary: #ffffff;
-  --bg-secondary: #f6f8fa;
-  --bg-tertiary: #eaeef2;
-  --bg-hover: #d8dee4;
-  --border: #d0d7de;
-  --border-subtle: #eaeef2;
-  --text-primary: #1f2328;
-  --text-secondary: #656d76;
-  --text-muted: #8c959f;
-  --accent: #0969da;
-  --green: #1a7f37;
-  --orange: #9a6700;
-  --purple: #8250df;
-  --red: #cf222e;
-  --pink: #953800;
-  --cyan: #0550ae;
-  --color-null: #6e7781;
-  --color-bool: #0550ae;
-  --color-number: #953800;
-  --color-string: #0a3069;
-  --color-key: #cf222e;
-  --color-bracket: #1f2328;
-  --color-index: #656d76;
+  /* Yuzeyler */
+  --bg-app: #f4f3f0;
+  --bg-chrome: #fbfaf8;
+  --bg-data: #ffffff;
+  --bg-subtle: #f0efe9;
+  --bg-inset: #eeece7;
+  --bg-nested: #fbfaf8;
+  --bg-cell-open: #f7f6f2;
 
-  --bg-string: rgba(10, 48, 105, 0.08);
-  --bg-number: rgba(149, 56, 0, 0.10);
-  --bg-bool: rgba(5, 80, 174, 0.08);
-  --bg-null: rgba(110, 119, 129, 0.10);
-  --bg-object: rgba(130, 80, 223, 0.10);
-  --bg-array: rgba(26, 127, 55, 0.10);
+  /* Cizgiler */
+  --line-strong: #d4d2ca;
+  --line: #e2e0d9;
+  --line-soft: #e6e4de;
+  --line-cell: #eceae4;
+  --line-cell-head: #e4e2db;
+  --line-panel: #eae8e2;
+  --line-nested: #dcdad3;
+  --line-dashed: #cdcbc4;
 
-  --accent-soft: rgba(9, 105, 218, 0.05);
-  --accent-wash: rgba(9, 105, 218, 0.09);
-  --accent-dim: rgba(9, 105, 218, 0.12);
-  --accent-strong: rgba(9, 105, 218, 0.22);
-  --purple-soft: rgba(130, 80, 223, 0.05);
-  --purple-wash: rgba(130, 80, 223, 0.10);
-  --purple-dim: rgba(130, 80, 223, 0.12);
-  --purple-avatar: rgba(130, 80, 223, 0.18);
-  --green-wash: rgba(26, 127, 55, 0.12);
-  --orange-dim: rgba(154, 103, 0, 0.14);
-  --red-soft: rgba(207, 34, 46, 0.06);
-  --red-wash: rgba(207, 34, 46, 0.09);
-  --red-dim: rgba(207, 34, 46, 0.11);
+  /*
+   * Murekkep. `--ink-5` erisilebilirlik tabanidir: tasarimin kabul olcutu
+   * "hicbir metin bundan daha soluk olmayacak" diyor.
+   */
+  --ink: #1b1d1e;
+  --ink-2: #4a4e50;
+  --ink-3: #6f7376;
+  --ink-4: #7a7d79;
+  --ink-5: #82868a;
+  --ink-row: #7d8184;
+  --ink-empty: #b6b8b3;
 
-  --match-soft: rgba(212, 167, 44, 0.10);
-  --match-bg: rgba(212, 167, 44, 0.22);
-  --match-strong: rgba(212, 167, 44, 0.38);
-  --match-ring: rgba(154, 103, 0, 0.55);
-  --mark-bg: rgba(212, 167, 44, 0.35);
-  --mark-text: #7a5300;
-  --row-zebra: rgba(27, 31, 36, 0.025);
-  --shadow-popover: 0 8px 24px rgba(31, 35, 40, 0.15);
+  /* Anlam */
+  --accent: #2f6f5e;
+  --accent-hover: #21514a;
+  --accent-sel-bg: rgba(47, 111, 94, .07);
+  --accent-soft: rgba(47, 111, 94, .08);
+  --accent-line: rgba(47, 111, 94, .12);
+  --on-accent: #ffffff;
+
+  --added: #2c6b45;
+  --added-bg: rgba(44, 107, 69, .07);
+  --removed: #a3382f;
+  --removed-bg: rgba(163, 56, 47, .07);
+  --removed-bg-soft: rgba(163, 56, 47, .05);
+  --removed-line: rgba(163, 56, 47, .10);
+  --changed: #8a5a00;
+  --changed-bg: rgba(138, 90, 0, .09);
+  --search-hit: rgba(214, 180, 60, .16);
+
+  /* JSON tip renkleri */
+  --type-string: #1b1d1e;
+  --type-number: #7a4a12;
+  --type-boolean: #2f5fa8;
+  --type-null: #7d8184;
+
+  --sort-head-bg: #e8e7e0;
+  --bar-track: var(--bg-inset);
+  --bar-fill: #8c9a93;
+  --scroll-thumb: #d6d4cd;
+  --scroll-thumb-hover: #bdbab2;
+  --shadow-menu: 0 14px 30px rgba(27, 29, 30, .12);
+}
+
+/*
+ * Karanlik tema: ayni roller, koyu yuzeyler. Tasarim aydinligi tanimliyor;
+ * buradaki degerler ayni kontrast iliskisini koyuda kuruyor.
+ */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-app: #16181a;
+  --bg-chrome: #1c1f21;
+  --bg-data: #202427;
+  --bg-subtle: #24282b;
+  --bg-inset: #101214;
+  --bg-nested: #1c1f21;
+  --bg-cell-open: #262a2e;
+
+  --line-strong: #3a4045;
+  --line: #2e3337;
+  --line-soft: #2a2f33;
+  --line-cell: #292e32;
+  --line-cell-head: #333a3f;
+  --line-panel: #2a2f33;
+  --line-nested: #383f44;
+  --line-dashed: #3d4348;
+
+  --ink: #e8e6e1;
+  --ink-2: #c2c6c8;
+  --ink-3: #a2a7aa;
+  --ink-4: #949895;
+  --ink-5: #8b9095;
+  --ink-row: #8f9498;
+  --ink-empty: #5d6266;
+
+  --accent: #5fae97;
+  --accent-hover: #7cc4ae;
+  --accent-sel-bg: rgba(95, 174, 151, .10);
+  --accent-soft: rgba(95, 174, 151, .12);
+  --accent-line: rgba(95, 174, 151, .18);
+  --on-accent: #10221d;
+
+  --added: #5fb07e;
+  --added-bg: rgba(95, 176, 126, .10);
+  --removed: #e0837a;
+  --removed-bg: rgba(224, 131, 122, .10);
+  --removed-bg-soft: rgba(224, 131, 122, .07);
+  --removed-line: rgba(224, 131, 122, .16);
+  --changed: #d3a44e;
+  --changed-bg: rgba(211, 164, 78, .12);
+  --search-hit: rgba(214, 180, 60, .18);
+
+  --type-string: #e8e6e1;
+  --type-number: #d8a06a;
+  --type-boolean: #7fa8e8;
+  --type-null: #8f9498;
+
+  --sort-head-bg: #2b3034;
+  --bar-fill: #6f8a80;
+  --scroll-thumb: #3a4045;
+  --scroll-thumb-hover: #4c5359;
+  --shadow-menu: 0 14px 30px rgba(0, 0, 0, .45);
+}
+
+/*
+ * Olculer. Tasarimin sabit yukseklikleri tek yerden yonetilir; bilesenler
+ * bunlari okur, kendi sayilarini yazmaz.
+ */
+:root {
+  --h-header: 46px;
+  --h-banner: 31px;
+  --h-crumbs: 32px;
+  --h-path: 25px;
+  --h-tabs: 33px;
+  --h-toolbar: 32px;
+  --h-diff-head: 27px;
+  --h-footer: 25px;
+
+  --editor-line: 19px;
+  --editor-gutter: 42px;
+  --panel-w-default: 344px;
+  --panel-w-min: 210px;
+  --panel-w-max: 760px;
+  --side-w: 272px;
+  --rail-w: 24px;
+
+  --radius: 6px;
+  --radius-sm: 4px;
 }
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  background: var(--bg-app);
+  color: var(--ink);
   min-height: 100vh;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 9px;
+  height: 9px;
 }
 
 ::-webkit-scrollbar-track {
@@ -161,12 +190,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 3px;
+  background: var(--scroll-thumb);
+  border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--bg-hover);
+  background: var(--scroll-thumb-hover);
 }
 
 button {
@@ -174,20 +203,28 @@ button {
   border: none;
   background: none;
   font-family: inherit;
+  color: inherit;
 }
 
 input, textarea {
   font-family: inherit;
+  color: inherit;
+}
+
+/* Odak halkasi: klavye kullanicisi icin gorunur, fare ile gorunmez. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 ::selection {
-  background: var(--accent-dim);
-  color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
 }
 
 mark {
-  background: var(--mark-bg);
-  color: var(--mark-text);
+  background: var(--search-hit);
+  color: inherit;
   border-radius: 2px;
   padding: 0 1px;
 }

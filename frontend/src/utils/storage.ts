@@ -76,9 +76,12 @@ export type Theme = 'dark' | 'light'
 
 const THEME_KEY = 'theme'
 
-/** Kayitli tema; hic secim yapilmadiysa urunun varsayilani olan karanlik. */
+/**
+ * Kayitli tema. Varsayilan **aydinlik**: tasarimin kendi paleti o — sicak
+ * kagit zemin, tek font. Karanlik tema ayni token setinden uretiliyor.
+ */
 export function readTheme(): Theme {
-  return readStored(THEME_KEY) === 'light' ? 'light' : 'dark'
+  return readStored(THEME_KEY) === 'dark' ? 'dark' : 'light'
 }
 
 export function writeTheme(theme: Theme) {
@@ -88,14 +91,12 @@ export function writeTheme(theme: Theme) {
 const VIEW_KEY = 'view'
 
 /**
- * Kayitli gorunum. Varsayilan **Kolon**: bir paylasim linkini acan kisi once
- * belgenin seviyelerini gormeli, kolon kolon inebilmeli — grid'in genis
- * tablolari ilk karsilasmada agir geliyor. Kullanicinin son secimi
- * hatirlaniyor; kendi tercihini her acilista yeniden yapmasi gerekmiyor.
+ * Kayitli gorunum. Varsayilan **Grid**: tasarimin ana ekrani o. Anahtarin
+ * sirasi da tasarimda kesin — Tree · Grid · Kolon.
  */
 export function readViewMode(): ViewMode {
   const stored = readStored(VIEW_KEY)
-  return stored === 'tree' || stored === 'grid' || stored === 'columns' ? stored : 'columns'
+  return stored === 'tree' || stored === 'columns' ? stored : 'grid'
 }
 
 export function writeViewMode(mode: ViewMode) {
@@ -118,4 +119,22 @@ export function formatRelative(iso: string): string {
   if (days < 7) return `${days} gün önce`
   if (days < 30) return `${Math.floor(days / 7)} hafta önce`
   return `${Math.floor(days / 30)} ay önce`
+}
+
+const PANEL_W_KEY = 'editor-width'
+
+/** Girdi panelinin tasarimdaki varsayilan ve sinir genislikleri. */
+export const PANEL_W_DEFAULT = 344
+export const PANEL_W_MIN = 210
+export const PANEL_W_MAX = 760
+
+/** Kayitli girdi paneli genisligi; sinirlarin disi varsayilana duser. */
+export function readPanelWidth(): number {
+  const raw = Number(readStored(PANEL_W_KEY))
+  if (!Number.isFinite(raw)) return PANEL_W_DEFAULT
+  return Math.min(PANEL_W_MAX, Math.max(PANEL_W_MIN, Math.round(raw)))
+}
+
+export function writePanelWidth(width: number) {
+  writeStored(PANEL_W_KEY, String(Math.round(width)))
 }
