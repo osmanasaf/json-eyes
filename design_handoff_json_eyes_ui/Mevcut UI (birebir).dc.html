@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  body { margin: 0; background: #0d1117; }
+  a { color: #58a6ff; }
+  a:hover { color: #79c0ff; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+</style>
+</helmet>
+
+<div style="width:1440px;height:900px;display:flex;flex-direction:column;overflow:hidden;background:#0d1117;color:#e6edf3;font-family:Inter,system-ui,sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased">
+
+  <header style="display:flex;align-items:center;gap:14px;padding:0 16px;height:56px;background:#161b22;border-bottom:1px solid #30363d;flex-shrink:0">
+    <div style="display:flex;align-items:center;gap:9px;flex-shrink:0;border-radius:8px;padding:2px 4px">
+      <svg width="26" height="26" viewBox="0 0 24 24">
+        <rect x="1" y="1" width="22" height="22" rx="6" fill="#58a6ff" opacity=".14"></rect>
+        <ellipse cx="12" cy="12" rx="8" ry="5.2" fill="none" stroke="#58a6ff" stroke-width="1.6"></ellipse>
+        <circle cx="12" cy="12" r="2.7" fill="#58a6ff"></circle>
+        <circle cx="13.4" cy="10.6" r="0.9" fill="#0d1117"></circle>
+      </svg>
+      <span style="font-size:15.5px;font-weight:700;letter-spacing:.2px;white-space:nowrap">JSON <span style="color:#58a6ff">EYES</span></span>
+    </div>
+    <div style="width:1px;height:22px;background:#30363d;flex-shrink:0"></div>
+
+    <div style="display:flex;align-items:center;gap:10px;min-width:0">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#e6edf3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:190px">orderview-prod.json</span>
+      <span style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:#3fb950;background:rgba(63,185,80,.12);border-radius:20px;padding:2px 8px;white-space:nowrap"><span style="width:5px;height:5px;border-radius:50%;background:currentColor"></span>geçerli</span>
+    </div>
+
+    <div style="flex:1;display:flex;justify-content:center;min-width:0">
+      <div style="display:flex;align-items:center;gap:8px;width:360px;max-width:100%;background:#0d1117;border:1px solid #30363d;border-radius:9px;padding:7px 11px">
+        <span style="color:#6e7681;font-size:12px">⌕</span>
+        <span style="flex:1;min-width:0;font-size:12.5px;color:#6e7681;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Alan, değer veya komut</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6e7681;border:1px solid #30363d;border-radius:4px;padding:1px 5px;white-space:nowrap">Ctrl K</span>
+      </div>
+    </div>
+
+    <button style="font-size:14px;line-height:1;color:#6e7681;border:1px solid #30363d;border-radius:8px;width:30px;height:30px;flex-shrink:0;background:none;cursor:pointer">☀</button>
+
+    <div style="display:flex;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:3px;gap:2px;flex-shrink:0">
+      <button style="padding:5px 11px;border-radius:6px;font-size:12.5px;color:#6e7681;background:none;border:none;font-family:inherit;cursor:pointer">Tree</button>
+      <button style="padding:5px 11px;border-radius:6px;font-size:12.5px;color:#e6edf3;background:#21262d;border:none;font-family:inherit;cursor:pointer">Grid</button>
+      <button style="padding:5px 11px;border-radius:6px;font-size:12.5px;color:#6e7681;background:none;border:none;font-family:inherit;cursor:pointer">Kolon</button>
+      <span style="width:1px;align-self:stretch;background:#30363d;margin:2px 3px"></span>
+      <button style="padding:5px 11px;border-radius:6px;font-size:12.5px;color:#6e7681;background:none;border:none;font-family:inherit;cursor:pointer">Fark</button>
+      <button style="padding:5px 11px;border-radius:6px;font-size:12.5px;color:#6e7681;background:none;border:none;font-family:inherit;cursor:pointer">XML</button>
+    </div>
+
+    <button style="font-size:12.5px;font-weight:600;color:#0d1117;background:#58a6ff;border-radius:7px;padding:6px 13px;border:none;font-family:inherit;cursor:pointer">Paylaş</button>
+  </header>
+
+  <div style="display:flex;align-items:center;gap:8px;height:38px;padding:0 16px;background:#0d1117;border-bottom:1px solid #21262d;flex-shrink:0;overflow:hidden">
+    <nav style="display:flex;align-items:center;gap:5px;min-width:0;overflow:hidden">
+      <button style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#8b949e;white-space:nowrap;background:none;border:none;cursor:pointer">json</button>
+      <span style="color:#30363d;font-size:11px">›</span>
+      <button style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#8b949e;white-space:nowrap;background:none;border:none;cursor:pointer">IATA_OrderViewRS</button>
+      <span style="color:#30363d;font-size:11px">›</span>
+      <button style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#8b949e;white-space:nowrap;background:none;border:none;cursor:pointer">Response</button>
+      <span style="color:#30363d;font-size:11px">›</span>
+      <button style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#8b949e;white-space:nowrap;background:none;border:none;cursor:pointer">Order</button>
+      <span style="color:#30363d;font-size:11px">›</span>
+      <button style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#8b949e;white-space:nowrap;background:none;border:none;cursor:pointer">3</button>
+      <span style="color:#30363d;font-size:11px">›</span>
+      <button style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#e6edf3;background:#21262d;border-radius:5px;padding:2px 7px;white-space:nowrap;border:none;cursor:pointer">TotalPrice</button>
+    </nav>
+    <button style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b949e;border:1px solid #30363d;border-radius:6px;padding:2px 8px;white-space:nowrap;flex-shrink:0;background:none;cursor:pointer">⧉ yolu kopyala</button>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:6px;background:#161b22;border:1px solid #30363d;border-radius:7px;padding:0 9px;flex-shrink:0">
+      <span style="color:#6e7681;font-size:11px">⌕</span>
+      <span style="width:190px;font-family:'JetBrains Mono',monospace;font-size:12px;padding:5px 0;color:#6e7681">Bu görünümü filtrele</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6e7681;white-space:nowrap">Ctrl+F</span>
+    </div>
+    <button style="font-size:11px;color:#6e7681;border:1px solid #30363d;border-radius:6px;padding:3px 9px;white-space:nowrap;flex-shrink:0;background:none;font-family:inherit;opacity:.4;cursor:not-allowed">yalnız eşleşen</button>
+  </div>
+
+  <div style="display:flex;flex:1;min-height:0">
+
+    <section style="width:292px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid #30363d;background:#161b22">
+      <div style="display:flex;align-items:center;gap:2px;padding:6px 8px 0;border-bottom:1px solid #21262d">
+        <button style="font-size:11.5px;color:#e6edf3;background:#21262d;padding:6px 11px;border-radius:6px 6px 0 0;border:none;font-family:inherit;cursor:pointer">Girdi</button>
+        <button style="font-size:11.5px;color:#6e7681;padding:6px 11px;border-radius:6px 6px 0 0;border:none;background:none;font-family:inherit;cursor:pointer">Geçmiş</button>
+        <div style="flex:1"></div>
+        <button style="font-size:12px;color:#6e7681;width:22px;height:22px;border-radius:5px;border:none;background:none;cursor:pointer">⤢</button>
+        <button style="font-size:12px;color:#6e7681;width:22px;height:22px;border-radius:5px;border:none;background:none;cursor:pointer">⤡</button>
+        <button style="font-size:12px;color:#6e7681;width:22px;height:22px;border-radius:5px;border:none;background:none;cursor:pointer">◇</button>
+        <button style="font-size:12px;color:#6e7681;width:22px;height:22px;border-radius:5px;border:none;background:none;cursor:pointer">×</button>
+        <button style="font-size:15px;color:#6e7681;width:22px;height:22px;margin-left:4px;border:none;border-left:1px solid #21262d;border-radius:0 5px 5px 0;background:none;cursor:pointer">‹</button>
+      </div>
+
+      <div style="flex:1;min-height:0;display:flex;background:#0d1117;padding:8px 0;overflow:hidden">
+        <div style="width:34px;flex-shrink:0;overflow:hidden;padding-left:12px;display:flex;flex-direction:column">
+          <sc-for list="{{ gutter }}" as="n" hint-placeholder-count="24">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:20px;height:20px;color:#30363d;text-align:right;flex-shrink:0">{{ n }}</span>
+          </sc-for>
+        </div>
+        <div style="position:relative;flex:1;min-width:0;display:flex;overflow:hidden">
+          <pre style="flex:1;min-width:0;margin:0;background:transparent;color:#e6edf3;padding:0 12px 0 10px;font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:20px;white-space:pre;overflow:hidden">{{ editorText }}</pre>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-top:1px solid #21262d;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.5;color:#3fb950">
+        <span style="width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0"></span>
+        Geçerli JSON · 48.216 node
+      </div>
+    </section>
+
+    <section style="flex:1;min-width:0;display:flex;flex-direction:column;background:#0d1117">
+      <div style="display:flex;flex-direction:column;flex:1;min-height:0">
+
+        <div style="display:flex;align-items:center;gap:10px;padding:5px 12px;background:#161b22;border-bottom:1px solid #30363d;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:10.5px">
+          <span style="border-radius:10px;padding:1px 8px;color:#bc8cff;background:rgba(188,140,255,.12)">nesne</span>
+          <span style="color:#8b949e">1 alan</span>
+          <span style="color:#6e7681">hücreye tıkla → içinde açılır</span>
+          <div style="flex:1"></div>
+          <button style="font-family:inherit;font-size:10.5px;color:#6e7681;border:1px solid #30363d;border-radius:5px;padding:1px 8px;white-space:nowrap;background:none;cursor:pointer">tümünü aç</button>
+          <button style="font-family:inherit;font-size:10.5px;color:#6e7681;border:1px solid #30363d;border-radius:5px;padding:1px 8px;white-space:nowrap;background:none;cursor:pointer">kapat</button>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow:auto">
+          <table style="border-collapse:collapse;width:max-content;min-width:100%;background:#0d1117">
+            <thead>
+              <tr>
+                <th style="border:1px solid #21262d;vertical-align:top;text-align:left;background:#161b22;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;width:1%;min-width:42px;position:sticky;top:0;z-index:2">anahtar</th>
+                <th style="border:1px solid #21262d;vertical-align:top;text-align:left;background:#161b22;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;position:sticky;top:0;z-index:2">değer</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="border:1px solid #21262d;vertical-align:top;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#ff7b72;white-space:nowrap;cursor:pointer;width:1%">
+                  <span style="font-weight:500">IATA_OrderViewRS</span>
+                  <span style="margin-left:5px;font-size:9px;opacity:.75;color:#58a6ff;cursor:pointer">ⓘ</span>
+                </td>
+                <td style="border:1px solid #21262d;vertical-align:top;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;max-width:460px;cursor:pointer;white-space:nowrap">
+                  <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#bc8cff;background:rgba(188,140,255,.12);border-radius:10px;padding:0 7px;white-space:nowrap">
+                    <span style="font-size:9px">▾</span><span style="opacity:.55">{</span><span style="font-size:10.5px">1 alan</span><span style="opacity:.55">}</span>
+                  </span>
+
+                  <div style="margin:4px 0 2px;padding-left:7px;border-left:2px solid #bc8cff;cursor:default">
+                    <table style="border-collapse:collapse;width:max-content;min-width:100%;background:#0d1117">
+                      <tbody>
+                        <tr>
+                          <td style="border:1px solid #21262d;vertical-align:top;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#ff7b72;white-space:nowrap;cursor:pointer;width:1%">
+                            <span style="font-weight:500">Response</span>
+                            <span style="margin-left:5px;font-size:9px;opacity:.75;color:#58a6ff;cursor:pointer">ⓘ</span>
+                          </td>
+                          <td style="border:1px solid #21262d;vertical-align:top;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;max-width:460px;cursor:pointer;white-space:nowrap">
+                            <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#bc8cff;background:rgba(188,140,255,.12);border-radius:10px;padding:0 7px;white-space:nowrap">
+                              <span style="font-size:9px">▾</span><span style="opacity:.55">{</span><span style="font-size:10.5px">3 alan</span><span style="opacity:.55">}</span>
+                            </span>
+
+                            <div style="margin:4px 0 2px;padding-left:7px;border-left:2px solid #58a6ff;cursor:default">
+                              <table style="border-collapse:collapse;width:max-content;min-width:100%;background:#0d1117">
+                                <tbody>
+                                  <tr>
+                                    <td style="border:1px solid #21262d;vertical-align:top;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#ff7b72;white-space:nowrap;cursor:pointer;width:1%"><span style="font-weight:500">Order</span><span style="margin-left:5px;font-size:9px;opacity:.75;color:#58a6ff;cursor:pointer">ⓘ</span></td>
+                                    <td style="border:1px solid #21262d;vertical-align:top;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;cursor:pointer;white-space:nowrap">
+                                      <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#bc8cff;background:rgba(188,140,255,.12);border-radius:10px;padding:0 7px;white-space:nowrap">
+                                        <span style="font-size:9px">▾</span><span style="opacity:.55">[</span><span style="font-size:10.5px">8 öğe</span><span style="opacity:.55">]</span>
+                                      </span>
+
+                                      <div style="margin:4px 0 2px;padding-left:7px;border-left:2px solid #79c0ff;cursor:default">
+                                        <div style="display:flex;align-items:center;gap:9px;padding:4px 8px;background:#161b22;border:1px solid #30363d;border-bottom:none;font-family:'JetBrains Mono',monospace;font-size:10.5px">
+                                          <span style="color:#bc8cff">8 kayıt</span>
+                                          <span style="color:#6e7681;white-space:nowrap">8 kolon</span>
+                                          <span style="color:#58a6ff">TotalAmount ↓</span>
+                                          <span style="color:#6e7681;white-space:nowrap">Σ TotalAmount = 30.009,34</span>
+                                          <div style="flex:1"></div>
+                                          <button style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8b949e;border:1px solid #30363d;border-radius:5px;padding:1px 7px;white-space:nowrap;background:none;cursor:pointer">⌕ filtre</button>
+                                          <button style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8b949e;border:1px solid #30363d;border-radius:5px;padding:1px 7px;white-space:nowrap;background:none;cursor:pointer">CSV</button>
+                                        </div>
+                                        <div style="overflow-x:auto">
+                                          <table style="border-collapse:collapse;width:max-content;min-width:100%;background:#0d1117">
+                                            <thead>
+                                              <tr>
+                                                <th style="border:1px solid #21262d;vertical-align:top;text-align:left;background:#161b22;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;width:1%;min-width:42px">#</th>
+                                                <sc-for list="{{ columns }}" as="col" hint-placeholder-count="8">
+                                                  <th style="border:1px solid #21262d;vertical-align:top;text-align:left;background:#161b22;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;max-width:260px">
+                                                    <span style="display:inline-flex;align-items:baseline;gap:4px;max-width:240px;text-transform:none;letter-spacing:0;color:#8b949e">
+                                                      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ col.name }}</span>
+                                                    </span>
+                                                    <span style="margin-left:5px;font-size:9px;opacity:.75;color:#58a6ff">ⓘ</span>
+                                                    <span style="display:block;font-size:9px;font-weight:400;color:#6e7681;text-transform:none;letter-spacing:0">{{ col.kind }}</span>
+                                                  </th>
+                                                </sc-for>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              <sc-for list="{{ orders }}" as="o" hint-placeholder-count="8">
+                                                <tr>
+                                                  <td style="border:1px solid #21262d;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#6e7681;text-align:right;white-space:nowrap;width:1%;cursor:pointer">{{ o.i }}</td>
+                                                  <td style="border:1px solid #21262d;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#a5d6ff;white-space:nowrap;cursor:pointer">{{ o.OrderID }}</td>
+                                                  <td style="border:1px solid #21262d;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#a5d6ff;white-space:nowrap;cursor:pointer">{{ o.OwnerCode }}</td>
+                                                  <td style="border:1px solid #21262d;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;white-space:nowrap;cursor:pointer"><span style="color:{{ o.statusColor }}">{{ o.StatusCode }}</span></td>
+                                                  <td style="border:1px solid #21262d;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#a5d6ff;white-space:nowrap;cursor:pointer">{{ o.CreateDateTime }}</td>
+                                                  <td style="border:1px solid #21262d;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;white-space:nowrap;cursor:pointer">
+                                                    <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#bc8cff;background:rgba(188,140,255,.12);border-radius:10px;padding:0 7px"><span style="font-size:9px">▸</span><span style="opacity:.55">{</span><span style="font-size:10.5px">2 alan</span><span style="opacity:.55">}</span></span>
+                                                  </td>
+                                                  <td style="border:1px solid #21262d;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#f78166;text-align:right;white-space:nowrap;cursor:pointer">{{ o.TotalAmount }}</td>
+                                                  <td style="border:1px solid #21262d;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#a5d6ff;white-space:nowrap;cursor:pointer">{{ o.PaxRefID }}<button style="font-size:10px;line-height:1.6;padding:0 5px;border-radius:8px;margin-left:5px;color:#58a6ff;background:rgba(88,166,255,.15);border:none;cursor:pointer">↳</button></td>
+                                                  <td style="border:1px solid #21262d;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#a5d6ff;white-space:nowrap;cursor:pointer">{{ o.BookingRefID }}</td>
+                                                </tr>
+                                              </sc-for>
+                                              <tr>
+                                                <td colspan="9" style="border:1px solid #21262d;padding:5px 8px;background:#161b22;font-family:'JetBrains Mono',monospace;font-size:11px;color:#6e7681">8 / 8 satır</td>
+                                              </tr>
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td style="border:1px solid #21262d;vertical-align:top;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#ff7b72;white-space:nowrap;cursor:pointer;width:1%"><span style="font-weight:500">DataLists</span><span style="margin-left:5px;font-size:9px;opacity:.75;color:#58a6ff;cursor:pointer">ⓘ</span></td>
+                                    <td style="border:1px solid #21262d;vertical-align:top;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;cursor:pointer;white-space:nowrap">
+                                      <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#bc8cff;background:rgba(188,140,255,.12);border-radius:10px;padding:0 7px"><span style="font-size:9px">▸</span><span style="opacity:.55">{</span><span style="font-size:10.5px">4 alan</span><span style="opacity:.55">}</span></span>
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td style="border:1px solid #21262d;vertical-align:top;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#ff7b72;white-space:nowrap;cursor:pointer;width:1%"><span style="font-weight:500">Warning</span><span style="margin-left:5px;font-size:9px;opacity:.75;color:#d29922">●</span></td>
+                                    <td style="border:1px solid #21262d;vertical-align:top;padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;cursor:pointer;white-space:nowrap">
+                                      <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#bc8cff;background:rgba(188,140,255,.12);border-radius:10px;padding:0 7px"><span style="font-size:9px">▸</span><span style="opacity:.55">[</span><span style="font-size:10.5px">1 öğe</span><span style="opacity:.55">]</span></span>
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <div style="display:flex;flex-direction:column;width:240px;flex-shrink:0;min-height:0">
+      <aside style="flex:1 1 auto;min-height:0;border-left:1px solid #30363d;background:#161b22;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid #21262d;flex-shrink:0">
+          <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#6e7681;margin-right:auto">IATA</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;border-radius:10px;padding:2px 8px;color:#3fb950;background:rgba(63,185,80,.12)">%86</span>
+          <button style="font-size:15px;line-height:1;color:#6e7681;width:20px;height:20px;border-radius:5px;border:none;background:none;cursor:pointer">›</button>
+        </div>
+        <div style="padding:10px 14px 0"><code style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#58a6ff;word-break:break-all">IATA_OrderViewRS</code></div>
+        <div style="padding:10px 14px 14px">
+          <code style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#ff7b72;word-break:break-all">TotalPrice</code>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 9px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:2px 8px;border-radius:10px;color:#79c0ff;background:rgba(121,192,255,.12)">TotalPrice_Type</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:2px 8px;border-radius:10px;color:#3fb950;background:rgba(63,185,80,.12)">şemada var</span>
+          </div>
+          <p style="margin:0;font-size:12px;color:#8b949e;line-height:1.5;text-wrap:pretty">Toplam tutar bilgisi: vergiler, ücretler ve indirimler dahil olmak üzere siparişin ödenecek son bedelini taşır.</p>
+        </div>
+        <div style="margin-top:auto;padding:11px 14px;border-top:1px solid #21262d;flex-shrink:0">
+          <p style="margin:0;font-size:11px;color:#6e7681;line-height:1.5"><span style="color:#58a6ff">ⓘ</span> şemada var · <span style="color:#79c0ff">≈</span> tahmini · <span style="color:#d29922">●</span> şemada yok</p>
+          <button style="display:block;margin-top:3px;font-size:11px;color:#6e7681;text-align:left;background:none;border:none;font-family:inherit;cursor:pointer"><span style="color:#d29922">7 alan</span> karşılıksız — listele</button>
+        </div>
+      </aside>
+
+      <section style="flex:0 1 auto;max-height:52%;display:flex;flex-direction:column;min-height:0;border-top:1px solid #30363d;border-left:1px solid #30363d;background:#161b22;overflow-y:auto">
+        <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid #21262d;flex-shrink:0">
+          <span style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#8b949e;white-space:nowrap">Alan değerleri</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#58a6ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">CurCode</span>
+          <button style="margin-left:auto;font-size:12px;line-height:1;color:#6e7681;padding:0 3px;border:none;background:none;cursor:pointer">▾</button>
+        </div>
+        <div style="display:flex;gap:6px;padding:10px 12px 6px">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;background:#0d1117;border:1px solid #21262d;border-radius:7px;padding:6px 8px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;color:#e6edf3">64</span>
+            <span style="font-size:9.5px;color:#6e7681;white-space:nowrap">geçiyor</span>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;background:#0d1117;border:1px solid #21262d;border-radius:7px;padding:6px 8px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;color:#e6edf3">3</span>
+            <span style="font-size:9.5px;color:#6e7681;white-space:nowrap">farklı değer</span>
+          </div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;background:#0d1117;border:1px solid #21262d;border-radius:7px;padding:6px 8px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;color:#d29922">2</span>
+            <span style="font-size:9.5px;color:#6e7681;white-space:nowrap">alan yok</span>
+          </div>
+        </div>
+        <ul style="padding:0 12px 4px;margin:0;list-style:none;display:flex;flex-direction:column;gap:6px">
+          <sc-for list="{{ dist }}" as="d" hint-placeholder-count="3">
+            <li>
+              <button style="display:flex;flex-direction:column;gap:3px;width:100%;text-align:left;padding:3px 4px;border-radius:5px;border:none;background:none;cursor:pointer">
+                <span style="display:flex;align-items:baseline;gap:8px;width:100%">
+                  <span style="flex:1;min-width:0;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#a5d6ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ d.text }}</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8b949e;flex-shrink:0">{{ d.count }}</span>
+                </span>
+                <span style="display:block;width:100%;height:6px;background:#21262d;border-radius:3px;overflow:hidden">
+                  <span style="display:block;height:100%;background:#58a6ff;border-radius:0 4px 4px 0;width:{{ d.width }};opacity:{{ d.opacity }}"></span>
+                </span>
+              </button>
+            </li>
+          </sc-for>
+        </ul>
+      </section>
+    </div>
+  </div>
+
+  <footer style="display:flex;align-items:center;gap:16px;height:30px;padding:0 16px;background:#161b22;border-top:1px solid #30363d;flex-shrink:0">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6e7681;white-space:nowrap">48.216 node</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6e7681;white-space:nowrap">ayrıştırma 42 ms</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6e7681;white-space:nowrap">31 satır · 4 tablo açık</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#58a6ff;white-space:nowrap">⌁ editör satır 47 · 6 satır</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6e7681;white-space:nowrap">IATA_OrderViewRS %86</span>
+    <div style="flex:1"></div>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#6e7681;white-space:nowrap">Ctrl+K komutlar · Ctrl+F filtre · J/K satır</span>
+  </footer>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  renderVals() {
+    const orders = [
+      ['ORD100004', 'TK', 'OPENED', '2026-08-15T07:22:55', '18.450,00', 'PAX4', 'TK-2P9Q4'],
+      ['ORD100007', 'QR', 'CLOSED', '2026-08-12T22:15:03', '4.120,90', 'PAX7', 'QR-7B3Z9'],
+      ['ORD100003', 'LH', 'CLOSED', '2026-08-13T18:47:09', '2.310,75', 'PAX3', 'LH-3C7X8'],
+      ['ORD100006', 'TK', 'PENDING', '2026-08-15T12:01:47', '1.980,00', 'PAX6', 'TK-5N8V7'],
+      ['ORD100001', 'TK', 'OPENED', '2026-08-14T09:12:00', '1.250,50', 'PAX1', 'TK-8H2K1'],
+      ['ORD100002', 'TK', 'PENDING', '2026-08-14T10:04:31', '842,00', 'PAX2', 'TK-9L4M2'],
+      ['ORD100005', 'AF', 'OPENED', '2026-08-15T11:39:14', '655,20', 'PAX5', 'AF-6R1T3'],
+      ['ORD100008', 'TK', 'OPENED', '2026-08-16T06:58:20', '399,99', 'PAX8', 'TK-1D6F5'],
+    ];
+    const tone = { OPENED: '#3fb950', PENDING: '#d29922', CLOSED: '#6e7681' };
+    const editorText = `{
+  "IATA_OrderViewRS": {
+    "Response": {
+      "Order": [
+        {
+          "OrderID": "ORD100001",
+          "OwnerCode": "TK",
+          "StatusCode": "OPENED",
+          "CreateDateTime": "2026-08-14T09:12:00",
+          "TotalPrice": {
+            "TotalAmount": 1250.50,
+            "CurCode": "EUR"
+          },
+          "PaxRefID": "PAX1",
+          "BookingRefID": "TK-8H2K1"
+        },
+        {
+          "OrderID": "ORD100002",
+          "OwnerCode": "TK",
+          "StatusCode": "PENDING",
+          "CreateDateTime": "2026-08-14T10:04:31",`;
+    return {
+      editorText,
+      gutter: Array.from({ length: 24 }, (_, i) => i + 1),
+      columns: [
+        { name: 'OrderID', kind: 'str' },
+        { name: 'OwnerCode', kind: 'str' },
+        { name: 'StatusCode', kind: 'str' },
+        { name: 'CreateDateTime', kind: 'str' },
+        { name: 'TotalPrice', kind: 'obj' },
+        { name: 'TotalAmount', kind: 'num' },
+        { name: 'PaxRefID', kind: 'str · 6/8' },
+        { name: 'BookingRefID', kind: 'str' },
+      ],
+      orders: orders.map((o, i) => ({
+        i, OrderID: o[0], OwnerCode: o[1], StatusCode: o[2], statusColor: tone[o[2]],
+        CreateDateTime: o[3], TotalAmount: o[4], PaxRefID: o[5], BookingRefID: o[6],
+      })),
+      dist: [
+        { text: 'EUR', count: '41', width: '100%', opacity: 1 },
+        { text: 'USD', count: '15', width: '37%', opacity: 0.59 },
+        { text: 'TRY', count: '8', width: '20%', opacity: 0.48 },
+      ],
+    };
+  }
+}
+
+</script>
+</body>
+</html>

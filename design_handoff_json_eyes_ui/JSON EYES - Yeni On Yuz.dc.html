@@ -1,0 +1,1712 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  body { margin: 0; background: #eceae5; }
+  a { color: #2f6f5e; text-decoration: none; }
+  a:hover { color: #21514a; }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #d6d4cd; border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: #bdbab2; }
+  textarea::placeholder, input::placeholder { color: #6f7376; }
+</style>
+</helmet>
+
+<div style="width:1440px;height:900px;display:flex;flex-direction:column;overflow:hidden;background:#f4f3f0;color:#1b1d1e;font-family:'JetBrains Mono',ui-monospace,monospace;line-height:1.5;-webkit-font-smoothing:antialiased">
+
+  <header style="display:flex;align-items:center;gap:14px;padding:0 16px;height:46px;background:#fbfaf8;border-bottom:1px solid #e2e0d9;flex-shrink:0;position:relative;z-index:30">
+    <button onClick="{{ goHome }}" title="Yeni JSON" style="font-size:13px;font-weight:600;letter-spacing:.3px;color:#1b1d1e;background:none;border:none;padding:2px 0;cursor:pointer;font-family:inherit;flex-shrink:0">JSON <span style="color:#7a7d79;font-weight:400">EYES</span></button>
+
+    <sc-if value="{{ hasFile }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;align-items:center;gap:7px;min-width:0;flex-shrink:0">
+        <span style="width:5px;height:5px;border-radius:50%;background:{{ validColor }};flex-shrink:0"></span>
+        <span style="font-size:12px;color:#4a4e50;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">{{ fileName }}</span>
+      </div>
+    </sc-if>
+
+    <div style="flex:1;display:flex;justify-content:center;min-width:0">
+      <div style="display:flex;align-items:center;gap:9px;width:320px;max-width:100%;border-bottom:1px solid {{ searchBorder }};padding:4px 2px">
+        <span style="color:#6f7376;font-size:11px">⌕</span>
+        <input value="{{ query }}" onInput="{{ onQuery }}" placeholder="alan veya değer ara" style="flex:1;min-width:0;background:transparent;border:none;outline:none;color:#1b1d1e;font-family:inherit;font-size:12px" />
+        <span style="font-size:11px;color:#7a7d79;white-space:nowrap">{{ hitLabel }}</span>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:1px;flex-shrink:0;background:#eeece7;border-radius:6px;padding:2px">
+      <button onClick="{{ setTree }}" style="padding:4px 12px;border-radius:4px;font-size:12px;color:{{ treeTabColor }};background:{{ treeTabBg }};border:none;font-family:inherit;cursor:pointer">Tree</button>
+      <button onClick="{{ setGrid }}" style="padding:4px 12px;border-radius:4px;font-size:12px;color:{{ gridTabColor }};background:{{ gridTabBg }};border:none;font-family:inherit;cursor:pointer">Grid</button>
+      <button onClick="{{ setColumns }}" style="padding:4px 12px;border-radius:4px;font-size:12px;color:{{ colTabColor }};background:{{ colTabBg }};border:none;font-family:inherit;cursor:pointer">Kolon</button>
+    </div>
+
+    <button onClick="{{ toggleTheme }}" title="Aydınlık / karanlık" style="font-size:12px;line-height:1;color:#7a7d79;border:none;background:none;padding:4px;flex-shrink:0;cursor:pointer;font-family:inherit">☀</button>
+
+    <div style="position:relative;flex-shrink:0">
+      <button onClick="{{ toggleShareMenu }}" style="font-size:12px;color:#1b1d1e;background:none;border:1px solid #d6d4cd;border-radius:6px;padding:5px 12px;cursor:pointer;font-family:inherit" style-hover="background:#eeece7">Paylaş</button>
+      <sc-if value="{{ shareMenuOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:34px;right:0;width:270px;background:#fbfaf8;border:1px solid #d6d4cd;border-radius:8px;padding:13px;box-shadow:0 14px 30px rgba(27,29,30,.12);display:flex;flex-direction:column;gap:9px">
+          <input value="{{ shareTitle }}" onInput="{{ onShareTitle }}" placeholder="başlık (isteğe bağlı)" style="box-sizing:border-box;background:#f4f3f0;border:1px solid #e2e0d9;border-radius:6px;outline:none;padding:6px 9px;font-family:inherit;font-size:12px;color:#1b1d1e" />
+          <button onClick="{{ toggleShareComments }}" style="display:flex;align-items:center;gap:8px;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;text-align:left">
+            <span style="width:14px;height:14px;border-radius:4px;border:1px solid {{ shareCheckBorder }};background:{{ shareCheckBg }};color:#ffffff;font-size:9px;line-height:12px;text-align:center">{{ shareCheckMark }}</span>
+            <span style="font-size:11.5px;color:#4a4e50">alan yorumlarına açık</span>
+          </button>
+          <p style="margin:0;font-size:11px;color:#7a7d79;line-height:1.5;text-wrap:pretty">Link salt okunur açılır, 60 gün sonra silinir.</p>
+          <button onClick="{{ createShare }}" style="font-size:12px;color:#ffffff;background:#2f6f5e;border:none;border-radius:6px;padding:7px 0;cursor:pointer;font-family:inherit">Link oluştur</button>
+        </div>
+      </sc-if>
+    </div>
+  </header>
+
+  <sc-if value="{{ hasBanner }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;gap:10px;height:31px;padding:0 16px;background:#f0efe9;border-bottom:1px solid #e2e0d9;flex-shrink:0">
+      <span style="font-size:11px;color:#7a7d79;letter-spacing:.4px">{{ bannerTag }}</span>
+      <span style="font-size:11.5px;color:#1b1d1e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ bannerText }}</span>
+      <span style="font-size:11px;color:#7a7d79;white-space:nowrap">{{ bannerNote }}</span>
+      <div style="flex:1"></div>
+      <button onClick="{{ copyShare }}" style="font-size:11px;color:#2f6f5e;border:none;background:none;padding:2px 4px;cursor:pointer;font-family:inherit">{{ copyLabel }}</button>
+      <button onClick="{{ closeBanner }}" style="font-size:13px;color:#7a7d79;background:none;border:none;cursor:pointer;font-family:inherit">×</button>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showPath }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;align-items:center;gap:7px;height:32px;padding:0 16px;background:#f4f3f0;border-bottom:1px solid #e6e4de;flex-shrink:0;overflow:hidden">
+      <sc-for list="{{ crumbs }}" as="c" hint-placeholder-count="4">
+        <div style="display:flex;align-items:center;gap:7px;flex-shrink:0">
+          <button onClick="{{ c.onGo }}" style="font-size:11.5px;color:{{ c.color }};background:none;border:none;padding:1px 2px;white-space:nowrap;cursor:pointer;font-family:inherit">{{ c.label }}</button>
+          <span style="color:#82868a;font-size:10px">{{ c.sep }}</span>
+        </div>
+      </sc-for>
+      <sc-if value="{{ hasStepper }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;margin-left:4px">
+          <button onClick="{{ stepPrev }}" title="Önceki kardeş" style="font-size:11px;color:#7a7d79;background:none;border:none;cursor:pointer;font-family:inherit;padding:0 2px">‹</button>
+          <span style="font-size:11px;color:#7a7d79;white-space:nowrap">{{ stepLabel }}</span>
+          <button onClick="{{ stepNext }}" title="Sonraki kardeş" style="font-size:11px;color:#7a7d79;background:none;border:none;cursor:pointer;font-family:inherit;padding:0 2px">›</button>
+        </div>
+      </sc-if>
+      <div style="flex:1"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;height:25px;padding:0 16px;background:#f4f3f0;border-bottom:1px solid #e6e4de;flex-shrink:0;overflow:hidden">
+      <button onClick="{{ copyPath }}" title="Tıkla: yolu kopyala" style="display:flex;align-items:center;gap:8px;min-width:0;font-size:10.5px;color:#6f7376;border:none;background:none;padding:0;cursor:pointer;font-family:inherit" style-hover="color:#1b1d1e">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#4a4e50">{{ pathExpr }}</span>
+        <span style="color:{{ copyHintColor }};white-space:nowrap">{{ copyHint }}</span>
+      </button>
+    </div>
+  </sc-if>
+
+  <div style="display:flex;flex:1;min-height:0">
+
+    <sc-if value="{{ editorClosed }}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{ toggleEditor }}" title="Girdi panelini aç" style="width:24px;flex-shrink:0;background:#fbfaf8;border:none;border-right:1px solid #e2e0d9;display:flex;flex-direction:column;align-items:center;gap:9px;padding-top:12px;cursor:pointer;font-family:inherit;color:#7a7d79">
+        <span style="font-size:11px">›</span>
+        <span style="font-size:10px;letter-spacing:.7px;writing-mode:vertical-rl">GİRDİ</span>
+      </button>
+    </sc-if>
+
+    <sc-if value="{{ editorOpen }}" hint-placeholder-val="{{ true }}">
+      <section data-screen-label="Girdi paneli" style="width:{{ editorW }};flex-shrink:0;display:flex;flex-direction:column;background:#fbfaf8;border-right:1px solid #e2e0d9;min-height:0;position:relative">
+        <div onMouseDown="{{ startResize }}" onDoubleClick="{{ resetWidth }}" title="Sürükle: panel genişliği · çift tıkla: sıfırla" style="position:absolute;top:0;right:-3px;width:7px;height:100%;cursor:col-resize;z-index:20;background:{{ resizeBg }}"></div>
+
+        <div style="display:flex;align-items:center;gap:12px;height:33px;padding:0 8px 0 14px;border-bottom:1px solid #eae8e2;flex-shrink:0">
+          <button onClick="{{ setTabInput }}" style="font-size:11.5px;color:{{ inputTabColor }};background:none;border:none;border-bottom:1px solid {{ inputTabLine }};padding:7px 1px;cursor:pointer;font-family:inherit">Girdi</button>
+          <button onClick="{{ setTabDiff }}" style="font-size:11.5px;color:{{ diffTabColor }};background:none;border:none;border-bottom:1px solid {{ diffTabLine }};padding:7px 1px;cursor:pointer;font-family:inherit">Fark</button>
+          <button onClick="{{ setTabHistory }}" style="font-size:11.5px;color:{{ histTabColor }};background:none;border:none;border-bottom:1px solid {{ histTabLine }};padding:7px 1px;cursor:pointer;font-family:inherit">Geçmiş</button>
+          <div style="flex:1"></div>
+          <button onClick="{{ toggleEditor }}" title="Paneli kapat" style="font-size:12px;line-height:1;color:#7a7d79;border:none;background:none;width:20px;height:20px;cursor:pointer;font-family:inherit">‹</button>
+        </div>
+
+        <sc-if value="{{ tabIsInput }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;flex:1;min-height:0">
+
+            <div style="display:flex;align-items:center;gap:10px;height:32px;padding:0 14px;border-bottom:1px solid #eae8e2;flex-shrink:0">
+              <button onClick="{{ setKindJson }}" style="font-size:11px;color:{{ kindJsonColor }};background:none;border:none;padding:0;cursor:pointer;font-family:inherit">JSON</button>
+              <button onClick="{{ setKindXml }}" style="font-size:11px;color:{{ kindXmlColor }};background:none;border:none;padding:0;cursor:pointer;font-family:inherit">XML</button>
+              <div style="flex:1"></div>
+              <span style="font-size:11px;color:#6f7376;white-space:nowrap">{{ sizeLabel }}</span>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:11px;height:31px;padding:0 14px;border-bottom:1px solid #eae8e2;flex-shrink:0;overflow:hidden">
+              <button onClick="{{ doFormat }}" style="font-size:11px;color:#4a4e50;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;white-space:nowrap" style-hover="color:#1b1d1e">biçim</button>
+              <button onClick="{{ doMinify }}" style="font-size:11px;color:#4a4e50;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;white-space:nowrap" style-hover="color:#1b1d1e">küçült</button>
+              <button onClick="{{ doPaste }}" style="font-size:11px;color:#4a4e50;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;white-space:nowrap" style-hover="color:#1b1d1e">yapıştır</button>
+              <button onClick="{{ doSample }}" style="font-size:11px;color:#4a4e50;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;white-space:nowrap" style-hover="color:#1b1d1e">örnek</button>
+              <div style="flex:1"></div>
+              <button onClick="{{ toggleLive }}" title="Yazarken ayrıştır / elle uygula" style="font-size:11px;color:{{ liveColor }};border:none;background:none;padding:0;cursor:pointer;font-family:inherit;white-space:nowrap">{{ liveLabel }}</button>
+              <sc-if value="{{ needsApply }}" hint-placeholder-val="{{ false }}">
+                <button onClick="{{ applyNow }}" style="font-size:11px;color:#ffffff;background:#2f6f5e;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-family:inherit">uygula</button>
+              </sc-if>
+              <button onClick="{{ doClear }}" style="font-size:11px;color:#6f7376;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;white-space:nowrap" style-hover="color:#a3382f">temizle</button>
+            </div>
+
+            <div style="flex:1;min-height:0;display:flex;background:#ffffff;overflow:hidden">
+              <div ref="{{ gutterRef }}" style="width:42px;flex-shrink:0;overflow:hidden;background:#fbfaf8;border-right:1px solid #eae8e2;padding:9px 0">
+                <sc-for list="{{ gutter }}" as="g" hint-placeholder-count="30">
+                  <div style="font-size:11px;line-height:19px;height:19px;color:{{ g.color }};text-align:right;padding-right:9px;background:{{ g.bg }}">{{ g.n }}</div>
+                </sc-for>
+              </div>
+              <textarea ref="{{ codeRef }}" value="{{ text }}" onInput="{{ onText }}" onScroll="{{ onCodeScroll }}" spellcheck="false" placeholder="JSON yapıştır ya da dosya bırak" style="flex:1;min-width:0;background:transparent;border:none;outline:none;resize:none;color:#1b1d1e;font-family:inherit;font-size:11.5px;line-height:19px;padding:9px 11px;white-space:pre;overflow:auto"></textarea>
+            </div>
+
+            <div style="flex-shrink:0;border-top:1px solid #eae8e2;padding:8px 14px;display:flex;align-items:flex-start;gap:8px;background:{{ statusBg }}">
+              <span style="flex:1;min-width:0;font-size:11px;color:{{ statusColor }};word-break:break-word">{{ statusText }}</span>
+              <sc-if value="{{ hasError }}" hint-placeholder-val="{{ false }}">
+                <button onClick="{{ doRepair }}" style="font-size:11px;color:#ffffff;background:#a3382f;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-family:inherit;white-space:nowrap">düzelt</button>
+              </sc-if>
+              <sc-if value="{{ isXmlKind }}" hint-placeholder-val="{{ false }}">
+                <button onClick="{{ loadConverted }}" style="font-size:11px;color:#2f6f5e;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;white-space:nowrap">JSON'a çevir</button>
+              </sc-if>
+            </div>
+
+            <sc-if value="{{ isXmlKind }}" hint-placeholder-val="{{ false }}">
+              <div style="flex-shrink:0;border-top:1px solid #eae8e2;padding:8px 14px;display:flex;align-items:center;gap:12px">
+                <button onClick="{{ togglePrefixes }}" style="font-size:11px;color:{{ prefColor }};border:none;background:none;padding:0;cursor:pointer;font-family:inherit">ad alanı önekleri</button>
+                <button onClick="{{ toggleNumbers }}" style="font-size:11px;color:{{ numColor }};border:none;background:none;padding:0;cursor:pointer;font-family:inherit">sayıya çevir</button>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ tabIsDiff }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;min-height:0;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span style="font-size:11px;color:#7a7d79">A</span>
+                <span style="font-size:12px;color:#1b1d1e;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ diffAName }}</span>
+                <div style="flex:1"></div>
+                <button onClick="{{ editA }}" style="font-size:10.5px;color:#6f7376;border:none;background:none;padding:0;cursor:pointer;font-family:inherit" style-hover="color:#1b1d1e">girdide düzenle</button>
+              </div>
+              <textarea value="{{ textA }}" onInput="{{ onTextA }}" spellcheck="false" placeholder="A tarafı JSON" style="box-sizing:border-box;width:100%;height:96px;background:#ffffff;border:1px solid {{ aBorder }};border-radius:6px;outline:none;resize:vertical;color:#1b1d1e;font-family:inherit;font-size:11px;line-height:17px;padding:7px 8px;white-space:pre;overflow:auto"></textarea>
+              <span style="font-size:10.5px;color:{{ aMsgColor }}">{{ aMsg }}</span>
+
+              <div style="display:flex;align-items:baseline;gap:8px;margin-top:6px">
+                <span style="font-size:11px;color:#7a7d79">B</span>
+                <span style="font-size:12px;color:#1b1d1e;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ diffBName }}</span>
+                <div style="flex:1"></div>
+                <button onClick="{{ pasteB }}" style="font-size:10.5px;color:#6f7376;border:none;background:none;padding:0;cursor:pointer;font-family:inherit" style-hover="color:#1b1d1e">yapıştır</button>
+              </div>
+              <textarea value="{{ textB }}" onInput="{{ onTextB }}" spellcheck="false" placeholder="B tarafı JSON yapıştır" style="box-sizing:border-box;width:100%;height:96px;background:#ffffff;border:1px solid {{ bBorder }};border-radius:6px;outline:none;resize:vertical;color:#1b1d1e;font-family:inherit;font-size:11px;line-height:17px;padding:7px 8px;white-space:pre;overflow:auto"></textarea>
+              <span style="font-size:10.5px;color:{{ bMsgColor }}">{{ bMsg }}</span>
+              <span style="font-size:10.5px;color:#7a7d79;margin-top:2px">ya da B'yi geçmişten seç</span>
+              <sc-for list="{{ diffCandidates }}" as="d" hint-placeholder-count="3">
+                <button onClick="{{ d.onPick }}" style="display:flex;align-items:center;gap:9px;padding:6px 8px;border:none;border-radius:6px;background:{{ d.bg }};cursor:pointer;font-family:inherit;text-align:left">
+                  <span style="font-size:11px;color:{{ d.dot }}">●</span>
+                  <span style="font-size:12px;color:#1b1d1e">{{ d.name }}</span>
+                  <div style="flex:1"></div>
+                  <span style="font-size:11px;color:#7a7d79">{{ d.meta }}</span>
+                </button>
+              </sc-for>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:6px;border-top:1px solid #eae8e2;padding-top:13px">
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span style="font-size:12px;color:#2c6b45;width:74px">{{ dAdded }} eklendi</span>
+                <div style="flex:1;height:4px;background:#eeece7;border-radius:2px;overflow:hidden"><div style="height:100%;background:#2c6b45;width:{{ addW }}"></div></div>
+              </div>
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span style="font-size:12px;color:#a3382f;width:74px">{{ dRemoved }} silindi</span>
+                <div style="flex:1;height:4px;background:#eeece7;border-radius:2px;overflow:hidden"><div style="height:100%;background:#a3382f;width:{{ delW }}"></div></div>
+              </div>
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span style="font-size:12px;color:#8a5a00;width:74px">{{ dChanged }} değişti</span>
+                <div style="flex:1;height:4px;background:#eeece7;border-radius:2px;overflow:hidden"><div style="height:100%;background:#8a5a00;width:{{ chgW }}"></div></div>
+              </div>
+              <p style="margin:6px 0 0;font-size:11px;color:#7a7d79;line-height:1.55;text-wrap:pretty">{{ diffNote }}</p>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:12px;border-top:1px solid #eae8e2;padding-top:13px">
+              <button onClick="{{ toggleOnlyChanges }}" style="font-size:11px;color:{{ onlyChColor }};border:none;background:none;padding:0;cursor:pointer;font-family:inherit">yalnız değişenler</button>
+              <div style="flex:1"></div>
+              <button onClick="{{ diffPrev }}" style="font-size:11px;color:#7a7d79;border:none;background:none;cursor:pointer;font-family:inherit">↑</button>
+              <span style="font-size:11px;color:#7a7d79">{{ diffPos }}</span>
+              <button onClick="{{ diffNext }}" style="font-size:11px;color:#7a7d79;border:none;background:none;cursor:pointer;font-family:inherit">↓</button>
+              <button onClick="{{ swapDiff }}" style="font-size:11px;color:#7a7d79;border:none;background:none;cursor:pointer;font-family:inherit">A↔B</button>
+            </div>
+            <button onClick="{{ exitDiff }}" style="font-size:11px;color:#7a7d79;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;text-align:left">← karşılaştırmayı kapat</button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ tabIsHistory }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;min-height:0;overflow:auto;padding:8px">
+            <sc-for list="{{ recents }}" as="r" hint-placeholder-count="4">
+              <button onClick="{{ r.onOpen }}" style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;padding:8px 10px;border:none;border-radius:6px;background:transparent;cursor:pointer;font-family:inherit;text-align:left" style-hover="background:#f0efe9">
+                <span style="font-size:12px;color:#1b1d1e">{{ r.name }}</span>
+                <span style="font-size:11px;color:#7a7d79">{{ r.meta }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </sc-if>
+      </section>
+    </sc-if>
+
+    <section style="flex:1;min-width:0;display:flex;flex-direction:column;background:#f4f3f0;min-height:0">
+
+      <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Boş durum" style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;padding:40px">
+          <span style="font-size:13px;color:#7a7d79">IATA NDC yanıtlarını tablo olarak okuyun</span>
+          <div style="width:500px;border:1px dashed #cdcbc4;border-radius:10px;padding:38px 30px;display:flex;flex-direction:column;align-items:center;gap:18px">
+            <span style="font-size:12.5px;color:#4a4e50">dosyayı buraya bırak · .json ya da .xml</span>
+            <div style="display:flex;gap:14px">
+              <button onClick="{{ doSample }}" style="font-size:12px;color:#ffffff;background:#2f6f5e;border:none;border-radius:6px;padding:8px 15px;cursor:pointer;font-family:inherit">Örneği aç</button>
+              <button onClick="{{ doPaste }}" style="font-size:12px;color:#1b1d1e;background:none;border:1px solid #d6d4cd;border-radius:6px;padding:8px 15px;cursor:pointer;font-family:inherit" style-hover="background:#eeece7">Panodan yapıştır</button>
+            </div>
+          </div>
+          <div style="width:500px;display:flex;flex-direction:column;gap:3px">
+            <sc-for list="{{ recents }}" as="r" hint-placeholder-count="3">
+              <button onClick="{{ r.onOpen }}" style="display:flex;align-items:center;gap:10px;width:100%;padding:7px 4px;border:none;background:none;cursor:pointer;font-family:inherit;text-align:left" style-hover="background:#eeece7">
+                <span style="font-size:12px;color:#1b1d1e">{{ r.name }}</span>
+                <div style="flex:1"></div>
+                <span style="font-size:11px;color:#7a7d79">{{ r.meta }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isGrid }}" hint-placeholder-val="{{ true }}">
+        <div data-screen-label="Grid" style="flex:1;min-height:0;display:flex;flex-direction:column">
+
+          <div style="display:flex;align-items:center;gap:14px;height:32px;padding:0 14px;background:#fbfaf8;border-bottom:1px solid #e2e0d9;flex-shrink:0;white-space:nowrap">
+            <button onClick="{{ expandAll }}" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#4a4e50;border:none;background:none;padding:0;cursor:pointer;font-family:inherit" style-hover="color:#1b1d1e"><span style="font-size:9px;color:#6f7376">⊞</span>tümünü aç</button>
+            <button onClick="{{ collapseAll }}" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#4a4e50;border:none;background:none;padding:0;cursor:pointer;font-family:inherit" style-hover="color:#1b1d1e"><span style="font-size:9px;color:#6f7376">⊟</span>tümünü kapat</button>
+            <button onClick="{{ doCsv }}" style="font-size:11px;color:#4a4e50;border:none;background:none;padding:0;cursor:pointer;font-family:inherit" style-hover="color:#1b1d1e">CSV</button>
+            <div style="flex:1"></div>
+            <span style="font-size:11px;color:#6f7376">{{ gridMeta }}</span>
+          </div>
+
+          <div style="flex:1;min-height:0;overflow:auto;background:#f4f3f0;padding:12px 14px 28px">
+            <div style="display:inline-block;min-width:0;border:1px solid #d4d2ca;background:#ffffff">
+              <sc-if value="{{ g0.hasHead }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;background:#f0efe9;border-bottom:1px solid #d4d2ca">
+                  <button onClick="{{ toggleFilters }}" title="Kolon filtreleri" style="flex:0 0 {{ g0.labelW }};padding:5px 9px;font-size:10.5px;color:{{ filtColor }};border:none;border-right:1px solid #e4e2db;background:none;cursor:pointer;font-family:inherit;text-align:left">{{ g0.corner }}</button>
+                  <sc-for list="{{ g0.cols }}" as="c0" hint-placeholder-count="7">
+                    <button onClick="{{ c0.onSort }}" title="{{ c0.tip }}" style="display:flex;align-items:center;gap:5px;flex:0 0 {{ c0.w }};padding:5px 9px;border:none;border-right:1px solid #e4e2db;background:{{ c0.bg }};cursor:pointer;font-family:inherit;text-align:left;overflow:hidden;white-space:nowrap">
+                      <span style="font-size:11px;color:{{ c0.color }};overflow:hidden;text-overflow:ellipsis">{{ c0.name }}</span>
+                      <span style="font-size:8px;color:#2f6f5e">{{ c0.arrow }}</span>
+                      <div style="flex:1"></div>
+                      <span style="font-size:9px;color:#8a5a00">{{ c0.docMark }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ g0.showFilters }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;background:#fbfaf8;border-bottom:1px solid #e4e2db">
+                  <div style="flex:0 0 {{ g0.labelW }};padding:3px 9px;font-size:10px;color:#9a9c98;border-right:1px solid #e4e2db">▽</div>
+                  <sc-for list="{{ g0.cols }}" as="c0" hint-placeholder-count="7">
+                    <div style="flex:0 0 {{ c0.w }};padding:3px 5px;border-right:1px solid #e4e2db;overflow:hidden">
+                      <input value="{{ c0.filter }}" data-key="{{ c0.fkey }}" onInput="{{ onFilter }}" placeholder="içerir" style="box-sizing:border-box;width:100%;background:#ffffff;border:none;border-bottom:1px solid {{ c0.filterBorder }};outline:none;color:#1b1d1e;font-family:inherit;font-size:10.5px;padding:1px 2px" />
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <sc-for list="{{ g0.rows }}" as="r0" hint-placeholder-count="12">
+                <div style="display:flex;align-items:stretch;border-bottom:1px solid #eceae4;background:{{ r0.bg }};box-shadow:{{ r0.ribbon }}">
+                  <div onClick="{{ r0.onSelect }}" style="flex:0 0 {{ g0.labelW }};padding:5px 9px;border-right:1px solid #eceae4;font-size:11.5px;color:{{ r0.labelColor }};cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r0.label }}</div>
+                  <sc-for list="{{ r0.cells }}" as="k0" hint-placeholder-count="7">
+                    <div style="flex:0 0 {{ k0.w }};border-right:1px solid #eceae4;display:flex;align-items:flex-start;overflow:hidden">
+
+                      <sc-if value="{{ k0.isVal }}" hint-placeholder-val="{{ true }}">
+                        <div onClick="{{ k0.onClick }}" style="display:flex;align-items:center;justify-content:{{ k0.justify }};gap:6px;width:100%;padding:5px 9px;font-size:12.5px;color:{{ k0.color }};cursor:pointer;white-space:nowrap;overflow:hidden">
+                          <span style="overflow:hidden;text-overflow:ellipsis">{{ k0.text }}</span>
+                          <span style="font-size:10px;color:#2f6f5e">{{ k0.ref }}</span>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{ k0.isBox }}" hint-placeholder-val="{{ false }}">
+                        <div style="display:flex;flex-direction:column;width:100%;min-width:0">
+                          <button onClick="{{ k0.onToggle }}" style="display:flex;align-items:center;gap:6px;padding:4px 9px;border:none;background:none;cursor:pointer;font-family:inherit;text-align:left">
+                            <span style="font-size:10px;color:#6f7376">{{ k0.sign }}</span>
+                            <span style="font-size:11.5px;color:#4a4e50;white-space:nowrap">{{ k0.label }}</span>
+                          </button>
+
+                          <sc-if value="{{ k0.hasGrid }}" hint-placeholder-val="{{ false }}">
+                            <div style="margin:0 5px 6px;border:1px solid #dcdad3;background:#fbfaf8;display:inline-block;min-width:0">
+                              <sc-if value="{{ k0.grid.hasHead }}" hint-placeholder-val="{{ false }}">
+                                <div style="display:flex;background:#f0efe9;border-bottom:1px solid #dcdad3">
+                                  <div style="flex:0 0 {{ k0.grid.labelW }};padding:4px 8px;font-size:10px;color:#6f7376;border-right:1px solid #e4e2db">{{ k0.grid.corner }}</div>
+                                  <sc-for list="{{ k0.grid.cols }}" as="c1" hint-placeholder-count="4">
+                                    <button onClick="{{ c1.onSort }}" style="display:flex;align-items:center;gap:4px;flex:0 0 {{ c1.w }};padding:4px 8px;border:none;border-right:1px solid #e4e2db;background:none;cursor:pointer;font-family:inherit;text-align:left;overflow:hidden;white-space:nowrap">
+                                      <span style="font-size:10.5px;color:{{ c1.color }};overflow:hidden;text-overflow:ellipsis">{{ c1.name }}</span>
+                                      <span style="font-size:8px;color:#2f6f5e">{{ c1.arrow }}</span>
+                                    </button>
+                                  </sc-for>
+                                </div>
+                              </sc-if>
+                              <sc-for list="{{ k0.grid.rows }}" as="r1" hint-placeholder-count="3">
+                                <div style="display:flex;align-items:stretch;border-bottom:1px solid #eceae4;background:{{ r1.bg }}">
+                                  <div onClick="{{ r1.onSelect }}" style="flex:0 0 {{ k0.grid.labelW }};padding:4px 8px;border-right:1px solid #eceae4;font-size:11px;color:{{ r1.labelColor }};cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r1.label }}</div>
+                                  <sc-for list="{{ r1.cells }}" as="k1" hint-placeholder-count="3">
+                                    <div style="flex:0 0 {{ k1.w }};border-right:1px solid #eceae4;display:flex;align-items:flex-start;overflow:hidden">
+                                      <sc-if value="{{ k1.isVal }}" hint-placeholder-val="{{ true }}">
+                                        <div onClick="{{ k1.onClick }}" style="display:flex;align-items:center;justify-content:{{ k1.justify }};gap:6px;width:100%;padding:4px 8px;font-size:12px;color:{{ k1.color }};cursor:pointer;white-space:nowrap;overflow:hidden">
+                                          <span style="overflow:hidden;text-overflow:ellipsis">{{ k1.text }}</span>
+                                          <span style="font-size:10px;color:#2f6f5e">{{ k1.ref }}</span>
+                                        </div>
+                                      </sc-if>
+                                      <sc-if value="{{ k1.isBox }}" hint-placeholder-val="{{ false }}">
+                                        <div style="display:flex;flex-direction:column;width:100%;min-width:0">
+                                          <button onClick="{{ k1.onToggle }}" style="display:flex;align-items:center;gap:6px;padding:4px 8px;border:none;background:none;cursor:pointer;font-family:inherit;text-align:left">
+                                            <span style="font-size:10px;color:#6f7376">{{ k1.sign }}</span>
+                                            <span style="font-size:11px;color:#4a4e50;white-space:nowrap">{{ k1.label }}</span>
+                                          </button>
+                                          <sc-if value="{{ k1.hasGrid }}" hint-placeholder-val="{{ false }}">
+                                            <div style="margin:0 5px 5px;border:1px solid #dcdad3;background:#ffffff;display:inline-block;min-width:0">
+                                              <sc-if value="{{ k1.grid.hasHead }}" hint-placeholder-val="{{ false }}">
+                                                <div style="display:flex;background:#f0efe9;border-bottom:1px solid #dcdad3">
+                                                  <div style="flex:0 0 {{ k1.grid.labelW }};padding:3px 7px;font-size:10px;color:#6f7376;border-right:1px solid #e4e2db">{{ k1.grid.corner }}</div>
+                                                  <sc-for list="{{ k1.grid.cols }}" as="c2" hint-placeholder-count="3">
+                                                    <div style="flex:0 0 {{ c2.w }};padding:3px 7px;border-right:1px solid #e4e2db;font-size:10px;color:#4a4e50;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ c2.name }}</div>
+                                                  </sc-for>
+                                                </div>
+                                              </sc-if>
+                                              <sc-for list="{{ k1.grid.rows }}" as="r2" hint-placeholder-count="2">
+                                                <div style="display:flex;align-items:stretch;border-bottom:1px solid #eceae4">
+                                                  <div onClick="{{ r2.onSelect }}" style="flex:0 0 {{ k1.grid.labelW }};padding:3px 7px;border-right:1px solid #eceae4;font-size:10.5px;color:{{ r2.labelColor }};cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r2.label }}</div>
+                                                  <sc-for list="{{ r2.cells }}" as="k2" hint-placeholder-count="3">
+                                                    <div onClick="{{ k2.onClick }}" style="flex:0 0 {{ k2.w }};display:flex;align-items:center;justify-content:{{ k2.justify }};gap:5px;padding:3px 7px;border-right:1px solid #eceae4;font-size:11.5px;color:{{ k2.color }};cursor:pointer;white-space:nowrap;overflow:hidden">
+                                                      <span style="overflow:hidden;text-overflow:ellipsis">{{ k2.text }}</span>
+                                                      <span style="font-size:10px;color:#2f6f5e">{{ k2.ref }}</span>
+                                                    </div>
+                                                  </sc-for>
+                                                </div>
+                                              </sc-for>
+                                            </div>
+                                          </sc-if>
+                                        </div>
+                                      </sc-if>
+                                    </div>
+                                  </sc-for>
+                                </div>
+                              </sc-for>
+                            </div>
+                          </sc-if>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+
+              <sc-if value="{{ g0.hasMore }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:6px 10px;background:#fbfaf8;font-size:11px;color:#6f7376">{{ g0.moreNote }}</div>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isTree }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Tree" style="flex:1;min-height:0;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:13px;height:32px;padding:0 14px;background:#fbfaf8;border-bottom:1px solid #e2e0d9;flex-shrink:0">
+            <button onClick="{{ expandAll }}" style="font-size:11px;color:#4a4e50;border:none;background:none;padding:0;cursor:pointer;font-family:inherit" style-hover="color:#1b1d1e">tümünü aç</button>
+            <button onClick="{{ collapseAll }}" style="font-size:11px;color:#4a4e50;border:none;background:none;padding:0;cursor:pointer;font-family:inherit" style-hover="color:#1b1d1e">tümünü kapat</button>
+            <div style="flex:1"></div>
+            <span style="font-size:11px;color:#6f7376">{{ treeMeta }}</span>
+          </div>
+          <div style="flex:1;min-height:0;overflow:auto;background:#ffffff;padding:6px 0 24px">
+            <sc-for list="{{ treeRows }}" as="t" hint-placeholder-count="22">
+              <div onClick="{{ t.onSelect }}" style="display:flex;align-items:center;gap:8px;padding:2px 14px 2px {{ t.pad }};background:{{ t.bg }};cursor:pointer;box-shadow:{{ t.ribbon }};white-space:nowrap">
+                <button onClick="{{ t.onToggle }}" style="width:12px;flex-shrink:0;font-size:10px;color:#6f7376;border:none;background:none;padding:0;cursor:pointer;font-family:inherit">{{ t.caret }}</button>
+                <span style="font-size:12px;color:#4a4e50">{{ t.key }}</span>
+                <span style="font-size:12px;color:{{ t.valColor }};overflow:hidden;text-overflow:ellipsis;min-width:0">{{ t.val }}</span>
+                <span style="font-size:10.5px;color:#6f7376">{{ t.note }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isColumns }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Kolon" style="flex:1;min-height:0;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:14px;height:30px;padding:0 14px;background:#fbfaf8;border-bottom:1px solid #e2e0d9;flex-shrink:0;font-size:11px;color:#7a7d79">
+            <span>↑ ↓ kardeşler</span>
+            <span>→ içine gir</span>
+            <span>← üst seviye</span>
+          </div>
+          <div style="flex:1;min-height:0;overflow:auto;display:flex">
+            <sc-for list="{{ colViews }}" as="cv" hint-placeholder-count="4">
+              <div style="width:224px;flex:0 0 224px;display:flex;flex-direction:column;min-height:0;border-right:1px solid #e2e0d9;background:{{ cv.bg }}">
+                <div style="display:flex;align-items:center;gap:6px;height:28px;padding:0 11px;border-bottom:1px solid #eae8e2;flex-shrink:0">
+                  <span style="font-size:11px;color:#4a4e50;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ cv.title }}</span>
+                  <div style="flex:1"></div>
+                  <span style="font-size:10.5px;color:#6f7376">{{ cv.count }}</span>
+                </div>
+                <div style="flex:1;min-height:0;overflow:auto">
+                  <sc-for list="{{ cv.entries }}" as="e" hint-placeholder-count="10">
+                    <button onClick="{{ e.onPick }}" style="display:flex;align-items:baseline;gap:8px;width:100%;padding:4px 11px;border:none;background:{{ e.bg }};cursor:pointer;font-family:inherit;text-align:left;box-shadow:{{ e.ribbon }}">
+                      <span style="font-size:11.5px;color:{{ e.keyColor }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:96px">{{ e.key }}</span>
+                      <div style="flex:1"></div>
+                      <span style="font-size:11px;color:{{ e.sumColor }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:92px">{{ e.summary }}</span>
+                      <span style="font-size:9px;color:#82868a">{{ e.chevron }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isDiff }}" hint-placeholder-val="{{ false }}">
+        <div data-screen-label="Fark" style="flex:1;min-height:0;display:flex;flex-direction:column">
+          <div style="display:flex;height:27px;flex-shrink:0;background:#fbfaf8;border-bottom:1px solid #e2e0d9">
+            <div style="flex:1;min-width:0;display:flex;align-items:center;gap:9px;padding:0 14px;border-right:1px solid #e2e0d9">
+              <span style="font-size:10.5px;color:#6f7376">A</span>
+              <span style="font-size:11px;color:#4a4e50;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ diffAName }}</span>
+            </div>
+            <div style="flex:1;min-width:0;display:flex;align-items:center;gap:9px;padding:0 14px">
+              <span style="font-size:10.5px;color:#6f7376">B</span>
+              <span style="font-size:11px;color:#4a4e50;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ diffBName }}</span>
+            </div>
+          </div>
+          <div ref="{{ diffScrollRef }}" style="flex:1;min-height:0;overflow:auto;background:#ffffff">
+            <sc-for list="{{ diffRows }}" as="d" hint-placeholder-count="18">
+              <div style="display:flex;min-height:24px;box-shadow:{{ d.cursor }}">
+                <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:2px 14px;border-right:1px solid #e2e0d9;background:{{ d.aBg }}">
+                  <span style="width:9px;flex-shrink:0;font-size:10px;color:#a3382f;text-align:center">{{ d.aMark }}</span>
+                  <span style="width:{{ d.indent }};flex-shrink:0"></span>
+                  <span style="font-size:12px;color:{{ d.keyColor }};white-space:nowrap">{{ d.aKey }}</span>
+                  <span style="font-size:11px;color:#55595c;white-space:nowrap">{{ d.aNote }}</span>
+                  <span style="font-size:12px;color:{{ d.aColor }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ d.aVal }}</span>
+                  <div style="flex:1"></div>
+                </div>
+                <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:2px 14px;background:{{ d.bBg }}">
+                  <span style="width:9px;flex-shrink:0;font-size:10px;color:#2c6b45;text-align:center">{{ d.bMark }}</span>
+                  <span style="width:{{ d.indent }};flex-shrink:0"></span>
+                  <span style="font-size:12px;color:{{ d.keyColor }};white-space:nowrap">{{ d.bKey }}</span>
+                  <span style="font-size:11px;color:#55595c;white-space:nowrap">{{ d.bNote }}</span>
+                  <span style="font-size:12px;color:{{ d.bColor }};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ d.bVal }}</span>
+                  <div style="flex:1"></div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+    </section>
+
+    <sc-if value="{{ sideClosed }}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{ toggleSide }}" title="IATA panelini aç" style="width:24px;flex-shrink:0;background:#fbfaf8;border:none;border-left:1px solid #e2e0d9;display:flex;flex-direction:column;align-items:center;gap:9px;padding-top:12px;cursor:pointer;font-family:inherit;color:#7a7d79">
+        <span style="font-size:11px">‹</span>
+        <span style="font-size:10px;letter-spacing:.7px;writing-mode:vertical-rl">IATA</span>
+      </button>
+    </sc-if>
+
+    <sc-if value="{{ sideOpen }}" hint-placeholder-val="{{ true }}">
+      <aside data-screen-label="IATA paneli" style="width:272px;flex-shrink:0;display:flex;flex-direction:column;min-height:0;background:#fbfaf8;border-left:1px solid #e2e0d9">
+
+        <div style="display:flex;align-items:center;gap:8px;height:33px;padding:0 8px 0 14px;border-bottom:1px solid #eae8e2;flex-shrink:0">
+          <span style="font-size:11px;color:#7a7d79;letter-spacing:.4px">IATA 24.4</span>
+          <div style="flex:1"></div>
+          <span style="font-size:11px;color:#6f7376">{{ msgLabel }}</span>
+          <button onClick="{{ toggleSide }}" title="Paneli kapat" style="font-size:13px;line-height:1;color:#7a7d79;border:none;background:none;width:20px;height:20px;cursor:pointer;font-family:inherit">×</button>
+        </div>
+
+        <sc-if value="{{ peekOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="flex-shrink:0;border-bottom:1px solid #eae8e2;background:#ffffff;padding:12px 14px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <span style="font-size:11px;color:#2f6f5e">referans</span>
+              <div style="flex:1"></div>
+              <button onClick="{{ closePeek }}" style="font-size:12px;color:#6f7376;background:none;border:none;cursor:pointer;font-family:inherit">×</button>
+            </div>
+            <div style="font-size:12.5px;color:#1b1d1e">{{ peekTitle }}</div>
+            <div style="display:flex;flex-direction:column;gap:4px;margin-top:9px">
+              <sc-for list="{{ peekFields }}" as="f" hint-placeholder-count="4">
+                <div style="display:flex;align-items:baseline;gap:8px">
+                  <span style="font-size:11px;color:#6f7376;width:98px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.k }}</span>
+                  <span style="font-size:11.5px;color:#1b1d1e;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <button onClick="{{ peekGo }}" style="margin-top:11px;font-size:11px;color:#2f6f5e;background:none;border:none;padding:0;cursor:pointer;font-family:inherit">hedefe git →</button>
+          </div>
+        </sc-if>
+
+        <div style="flex-shrink:0;border-bottom:1px solid #eae8e2;padding:13px 14px">
+          <div style="font-size:13px;color:#1b1d1e">{{ selName }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:9px;margin:6px 0 9px">
+            <span style="font-size:11px;color:#7a7d79">{{ selType }}</span>
+            <span style="font-size:11px;color:{{ selStateColor }}">{{ selState }}</span>
+          </div>
+          <p style="margin:0;font-size:11.5px;color:#4a4e50;line-height:1.55;text-wrap:pretty">{{ selDoc }}</p>
+          <div style="margin-top:9px;font-size:10.5px;color:#6f7376;word-break:break-all">{{ selPath }}</div>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow:auto;padding:13px 14px">
+          <div style="font-size:11px;color:#7a7d79;margin-bottom:10px">{{ distField }}</div>
+          <sc-for list="{{ dist }}" as="d" hint-placeholder-count="4">
+            <div style="margin-bottom:9px">
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span style="flex:1;min-width:0;font-size:11.5px;color:#1b1d1e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ d.text }}</span>
+                <span style="font-size:11px;color:#7a7d79">{{ d.count }}</span>
+              </div>
+              <div style="height:4px;background:#eeece7;border-radius:2px;overflow:hidden;margin-top:5px">
+                <div style="height:100%;background:#8c9a93;width:{{ d.width }}"></div>
+              </div>
+            </div>
+          </sc-for>
+          <div style="margin-top:14px;padding-top:13px;border-top:1px solid #eae8e2">
+            <span style="font-size:11px;color:#7a7d79">şemada yok</span>
+            <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
+              <sc-for list="{{ unmatched }}" as="u" hint-placeholder-count="3">
+                <button onClick="{{ u.onGo }}" style="display:flex;align-items:center;gap:8px;background:none;border:none;padding:2px 0;cursor:pointer;font-family:inherit;text-align:left">
+                  <span style="font-size:8px;color:#8a5a00">●</span>
+                  <span style="font-size:11px;color:#4a4e50">{{ u.name }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <sc-if value="{{ commentsOn }}" hint-placeholder-val="{{ false }}">
+          <div style="flex-shrink:0;border-top:1px solid #eae8e2;background:#ffffff;padding:11px 14px;max-height:250px;overflow:auto">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
+              <span style="font-size:11px;color:#7a7d79">yorumlar</span>
+              <span style="font-size:11px;color:#2f6f5e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ threadPath }}</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <sc-for list="{{ thread }}" as="t" hint-placeholder-count="2">
+                <div style="display:flex;flex-direction:column;gap:2px;border-left:1px solid #d6d4cd;padding-left:9px">
+                  <div style="display:flex;align-items:baseline;gap:7px">
+                    <span style="font-size:11px;color:#1b1d1e">{{ t.author }}</span>
+                    <span style="font-size:10.5px;color:#6f7376">{{ t.when }}</span>
+                  </div>
+                  <span style="font-size:11.5px;color:#4a4e50;line-height:1.5;text-wrap:pretty">{{ t.body }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:11px">
+              <input value="{{ draft }}" onInput="{{ onDraft }}" placeholder="bu alana yorum bırak" style="box-sizing:border-box;flex:1;min-width:0;background:#f4f3f0;border:1px solid #e2e0d9;border-radius:6px;outline:none;padding:5px 9px;font-family:inherit;font-size:11.5px;color:#1b1d1e" />
+              <button onClick="{{ addComment }}" style="font-size:11px;color:#ffffff;background:#2f6f5e;border:none;border-radius:6px;padding:5px 11px;cursor:pointer;font-family:inherit">gönder</button>
+            </div>
+          </div>
+        </sc-if>
+      </aside>
+    </sc-if>
+  </div>
+
+  <footer style="display:flex;align-items:center;gap:16px;height:25px;padding:0 16px;background:#fbfaf8;border-top:1px solid #e2e0d9;flex-shrink:0;white-space:nowrap">
+    <span style="font-size:10.5px;color:#6f7376">{{ stNodes }}</span>
+    <span style="font-size:10.5px;color:#6f7376">{{ stParse }}</span>
+    <div style="flex:1"></div>
+    <span style="font-size:10.5px;color:#6f7376">{{ stSync }}</span>
+  </footer>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;filterRowAlways&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Grid&quot;,&quot;label&quot;:&quot;Tablo filtre satırı&quot;},&quot;pageSize&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:50,&quot;min&quot;:10,&quot;max&quot;:500,&quot;step&quot;:10,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Grid&quot;,&quot;label&quot;:&quot;Tablo satır penceresi&quot;},&quot;sparseHide&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Grid&quot;,&quot;label&quot;:&quot;Seyrek kolonları gizle&quot;},&quot;refOpen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;panel&quot;,&quot;satır&quot;],&quot;default&quot;:&quot;panel&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Referans&quot;,&quot;label&quot;:&quot;Referans nerede açılsın&quot;},&quot;diffLayout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;yan yana&quot;,&quot;birleşik&quot;],&quot;default&quot;:&quot;yan yana&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Fark&quot;,&quot;label&quot;:&quot;Fark düzeni&quot;}}">
+const OWNERS = ['TK', 'LH', 'AF', 'QR', 'TK', 'TK', 'LH', 'TK', 'AF', 'TK', 'QR', 'TK'];
+const STATUS = ['OPENED', 'PENDING', 'CLOSED'];
+const AMOUNTS = [1250.5, 842, 2310.75, 18450, 655.2, 1980, 4120.9, 399.99, 7620.4, 215, 3390.6, 12040];
+const CURS = ['EUR', 'EUR', 'USD', 'TRY', 'EUR', 'EUR', 'USD', 'EUR', 'USD', 'EUR', 'TRY', 'TRY'];
+const NAMES = [['Sarp', 'Yılmaz'], ['Elif', 'Demir'], ['Mert', 'Koc'], ['Ayşe', 'Kaya'], ['Can', 'Aydın'], ['Zeynep', 'Şahin']];
+
+function buildSample() {
+  const orders = [];
+  for (let i = 0; i < 12; i++) {
+    const amount = AMOUNTS[i];
+    const parts = 1 + (i % 3);
+    const o = {
+      OrderID: 'ORD' + (100001 + i),
+      OwnerCode: OWNERS[i],
+      StatusCode: STATUS[i % 3],
+      CreateDateTime: `2026-08-${String(10 + (i % 18)).padStart(2, '0')}T${String(6 + (i % 12)).padStart(2, '0')}:${String(10 + i).padStart(2, '0')}:00`,
+      TotalPrice: { TotalAmount: amount, CurCode: CURS[i] },
+      OrderItem: Array.from({ length: parts }, (_, k) => ({
+        OrderItemID: `OI${k + 1}`,
+        Amount: Number((amount / parts).toFixed(2)),
+        ServiceRefID: k % 2 ? null : `SVC${1 + ((i + k) % 6)}`,
+      })),
+      PaxRefID: i === 7 ? null : `PAX${1 + (i % 6)}`,
+      BookingRefID: `${OWNERS[i]}-${(4000 + i * 137).toString(36).toUpperCase()}`,
+    };
+    if (i === 4) o.PenaltyInd = true;
+    if (i === 9) o.RemarkText = 'Manual reissue at desk';
+    orders.push(o);
+  }
+  return {
+    IATA_OrderViewRS: {
+      Response: {
+        Order: orders,
+        DataLists: {
+          PaxList: NAMES.map((n, i) => ({
+            PaxID: `PAX${i + 1}`, PTC: i % 4 === 3 ? 'CHD' : 'ADT', GivenName: n[0], Surname: n[1],
+          })),
+          ServiceDefinitionList: Array.from({ length: 6 }, (_, i) => ({
+            ServiceDefinitionID: `SVC${i + 1}`,
+            Name: ['Extra baggage 23kg', 'Seat 12A', 'Lounge access', 'Fast track', 'Meal AVML', 'Wi-Fi pass'][i],
+            RFIC: ['C', 'A', 'G', 'G', 'F', 'E'][i],
+          })),
+        },
+        Warning: [
+          { Code: 'WRN12', DescText: 'Partial availability for segment 2' },
+          { Code: 'WRN04', DescText: 'Fare recalculated at ticketing' },
+        ],
+      },
+    },
+  };
+}
+
+const DOCS = {
+  IATA_OrderViewRS: ['IATA_OrderViewRS_Type', 'exact', 'Sipariş görüntüleme yanıtının kök mesajı.'],
+  Response: ['ResponseType', 'exact', 'Yanıt gövdesi: sipariş listesi, veri listeleri ve uyarılar.'],
+  Order: ['Order_Type', 'exact', 'Bir veya daha fazla sipariş kaydı. Kimlik alanı OrderID.'],
+  OrderID: ['ID_Type', 'exact', 'Siparişin benzersiz kimliği; sağlayıcı tarafından üretilir.'],
+  OwnerCode: ['AirlineDesigCode_Type', 'exact', 'Siparişin sahibi taşıyıcının IATA kodu (2 karakter).'],
+  StatusCode: ['StatusCode_Type', 'exact', 'Siparişin yaşam döngüsü durumu: OPENED, PENDING, CLOSED.'],
+  CreateDateTime: ['DateTime_Type', 'exact', 'Kaydın oluşturulma zamanı, UTC.'],
+  TotalPrice: ['TotalPrice_Type', 'exact', 'Vergiler, ücretler ve indirimler dahil ödenecek son bedel.'],
+  TotalAmount: ['CurrencyAmountOptional_Type', 'exact', 'Tutar. Para birimi kardeş CurCode alanından okunur.'],
+  CurCode: ['CurrencyCode_Type', 'exact', 'ISO 4217 para birimi kodu.'],
+  OrderItem: ['OrderItem_Type', 'exact', 'Siparişin ücretlendirilebilir kalemleri.'],
+  OrderItemID: ['ID_Type', 'exact', 'Sipariş kaleminin kimliği.'],
+  Amount: ['CurrencyAmountOptional_Type', 'exact', 'Kalem tutarı.'],
+  ServiceRefID: ['ID_Type', 'exact', 'ServiceDefinitionList içindeki hizmete referans.'],
+  PaxRefID: ['ID_Type', 'exact', 'DataLists içindeki Pax kaydına referans.'],
+  BookingRefID: ['ID_Type', 'inferred', 'Rezervasyon kaydı referansı; değer biçiminden çıkarıldı.'],
+  DataLists: ['DataLists_Type', 'exact', 'Mesaj boyunca referans edilen ortak kayıtlar.'],
+  PaxList: ['PaxList_Type', 'exact', 'Yolcu kayıtları; PaxID ile referans edilir.'],
+  ServiceDefinitionList: ['ServiceDefinitionList_Type', 'exact', 'Hizmet tanımları; ServiceDefinitionID ile referans edilir.'],
+  Warning: ['Warning_Type', 'exact', 'İşlemi engellemeyen uyarı mesajları.'],
+  PenaltyInd: [null, 'missing', 'Şemada karşılığı bulunamadı.'],
+  RemarkText: [null, 'missing', 'Şemada karşılığı bulunamadı.'],
+};
+
+const RECENTS = [
+  { name: 'orderview-prod.json', meta: '4,3 MB · 2 saat önce' },
+  { name: 'orderview-uat.json', meta: '4,1 MB · dün' },
+  { name: 'airshopping-tk.json', meta: '812 KB · 3 gün önce' },
+];
+
+function typeOf(v) {
+  if (v === null) return 'null';
+  if (Array.isArray(v)) return 'array';
+  return typeof v === 'object' ? 'object' : typeof v;
+}
+
+function valueAt(root, segs) {
+  let cur = root;
+  for (const s of segs) {
+    if (cur === null || typeof cur !== 'object') return undefined;
+    cur = Array.isArray(cur) ? cur[Number(s)] : cur[s];
+    if (cur === undefined) return undefined;
+  }
+  return cur;
+}
+
+function isRecordArray(v) {
+  if (!Array.isArray(v) || v.length === 0) return false;
+  const objs = v.filter((x) => x !== null && typeof x === 'object' && !Array.isArray(x)).length;
+  return objs / v.length > 0.6;
+}
+
+function summary(v) {
+  const t = typeOf(v);
+  if (t === 'object') return `{${Object.keys(v).length}}`;
+  if (t === 'array') return `[${v.length}]`;
+  if (t === 'string') return v;
+  return String(v);
+}
+
+/** JSON'u satır satır yazar ve her yol için satır numarasını tutar (GridSync). */
+function serializeWithMap(root) {
+  const lines = [];
+  const map = {};
+  const pad = (d) => '  '.repeat(d);
+  const walk = (v, depth, pk, prefix, tail) => {
+    map[pk] = lines.length + 1;
+    const t = typeOf(v);
+    if (t === 'object') {
+      const keys = Object.keys(v);
+      if (!keys.length) { lines.push(prefix + '{}' + tail); return; }
+      lines.push(prefix + '{');
+      keys.forEach((k, i) => walk(v[k], depth + 1, pk ? pk + '.' + k : k,
+        pad(depth + 1) + JSON.stringify(k) + ': ', i < keys.length - 1 ? ',' : ''));
+      lines.push(pad(depth) + '}' + tail);
+    } else if (t === 'array') {
+      if (!v.length) { lines.push(prefix + '[]' + tail); return; }
+      lines.push(prefix + '[');
+      v.forEach((x, i) => walk(x, depth + 1, pk ? pk + '.' + i : String(i),
+        pad(depth + 1), i < v.length - 1 ? ',' : ''));
+      lines.push(pad(depth) + ']' + tail);
+    } else {
+      lines.push(prefix + JSON.stringify(v) + tail);
+    }
+  };
+  walk(root, 0, '', '', '');
+  return { text: lines.join('\n'), map };
+}
+
+function parseText(text) {
+  const t0 = performance.now();
+  try {
+    return { data: JSON.parse(text), err: null, ms: performance.now() - t0 };
+  } catch (e) {
+    const m = /position (\d+)/.exec(e.message);
+    const line = m ? text.slice(0, Number(m[1])).split('\n').length : null;
+    return { data: null, err: { msg: e.message, line }, ms: performance.now() - t0 };
+  }
+}
+
+function repair(text) {
+  return text
+    .replace(/\/\/[^\n]*/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/,(\s*[}\]])/g, '$1')
+    .replace(/'([^'\n]*)'(\s*:)/g, '"$1"$2')
+    .replace(/:(\s*)'([^'\n]*)'/g, ':$1"$2"');
+}
+
+function buildRefIndex(root) {
+  const map = new Map();
+  const lists = valueAt(root, ['IATA_OrderViewRS', 'Response', 'DataLists']);
+  if (!lists || typeof lists !== 'object') return map;
+  for (const [listName, arr] of Object.entries(lists)) {
+    if (!Array.isArray(arr)) continue;
+    arr.forEach((item, i) => {
+      if (item === null || typeof item !== 'object') return;
+      const idKey = Object.keys(item).find((k) => /ID$/.test(k) && !/RefID$/.test(k));
+      if (!idKey) return;
+      map.set(String(item[idKey]), {
+        label: `${listName}[${i}] · ${item[idKey]}`,
+        path: ['IATA_OrderViewRS', 'Response', 'DataLists', listName, String(i)],
+        obj: item,
+      });
+    });
+  }
+  return map;
+}
+
+function diffTree(a, b) {
+  const rows = [];
+  const counts = { add: 0, del: 0, chg: 0 };
+  const short = (v) => {
+    const t = typeOf(v);
+    if (t === 'object') return `{ ${Object.keys(v).length} alan }`;
+    if (t === 'array') return `[ ${v.length} öğe ]`;
+    if (t === 'string') return `"${v}"`;
+    return String(v);
+  };
+  const walk = (key, av, bv, depth, label) => {
+    const at = av === undefined ? 'none' : typeOf(av);
+    const bt = bv === undefined ? 'none' : typeOf(bv);
+    if (at === 'none') { counts.add += 1; rows.push({ kind: 'add', depth, key, label, a: null, b: short(bv) }); return; }
+    if (bt === 'none') { counts.del += 1; rows.push({ kind: 'del', depth, key, label, a: short(av), b: null }); return; }
+    const container = (at === 'object' || at === 'array') && at === bt;
+    if (!container) {
+      if (av === bv) rows.push({ kind: 'same', depth, key, label, a: short(av), b: short(bv) });
+      else { counts.chg += 1; rows.push({ kind: 'chg', depth, key, label, a: short(av), b: short(bv) }); }
+      return;
+    }
+    const child = [];
+    if (at === 'array') {
+      const idKey = isRecordArray(av)
+        ? Object.keys(av[0] || {}).find((k) => /ID$/.test(k) && !/RefID$/.test(k))
+        : null;
+      if (idKey) {
+        const bById = new Map(bv.map((x, i) => [String(x && x[idKey]), { x, i }]));
+        av.forEach((x, i) => {
+          const hit = bById.get(String(x && x[idKey]));
+          child.push([String(i), x, hit ? hit.x : undefined, hit && hit.i !== i ? `sıra ${i} → ${hit.i}` : String(x && x[idKey])]);
+          if (hit) bById.delete(String(x && x[idKey]));
+        });
+        for (const [id, hit] of bById) child.push([String(hit.i), undefined, hit.x, id]);
+      } else {
+        const n = Math.max(av.length, bv.length);
+        for (let i = 0; i < n; i++) child.push([String(i), av[i], bv[i], '']);
+      }
+    } else {
+      const keys = [...new Set([...Object.keys(av), ...Object.keys(bv)])];
+      for (const k of keys) child.push([k, av[k], bv[k], '']);
+    }
+    const start = rows.length;
+    rows.push({ kind: 'node', depth, key, label, a: short(av), b: short(bv) });
+    for (const [k, x, y, lab] of child) walk(k, x, y, depth + 1, lab);
+    rows[start].changed = rows.slice(start + 1).some((r) => r.kind === 'add' || r.kind === 'del' || r.kind === 'chg');
+  };
+  walk('json', a, b, 0, '');
+  return { rows, counts };
+}
+
+function buildVariant(base) {
+  const b = JSON.parse(JSON.stringify(base));
+  const R = b.IATA_OrderViewRS.Response;
+  R.Order[2].StatusCode = 'OPENED';
+  R.Order[2].TotalPrice.TotalAmount = 2450;
+  R.Order[0].BookingRefID = 'TK-9XQ2M';
+  R.Order.push({
+    OrderID: 'ORD100013', OwnerCode: 'TK', StatusCode: 'OPENED',
+    CreateDateTime: '2026-08-29T09:40:00',
+    TotalPrice: { TotalAmount: 990, CurCode: 'EUR' },
+    OrderItem: [{ OrderItemID: 'OI1', Amount: 990, ServiceRefID: 'SVC2' }],
+    PaxRefID: 'PAX2', BookingRefID: 'TK-4QW8H',
+  });
+  R.DataLists.PaxList[2].Surname = 'Koç';
+  R.Warning.pop();
+  R.PaymentInfo = { Method: 'CreditCard', TotalAmount: 32459.34 };
+  return b;
+}
+
+function xmlToJson(text, keepPrefixes, numbers) {
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.querySelector('parsererror') || !doc.documentElement) return { json: null, root: null, error: 'XML ayrıştırılamadı' };
+  const nameOf = (el) => (keepPrefixes ? el.nodeName : el.nodeName.replace(/^[^:]+:/, ''));
+  const cast = (s) => {
+    if (!numbers) return s;
+    const t = s.trim();
+    return t !== '' && /^-?\d+(\.\d+)?$/.test(t) && !/^0\d/.test(t) ? Number(t) : s;
+  };
+  const conv = (el) => {
+    const out = {};
+    for (const at of Array.from(el.attributes)) {
+      if (/^xmlns(:|$)/.test(at.name)) continue;
+      out['@' + (keepPrefixes ? at.name : at.name.replace(/^[^:]+:/, ''))] = cast(at.value);
+    }
+    const kids = Array.from(el.children);
+    if (kids.length === 0) {
+      const txt = cast(el.textContent || '');
+      if (Object.keys(out).length === 0) return txt;
+      if (String(txt).trim() !== '') out['#text'] = txt;
+      return out;
+    }
+    for (const kid of kids) {
+      const key = nameOf(kid);
+      const val = conv(kid);
+      if (out[key] === undefined) out[key] = val;
+      else if (Array.isArray(out[key])) out[key].push(val);
+      else out[key] = [out[key], val];
+    }
+    return out;
+  };
+  const root = nameOf(doc.documentElement);
+  return { json: { [root]: conv(doc.documentElement) }, root, error: null };
+}
+
+const XML_SEED = `<iata:IATA_OrderViewRS xmlns:iata="http://www.iata.org/IATA/2015/EASD/00">
+  <iata:Response>
+    <iata:Order>
+      <iata:OrderID>ORD100001</iata:OrderID>
+      <iata:OwnerCode>TK</iata:OwnerCode>
+      <iata:TotalPrice>
+        <iata:TotalAmount CurCode="EUR">1250.50</iata:TotalAmount>
+      </iata:TotalPrice>
+    </iata:Order>
+    <iata:Order>
+      <iata:OrderID>ORD100002</iata:OrderID>
+      <iata:OwnerCode>LH</iata:OwnerCode>
+      <iata:TotalPrice>
+        <iata:TotalAmount CurCode="EUR">842.00</iata:TotalAmount>
+      </iata:TotalPrice>
+    </iata:Order>
+  </iata:Response>
+</iata:IATA_OrderViewRS>`;
+
+const SAMPLE = buildSample();
+const SER = serializeWithMap(SAMPLE);
+const SAMPLE_TEXT = SER.text;
+const VARIANT = buildVariant(SAMPLE);
+const VARIANT_TEXT = serializeWithMap(VARIANT).text;
+
+const VAL_COLOR = { string: '#1b1d1e', number: '#7a4a12', boolean: '#2f5fa8', null: '#7d8184' };
+const LINE_H = 19;
+
+class Component extends DCLogic {
+  gutterRef = React.createRef();
+  codeRef = React.createRef();
+  diffScrollRef = React.createRef();
+
+  state = {
+    view: 'grid',
+    tab: 'input',
+    inputKind: 'json',
+    text: SAMPLE_TEXT,
+    data: SAMPLE,
+    err: null,
+    ms: 0,
+    live: true,
+    dirty: false,
+    editorOpen: true,
+    sideOpen: true,
+    path: ['IATA_OrderViewRS', 'Response', 'Order'],
+    open: {
+      '': true,
+      'IATA_OrderViewRS': true,
+      'IATA_OrderViewRS.Response': true,
+      'IATA_OrderViewRS.Response.Order': true,
+    },
+    sel: ['IATA_OrderViewRS', 'Response', 'Order'],
+    activeLine: null,
+    sort: {},
+    filters: {},
+    filtersOn: false,
+    editorW: 344,
+    resizing: false,
+    query: '',
+    peek: null,
+    inlineRef: null,
+    diffOn: false,
+    diffB: 'orderview-uat.json',
+    textA: null,
+    textB: null,
+    diffOnlyChanges: true,
+    diffIdx: 0,
+    diffSwapped: false,
+    shareMenuOpen: false,
+    shareTitle: '',
+    shareComments: true,
+    shareUrl: null,
+    copied: false,
+    pathCopied: false,
+    threads: {
+      'IATA_OrderViewRS.Response.Order.2.StatusCode': [
+        { author: 'Deniz', when: 'dün 14:20', body: 'UAT tarafında bu sipariş CLOSED görünüyor, prod ile farklı.' },
+        { author: 'Sarp', when: 'dün 15:02', body: 'Ticketing job gece çalışıyor, sabah eşitlenir.' },
+      ],
+    },
+    draft: '',
+    xmlPrefixes: false,
+    xmlNumbers: true,
+    themeNote: false,
+  };
+
+  set(patch) { this.setState(patch); }
+
+  lineMap() {
+    if (!this.state.data) return {};
+    if (this._mapFor !== this.state.data) {
+      this._mapFor = this.state.data;
+      this._map = serializeWithMap(this.state.data).map;
+    }
+    return this._map;
+  }
+
+  applyText(text, opts) {
+    const res = parseText(text);
+    const patch = { text, err: res.err ?? null, ms: res.ms, dirty: false };
+    if (res.data) {
+      patch.data = res.data;
+      if (valueAt(res.data, this.state.path) === undefined) {
+        patch.path = valueAt(res.data, ['IATA_OrderViewRS', 'Response', 'Order']) !== undefined
+          ? ['IATA_OrderViewRS', 'Response', 'Order'] : [];
+        patch.sel = patch.path;
+      }
+    }
+    this.setState({ ...patch, ...(opts || {}) });
+  }
+
+  onCodeScroll = (e) => {
+    if (this.gutterRef.current) this.gutterRef.current.scrollTop = e.target.scrollTop;
+  };
+
+  /** GridSync: seçilen alanın JSON satırına kaydır. */
+  select(segs) {
+    const key = segs.join('.');
+    const line = this.lineMap()[key] ?? null;
+    this.setState({ sel: segs, activeLine: line });
+    if (line && this.codeRef.current) {
+      const top = Math.max(0, (line - 1) * LINE_H - 130);
+      this.codeRef.current.scrollTop = top;
+      if (this.gutterRef.current) this.gutterRef.current.scrollTop = top;
+    }
+  }
+
+  toggle(key) {
+    const open = { ...this.state.open };
+    if (open[key]) delete open[key]; else open[key] = true;
+    this.setState({ open });
+  }
+
+  openRef(value, rowKey) {
+    const hit = buildRefIndex(this.state.data).get(value);
+    if (!hit) return;
+    if (this.props.refOpen === 'satır') this.setState({ inlineRef: this.state.inlineRef === rowKey ? null : rowKey, peek: null });
+    else this.setState({ peek: { value, ...hit }, inlineRef: null, sideOpen: true });
+  }
+
+  cellText(v) {
+    const t = typeOf(v);
+    if (v === undefined) return '';
+    if (t === 'object' || t === 'array') return '';
+    return String(v);
+  }
+
+  /** Kayıt dizisinin kolonları; seyrek olanlar isteğe bağlı gizlenir. */
+  colsOf(arr) {
+    const counts = new Map();
+    arr.forEach((item) => {
+      if (item === null || typeof item !== 'object') return;
+      Object.keys(item).forEach((k) => counts.set(k, (counts.get(k) ?? 0) + 1));
+    });
+    let cols = [...counts.entries()].map(([name, n]) => ({ name, n, fill: n / arr.length }));
+    let hidden = 0;
+    if (this.props.sparseHide !== false && cols.length > 4) {
+      const kept = cols.filter((c) => c.fill >= 0.3);
+      hidden = cols.length - kept.length;
+      cols = kept;
+    }
+    return { cols, hidden };
+  }
+
+  cellWidth(text) {
+    return Math.min(310, Math.max(90, String(text).length * 8 + 30));
+  }
+
+  /** Bir hücrenin içeriği: skaler değer ya da açılabilir alt tablo. */
+  buildCell(v, cellSegs, level, refIndex) {
+    const ck = cellSegs.join('.');
+    const t = typeOf(v);
+    if (v === undefined) {
+      return { isVal: true, isBox: false, text: '—', color: '#b6b8b3', justify: 'flex-start', ref: '', natural: 86, hasGrid: false, grid: null, sign: '', label: '', onClick: () => this.select(cellSegs), onToggle: () => {} };
+    }
+    if (t === 'object' || t === 'array') {
+      const open = !!this.state.open[ck];
+      const canNest = level < 2;
+      const grid = open && canNest ? this.buildGrid(v, cellSegs, level + 1, refIndex) : null;
+      const label = open && !canNest ? summary(v) + ' → yolu aç' : summary(v);
+      const closedW = Math.max(96, label.length * 7.2 + 34);
+      return {
+        isVal: false, isBox: true, sign: open ? '−' : '+', label,
+        hasGrid: !!grid, grid,
+        natural: grid ? Math.max(closedW, grid.width + 14) : closedW,
+        text: '', color: '#4a4e50', justify: 'flex-start', ref: '',
+        onClick: () => this.select(cellSegs),
+        onToggle: () => {
+          if (open && !canNest) {
+            const nextOpen = { ...this.state.open };
+            for (let k = 0; k <= cellSegs.length; k++) nextOpen[cellSegs.slice(0, k).join('.')] = true;
+            this.setState({ path: cellSegs, open: nextOpen });
+            this.select(cellSegs);
+            return;
+          }
+          this.toggle(ck);
+          this.select(cellSegs);
+        },
+      };
+    }
+    const isRef = /RefID$/.test(String(cellSegs[cellSegs.length - 1])) && v !== null && refIndex.has(String(v));
+    const text = String(v);
+    return {
+      isVal: true, isBox: false, text, color: VAL_COLOR[t] ?? '#1b1d1e',
+      justify: t === 'number' ? 'flex-end' : 'flex-start',
+      ref: isRef ? '↳' : '', natural: this.cellWidth(text) + (isRef ? 16 : 0),
+      hasGrid: false, grid: null, sign: '', label: '',
+      onClick: () => { this.select(cellSegs); if (isRef) this.openRef(String(v), cellSegs.slice(0, -1).join('.')); },
+      onToggle: () => {},
+    };
+  }
+
+  /** Kayıt dizisi -> kolon başlıklı tablo; nesne -> anahtar/değer tablosu. */
+  buildGrid(node, segs, level, refIndex) {
+    const s = this.state;
+    const pk = segs.join('.');
+    const query = s.query.trim().toLowerCase();
+
+    if (isRecordArray(node)) {
+      const { cols, hidden } = this.colsOf(node);
+      let items = node.map((item, i) => ({ i, item }));
+      cols.forEach((c) => {
+        const q = String(s.filters[pk + '::' + c.name] || '').trim().toLowerCase();
+        if (q) items = items.filter((r) => this.cellText(r.item ? r.item[c.name] : undefined).toLowerCase().includes(q));
+      });
+      const so = s.sort[pk];
+      if (so) {
+        const dir = so.dir === 'asc' ? 1 : -1;
+        items = items.slice().sort((a, b) => {
+          const x = a.item ? a.item[so.col] : undefined;
+          const y = b.item ? b.item[so.col] : undefined;
+          if (typeof x === 'number' && typeof y === 'number') return (x - y) * dir;
+          return String(this.cellText(x)).localeCompare(String(this.cellText(y)), 'tr') * dir;
+        });
+      }
+      const pageSize = level === 0 ? Number(this.props.pageSize ?? 50) : 12;
+      const shown = items.slice(0, pageSize);
+      const rows = shown.map(({ i, item }) => {
+        const rowSegs = [...segs, String(i)];
+        const rowKey = rowSegs.join('.');
+        const selected = s.sel && s.sel.join('.') === rowKey;
+        const hit = query && cols.some((c) => this.cellText(item ? item[c.name] : undefined).toLowerCase().includes(query));
+        return {
+          label: String(i),
+          labelColor: selected ? '#2f6f5e' : '#7d8184',
+          bg: selected ? 'rgba(47,111,94,.07)' : hit ? 'rgba(214,180,60,.16)' : 'transparent',
+          ribbon: selected ? 'inset 2px 0 0 #2f6f5e' : 'none',
+          onSelect: () => this.select(rowSegs),
+          cells: cols.map((c) => this.buildCell(item ? item[c.name] : undefined, [...rowSegs, c.name], level, refIndex)),
+        };
+      });
+      const labelW = 44;
+      const colModels = cols.map((c, ci) => {
+        const doc = DOCS[c.name];
+        const active = so && so.col === c.name;
+        const w = Math.max(this.cellWidth(c.name) + 20, ...rows.map((r) => r.cells[ci].natural), 92);
+        return {
+          name: c.name, w: `${Math.round(w)}px`, fkey: pk + '::' + c.name,
+          filter: s.filters[pk + '::' + c.name] ?? '',
+          filterBorder: (s.filters[pk + '::' + c.name] || '').trim() ? '#2f6f5e' : '#e2e0d9',
+          color: active ? '#1b1d1e' : '#4a4e50',
+          bg: active ? '#e8e7e0' : 'none',
+          arrow: active ? (so.dir === 'asc' ? '▲' : '▼') : '',
+          docMark: doc && doc[1] !== 'exact' ? '●' : (doc ? '' : '●'),
+          tip: doc && doc[0] ? `${doc[0]} — sırala` : 'şemada yok — sırala',
+          onSort: () => {
+            const cur = s.sort[pk];
+            const next = { ...s.sort };
+            if (!cur || cur.col !== c.name) next[pk] = { col: c.name, dir: 'asc' };
+            else if (cur.dir === 'asc') next[pk] = { col: c.name, dir: 'desc' };
+            else delete next[pk];
+            this.setState({ sort: next });
+          },
+        };
+      });
+      rows.forEach((r) => r.cells.forEach((c, ci) => { c.w = colModels[ci].w; }));
+      return {
+        hasHead: true, corner: level === 0 ? (this.state.filtersOn ? '▼' : '▽') : '#', labelW: `${labelW}px`, cols: colModels, rows,
+        showFilters: level === 0 && this.props.filterRowAlways !== false && s.filtersOn && node.length > 3,
+        hasMore: items.length > shown.length,
+        moreNote: `${items.length - shown.length} satır daha var${hidden ? ' · ' + hidden + ' seyrek kolon gizli' : ''}`,
+        width: labelW + colModels.reduce((a, c) => a + parseFloat(c.w), 0) + 2,
+      };
+    }
+
+    const entries = Array.isArray(node) ? node.map((v, i) => [String(i), v]) : Object.entries(node);
+    const rows = entries.map(([k, v]) => {
+      const childSegs = [...segs, k];
+      const selected = s.sel && s.sel.join('.') === childSegs.join('.');
+      const doc = DOCS[k];
+      return {
+        label: doc && doc[1] === 'missing' ? k + ' ●' : k,
+        labelColor: selected ? '#2f6f5e' : '#4a4e50',
+        bg: selected ? 'rgba(47,111,94,.07)' : 'transparent',
+        ribbon: selected ? 'inset 2px 0 0 #2f6f5e' : 'none',
+        onSelect: () => this.select(childSegs),
+        cells: [this.buildCell(v, childSegs, level, refIndex)],
+      };
+    });
+    const labelW = Math.max(96, ...entries.map(([k]) => k.length * 7.2 + 26));
+    const valW = Math.max(120, ...rows.map((r) => r.cells[0].natural));
+    rows.forEach((r) => { r.cells[0].w = `${Math.round(valW)}px`; });
+    return {
+      hasHead: false, corner: '', labelW: `${Math.round(labelW)}px`,
+      cols: [{ name: 'değer', w: `${Math.round(valW)}px`, arrow: '', color: '#4a4e50', bg: 'none', docMark: '', tip: '', filter: '', fkey: '', filterBorder: '#e2e0d9', onSort: () => {} }],
+      rows, showFilters: false, hasMore: false, moreNote: '',
+      width: labelW + valW + 2,
+    };
+  }
+
+  flattenTree(node, depth, segs, out) {
+    const entries = Array.isArray(node) ? node.map((v, i) => [String(i), v]) : Object.entries(node);
+    entries.forEach(([k, v]) => {
+      const childSegs = [...segs, k];
+      const ck = childSegs.join('.');
+      const t = typeOf(v);
+      const container = t === 'object' || t === 'array';
+      const isOpen = !!this.state.open[ck];
+      const selected = this.state.sel && this.state.sel.join('.') === ck;
+      out.push({
+        pad: `${14 + depth * 17}px`,
+        caret: container ? (isOpen ? '▾' : '▸') : '·',
+        key: container ? k : k + ':',
+        val: container ? summary(v) : (t === 'string' ? `"${v}"` : String(v)),
+        valColor: container ? '#6f7376' : (VAL_COLOR[t] ?? '#1b1d1e'),
+        note: DOCS[k] && DOCS[k][1] === 'missing' ? 'şemada yok' : '',
+        bg: selected ? 'rgba(47,111,94,.07)' : 'transparent',
+        ribbon: selected ? 'inset 2px 0 0 #2f6f5e' : 'none',
+        onToggle: () => { if (container) this.toggle(ck); },
+        onSelect: () => this.select(childSegs),
+      });
+      if (container && isOpen) this.flattenTree(v, depth + 1, childSegs, out);
+    });
+  }
+
+  collectPaths(node, segs, out, depth) {
+    if (depth > 5 || node === null || typeof node !== 'object') return;
+    out[segs.join('.')] = true;
+    const entries = Array.isArray(node) ? node.map((v, i) => [String(i), v]) : Object.entries(node);
+    entries.forEach(([k, v]) => {
+      if (v !== null && typeof v === 'object') this.collectPaths(v, [...segs, k], out, depth + 1);
+    });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const p = this.props;
+    const on = (c, a, b) => (c ? a : b);
+    const refIndex = buildRefIndex(s.data);
+    const query = s.query.trim().toLowerCase();
+    const diffMode = s.diffOn && s.tab === 'diff';
+
+    const treeRows = [];
+    if (s.data && !diffMode && s.view === 'tree') this.flattenTree(s.data, 0, [], treeRows);
+    let gridSegs = s.path;
+    let gridNode = valueAt(s.data, gridSegs);
+    if (gridNode === null || typeof gridNode !== 'object') {
+      gridSegs = s.path.slice(0, -1);
+      gridNode = valueAt(s.data, gridSegs);
+    }
+    if (gridNode === null || typeof gridNode !== 'object') { gridSegs = []; gridNode = s.data; }
+    const g0 = s.data && !diffMode && s.view === 'grid'
+      ? this.buildGrid(gridNode, gridSegs, 0, refIndex)
+      : { hasHead: false, corner: '', labelW: '96px', cols: [], rows: [], showFilters: false, hasMore: false, moreNote: '', width: 0 };
+    // yol şeridi
+    const crumbs = [{ label: 'json', path: [] }, ...s.path.map((seg, i) => ({ label: seg, path: s.path.slice(0, i + 1) }))]
+      .map((c, i, arr) => ({
+        label: c.label,
+        sep: i === arr.length - 1 ? '' : '›',
+        color: i === arr.length - 1 ? '#1b1d1e' : '#7a7d79',
+        onGo: () => {
+          const open = { ...s.open };
+          for (let k = 0; k <= c.path.length; k++) open[c.path.slice(0, k).join('.')] = true;
+          this.setState({ path: c.path, open });
+          this.select(c.path);
+        },
+      }));
+    const lastNumeric = [...s.path].reverse().findIndex((seg) => /^\d+$/.test(seg));
+    const stepIdx = lastNumeric < 0 ? -1 : s.path.length - 1 - lastNumeric;
+    let stepTotal = 0;
+    if (stepIdx >= 0) {
+      const parent = valueAt(s.data, s.path.slice(0, stepIdx));
+      stepTotal = Array.isArray(parent) ? parent.length : 0;
+    }
+    const step = (delta) => {
+      if (stepIdx < 0 || stepTotal === 0) return;
+      const cur = Number(s.path[stepIdx]);
+      const next = Math.min(Math.max(cur + delta, 0), stepTotal - 1);
+      const path = [...s.path];
+      path[stepIdx] = String(next);
+      if (valueAt(s.data, path) !== undefined) {
+        const open = { ...s.open };
+        for (let k = 0; k <= path.length; k++) open[path.slice(0, k).join('.')] = true;
+        this.setState({ path, open });
+        this.select(path);
+      }
+    };
+
+    // editör
+    const lines = s.text.split('\n');
+    const gutter = lines.slice(0, 600).map((_, i) => ({
+      n: i + 1,
+      color: s.err && s.err.line === i + 1 ? '#a3382f' : s.activeLine === i + 1 ? '#2f6f5e' : '#82868a',
+      bg: s.err && s.err.line === i + 1 ? 'rgba(163,56,47,.10)' : s.activeLine === i + 1 ? 'rgba(47,111,94,.12)' : 'transparent',
+    }));
+    const isXmlKind = s.inputKind === 'xml';
+    const xml = isXmlKind ? xmlToJson(s.text, s.xmlPrefixes, s.xmlNumbers) : null;
+
+    // kolon görünümü
+    const chain = s.sel ? s.sel.slice() : s.path.slice();
+    const colViews = [];
+    for (let depth = 0; depth <= chain.length; depth++) {
+      const node = valueAt(s.data, chain.slice(0, depth));
+      if (node === undefined || node === null || typeof node !== 'object') break;
+      const entries = Array.isArray(node) ? node.map((v, i) => [String(i), v]) : Object.entries(node);
+      colViews.push({
+        title: depth === 0 ? 'json' : chain[depth - 1],
+        count: String(entries.length),
+        bg: depth === chain.length ? '#fbfaf8' : '#ffffff',
+        entries: entries.slice(0, 200).map(([k, v]) => {
+          const t = typeOf(v);
+          const sel = chain[depth] === k;
+          return {
+            key: k,
+            summary: t === 'array' ? `${v.length} öğe` : t === 'object' ? `${Object.keys(v).length} alan` : t === 'null' ? 'null' : String(v),
+            keyColor: sel ? '#1b1d1e' : '#4a4e50',
+            sumColor: t === 'object' || t === 'array' ? '#6f7376' : (VAL_COLOR[t] ?? '#1b1d1e'),
+            chevron: t === 'object' || t === 'array' ? '›' : '',
+            bg: sel ? 'rgba(47,111,94,.08)' : 'transparent',
+            ribbon: sel ? 'inset 2px 0 0 #2f6f5e' : 'none',
+            onPick: () => {
+              const next = [...chain.slice(0, depth), k];
+              const node2 = valueAt(s.data, next);
+              this.setState({ path: node2 !== null && typeof node2 === 'object' ? next : next.slice(0, -1) });
+              this.select(next);
+            },
+          };
+        }),
+      });
+    }
+
+    // fark: iki taraf da elle girilebilir
+    const rawA = s.textA === null ? (s.data ? serializeWithMap(s.data).text : '') : s.textA;
+    const rawB = s.textB === null ? VARIANT_TEXT : s.textB;
+    const pA = parseText(rawA);
+    const pB = parseText(rawB);
+    const sideA = pA.data ?? s.data;
+    const sideB = pB.data;
+    const cacheKey = rawA.length + '|' + rawB.length + '|' + rawA.slice(0, 64) + rawB.slice(0, 64);
+    if (this._diffKey !== cacheKey) {
+      this._diffKey = cacheKey;
+      this._diff = sideA && sideB ? diffTree(sideA, sideB) : { rows: [], counts: { add: 0, del: 0, chg: 0 } };
+    }
+    const D = this._diff;
+    let diffRows = D.rows;
+    if (s.diffOnlyChanges) diffRows = diffRows.filter((r) => (r.kind === 'node' ? r.changed === true : r.kind !== 'same'));
+    const changeIdx = diffRows.map((r, i) => (r.kind === 'add' || r.kind === 'del' || r.kind === 'chg' ? i : -1)).filter((i) => i >= 0);
+    const cursor = changeIdx[Math.min(s.diffIdx, Math.max(0, changeIdx.length - 1))] ?? -1;
+    const swap = s.diffSwapped;
+    const diffDisplay = diffRows.map((r, i) => {
+      const isNode = r.kind === 'node' || r.kind === 'same';
+      const aSide = swap ? r.b : r.a;
+      const bSide = swap ? r.a : r.b;
+      return {
+        indent: `${r.depth * 14}px`,
+        keyColor: isNode ? '#7a7d79' : '#1b1d1e',
+        aKey: r.key, bKey: r.key,
+        aVal: aSide === null ? '' : aSide,
+        bVal: bSide === null ? '' : bSide,
+        aColor: r.kind === 'chg' || r.kind === 'del' ? '#a3382f' : isNode ? '#6f7376' : '#4a4e50',
+        bColor: r.kind === 'chg' || r.kind === 'add' ? '#2c6b45' : isNode ? '#6f7376' : '#4a4e50',
+        aBg: r.kind === 'del' || r.kind === 'chg' ? 'rgba(163,56,47,.07)' : 'transparent',
+        bBg: r.kind === 'add' || r.kind === 'chg' ? 'rgba(44,107,69,.07)' : 'transparent',
+        aMark: r.kind === 'del' ? '−' : r.kind === 'chg' ? '~' : '',
+        bMark: r.kind === 'add' ? '+' : r.kind === 'chg' ? '~' : '',
+        aNote: r.label ? r.label : '',
+        bNote: r.label ? r.label : '',
+        cursor: i === cursor ? 'inset 2px 0 0 #2f6f5e' : 'none',
+      };
+    });
+    const jumpDiff = (delta) => {
+      if (changeIdx.length === 0) return;
+      const next = (s.diffIdx + delta + changeIdx.length) % changeIdx.length;
+      this.setState({ diffIdx: next });
+      const el = this.diffScrollRef.current;
+      if (el) el.scrollTop = Math.max(0, changeIdx[next] * 24 - 170);
+    };
+    const diffTotal = Math.max(1, D.counts.add + D.counts.del + D.counts.chg);
+
+    // sağ panel
+    const selPath = s.sel ?? s.path;
+    const selKey = selPath.length ? selPath[selPath.length - 1] : 'json';
+    const docKey = /^\d+$/.test(selKey) && selPath.length > 1 ? selPath[selPath.length - 2] : selKey;
+    const doc = DOCS[docKey];
+    const allOrders = valueAt(s.data, ['IATA_OrderViewRS', 'Response', 'Order']);
+    const bag = new Map();
+    if (Array.isArray(allOrders)) {
+      allOrders.forEach((o) => {
+        const v = o && o.TotalPrice ? o.TotalPrice.CurCode : undefined;
+        if (v === undefined) return;
+        bag.set(String(v), (bag.get(String(v)) ?? 0) + 1);
+      });
+    }
+    const maxCount = Math.max(1, ...bag.values());
+    const dist = [...bag.entries()].sort((a, b) => b[1] - a[1]).map(([text, count]) => ({
+      text, count: String(count), width: `${Math.round((count / maxCount) * 100)}%`,
+    }));
+    const threadKey = s.sel ? s.sel.join('.') : '';
+    const thread = s.threads[threadKey] ?? s.threads['IATA_OrderViewRS.Response.Order.2.StatusCode'];
+
+    const nodeCount = (() => {
+      let n = 0;
+      const walk = (v) => {
+        n += 1;
+        if (v === null || typeof v !== 'object') return;
+        if (Array.isArray(v)) v.forEach(walk); else Object.values(v).forEach(walk);
+      };
+      if (s.data) walk(s.data);
+      return n;
+    })();
+    const rowCount = Array.isArray(allOrders) ? allOrders.length : 0;
+
+    return {
+      // kabuk
+      hasFile: s.data !== null,
+      fileName: 'orderview-prod.json',
+      validColor: s.err ? '#a3382f' : '#2c6b45',
+      query: s.query,
+      onQuery: (e) => this.set({ query: e.target.value }),
+      searchBorder: s.query.trim() ? '#2f6f5e' : '#e2e0d9',
+      hitLabel: s.query.trim() ? 'eşleşenler işaretli' : '⌘K',
+      toggleTheme: () => this.set({ themeNote: !s.themeNote }),
+      goHome: () => this.setState({ data: null, text: '', sel: null, shareMenuOpen: false }),
+      setTree: () => this.set({ view: 'tree', diffOn: false }),
+      setGrid: () => this.set({ view: 'grid', diffOn: false }),
+      setColumns: () => this.set({ view: 'columns', diffOn: false }),
+      treeTabColor: on(s.view === 'tree' && !diffMode, '#1b1d1e', '#7a7d79'),
+      treeTabBg: on(s.view === 'tree' && !diffMode, '#ffffff', 'transparent'),
+      gridTabColor: on(s.view === 'grid' && !diffMode, '#1b1d1e', '#7a7d79'),
+      gridTabBg: on(s.view === 'grid' && !diffMode, '#ffffff', 'transparent'),
+      colTabColor: on(s.view === 'columns' && !diffMode, '#1b1d1e', '#7a7d79'),
+      colTabBg: on(s.view === 'columns' && !diffMode, '#ffffff', 'transparent'),
+      isEmpty: s.data === null,
+      isGrid: s.data !== null && !diffMode && s.view === 'grid',
+      isTree: s.data !== null && !diffMode && s.view === 'tree',
+      isColumns: s.data !== null && !diffMode && s.view === 'columns',
+      isDiff: diffMode,
+      showPath: s.data !== null && !diffMode,
+
+      // paylaşım
+      shareMenuOpen: s.shareMenuOpen,
+      toggleShareMenu: () => this.set({ shareMenuOpen: !s.shareMenuOpen }),
+      shareTitle: s.shareTitle,
+      onShareTitle: (e) => this.set({ shareTitle: e.target.value }),
+      shareCheckMark: s.shareComments ? '✓' : '',
+      shareCheckBg: s.shareComments ? '#2f6f5e' : '#ffffff',
+      shareCheckBorder: s.shareComments ? '#2f6f5e' : '#d6d4cd',
+      toggleShareComments: () => this.set({ shareComments: !s.shareComments }),
+      createShare: () => this.set({ shareUrl: 'json-eyes.app/?s=7fA2c9', shareMenuOpen: false, copied: false }),
+      hasBanner: s.shareUrl !== null || s.themeNote,
+      bannerTag: s.themeNote ? 'tema' : 'paylaşım',
+      bannerText: s.themeNote ? 'Aydınlık ve karanlık aynı token setinden okur; bu prototip aydınlık temayı gösteriyor.' : (s.shareUrl ?? ''),
+      bannerNote: s.themeNote ? '' : (s.shareComments ? 'salt okunur · yorumlara açık' : 'salt okunur'),
+      copyLabel: s.copied ? 'kopyalandı' : 'kopyala',
+      copyShare: () => { if (s.shareUrl) { navigator.clipboard?.writeText('https://' + s.shareUrl); this.set({ copied: true }); } },
+      closeBanner: () => this.set({ shareUrl: null, themeNote: false, copied: false }),
+      commentsOn: s.shareUrl !== null && s.shareComments,
+      thread,
+      threadPath: (threadKey || '').split('.').slice(-2).join('.'),
+      draft: s.draft,
+      onDraft: (e) => this.set({ draft: e.target.value }),
+      addComment: () => {
+        const body = s.draft.trim();
+        if (!body) return;
+        const key = threadKey || 'IATA_OrderViewRS.Response.Order.2.StatusCode';
+        const next = { ...s.threads };
+        next[key] = [...(next[key] ?? []), { author: 'Sen', when: 'şimdi', body }];
+        this.setState({ threads: next, draft: '' });
+      },
+
+      // yol
+      crumbs,
+      hasStepper: stepIdx >= 0 && stepTotal > 1,
+      stepLabel: stepIdx >= 0 ? `${Number(s.path[stepIdx]) + 1}/${stepTotal}` : '',
+      stepPrev: () => step(-1),
+      stepNext: () => step(1),
+      pathExpr: selPath.reduce((acc, seg) => acc + (/^\d+$/.test(seg) ? `[${seg}]` : `.${seg}`), '$'),
+      copyHint: s.pathCopied ? '✓ kopyalandı' : '⧉',
+      copyHintColor: s.pathCopied ? '#2f6f5e' : '#82868a',
+      copyPath: () => {
+        const expr = selPath.reduce((acc, seg) => acc + (/^\d+$/.test(seg) ? `[${seg}]` : `.${seg}`), '$');
+        navigator.clipboard?.writeText(expr);
+        this.set({ pathCopied: true });
+        setTimeout(() => this.set({ pathCopied: false }), 1600);
+      },
+
+      // girdi paneli
+      editorOpen: s.editorOpen,
+      editorClosed: !s.editorOpen,
+      editorW: `${s.editorW}px`,
+      resizeBg: s.resizing ? '#2f6f5e' : 'transparent',
+      startResize: (e) => {
+        e.preventDefault();
+        const startX = e.clientX;
+        const startW = this.state.editorW;
+        this.setState({ resizing: true });
+        const move = (ev) => {
+          const w = Math.min(760, Math.max(210, startW + (ev.clientX - startX)));
+          this.setState({ editorW: w });
+        };
+        const up = () => {
+          window.removeEventListener('mousemove', move);
+          window.removeEventListener('mouseup', up);
+          this.setState({ resizing: false });
+        };
+        window.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', up);
+      },
+      resetWidth: () => this.set({ editorW: 344 }),
+      toggleEditor: () => this.set({ editorOpen: !s.editorOpen }),
+      tabIsInput: s.tab === 'input',
+      tabIsDiff: s.tab === 'diff',
+      tabIsHistory: s.tab === 'history',
+      setTabInput: () => this.set({ tab: 'input', diffOn: false }),
+      setTabDiff: () => this.set({ tab: 'diff', diffOn: true }),
+      setTabHistory: () => this.set({ tab: 'history', diffOn: false }),
+      inputTabColor: on(s.tab === 'input', '#1b1d1e', '#7a7d79'),
+      inputTabLine: on(s.tab === 'input', '#2f6f5e', 'transparent'),
+      diffTabColor: on(s.tab === 'diff', '#1b1d1e', '#7a7d79'),
+      diffTabLine: on(s.tab === 'diff', '#2f6f5e', 'transparent'),
+      histTabColor: on(s.tab === 'history', '#1b1d1e', '#7a7d79'),
+      histTabLine: on(s.tab === 'history', '#2f6f5e', 'transparent'),
+      sizeLabel: `${lines.length.toLocaleString('tr-TR')} satır`,
+      kindJsonColor: on(!isXmlKind, '#1b1d1e', '#6f7376'),
+      kindXmlColor: on(isXmlKind, '#1b1d1e', '#6f7376'),
+      setKindJson: () => this.applyText(s.data ? serializeWithMap(s.data).text : SAMPLE_TEXT, { inputKind: 'json' }),
+      setKindXml: () => this.setState({ inputKind: 'xml', text: XML_SEED, err: null }),
+      isXmlKind,
+      liveLabel: s.live ? 'canlı' : 'elle',
+      liveColor: on(s.live, '#2f6f5e', '#7a7d79'),
+      toggleLive: () => this.set({ live: !s.live }),
+      needsApply: !s.live && s.dirty,
+      applyNow: () => this.applyText(s.text),
+      text: s.text,
+      codeRef: this.codeRef,
+      gutterRef: this.gutterRef,
+      gutter,
+      onCodeScroll: this.onCodeScroll,
+      onText: (e) => {
+        const text = e.target.value;
+        if (isXmlKind) { this.setState({ text, dirty: true }); return; }
+        if (s.live) this.applyText(text); else this.setState({ text, dirty: true });
+      },
+      doFormat: () => { if (s.data) this.applyText(serializeWithMap(s.data).text); },
+      doMinify: () => { if (s.data) this.applyText(JSON.stringify(s.data)); },
+      doSample: () => this.applyText(SAMPLE_TEXT, { inputKind: 'json', tab: 'input', diffOn: false, path: ['IATA_OrderViewRS', 'Response', 'Order'] }),
+      doClear: () => this.setState({ text: '', data: null, err: null, sel: null, activeLine: null }),
+      doPaste: async () => {
+        try {
+          const t = await navigator.clipboard.readText();
+          if (t && t.trim()) this.applyText(t, { tab: 'input', diffOn: false });
+        } catch { this.applyText(SAMPLE_TEXT, { tab: 'input', diffOn: false }); }
+      },
+      doRepair: () => this.applyText(repair(s.text)),
+      hasError: !isXmlKind && s.err !== null,
+      statusText: isXmlKind
+        ? (xml.error ? xml.error : `kök: ${xml.root} · öznitelikler @ad, tekrarlar dizi`)
+        : s.err
+          ? `${s.err.msg}${s.err.line ? ` · satır ${s.err.line}` : ''}`
+          : `geçerli · ${nodeCount.toLocaleString('tr-TR')} node · ${Math.round(s.ms)} ms`,
+      statusColor: (isXmlKind ? xml.error : s.err) ? '#a3382f' : '#4a4e50',
+      statusBg: (isXmlKind ? xml.error : s.err) ? 'rgba(163,56,47,.05)' : '#fbfaf8',
+      prefColor: on(s.xmlPrefixes, '#2f6f5e', '#7a7d79'),
+      togglePrefixes: () => this.set({ xmlPrefixes: !s.xmlPrefixes }),
+      numColor: on(s.xmlNumbers, '#2f6f5e', '#7a7d79'),
+      toggleNumbers: () => this.set({ xmlNumbers: !s.xmlNumbers }),
+      loadConverted: () => {
+        if (!xml || !xml.json) return;
+        const ser = serializeWithMap(xml.json);
+        const open = {};
+        this.collectPaths(xml.json, [], open, 0);
+        this.setState({
+          text: ser.text, data: xml.json, err: null, inputKind: 'json',
+          path: [xml.root], sel: [xml.root], open, view: 'grid',
+        });
+      },
+      recents: RECENTS.map((r) => ({
+        name: r.name, meta: r.meta,
+        onOpen: () => this.applyText(SAMPLE_TEXT, { tab: 'input', diffOn: false, inputKind: 'json', path: ['IATA_OrderViewRS', 'Response', 'Order'] }),
+      })),
+
+      // grid + tree
+      g0,
+      treeRows,
+      gridMeta: `${g0.rows.length} satır · ${g0.cols.length} kolon`,
+      treeMeta: `${treeRows.length} açık satır`,
+      expandAll: () => {
+        const open = { ...s.open };
+        this.collectPaths(gridNode, gridSegs, open, 0);
+        this.setState({ open });
+      },
+      collapseAll: () => {
+        const prefix = gridSegs.join('.');
+        const open = {};
+        Object.keys(s.open).forEach((k) => { if (!(k === prefix || k.startsWith(prefix + '.')) || k === prefix) open[k] = true; });
+        this.setState({ open });
+      },
+      filtColor: s.filtersOn ? '#2f6f5e' : '#4a4e50',
+      toggleFilters: () => this.set({ filtersOn: !s.filtersOn }),
+      doCsv: () => {
+        if (!Array.isArray(allOrders)) return;
+        const { cols } = this.colsOf(allOrders);
+        const head = ['#', ...cols.map((c) => c.name)].join(',');
+        const body = allOrders.map((o, i) => [i, ...cols.map((c) => JSON.stringify(this.cellText(o[c.name]) || summary(o[c.name])))].join(',')).join('\n');
+        const url = URL.createObjectURL(new Blob([head + '\n' + body], { type: 'text/csv' }));
+        const a = document.createElement('a');
+        a.href = url; a.download = 'order.csv'; a.click();
+        URL.revokeObjectURL(url);
+      },
+      onFilter: (e) => this.setState({ filters: { ...this.state.filters, [e.target.dataset.key]: e.target.value } }),
+
+      // kolon
+      colViews,
+
+      // fark
+      diffCandidates: RECENTS.slice(1).map((r) => ({
+        name: r.name, meta: r.meta,
+        bg: s.diffB === r.name ? 'rgba(47,111,94,.08)' : 'transparent',
+        dot: s.diffB === r.name ? '#2f6f5e' : '#d6d4cd',
+        onPick: () => this.set({ diffB: r.name, textB: VARIANT_TEXT, diffOn: true, tab: 'diff', diffIdx: 0 }),
+      })),
+      textA: rawA,
+      textB: rawB,
+      onTextA: (e) => this.set({ textA: e.target.value }),
+      onTextB: (e) => this.set({ textB: e.target.value, diffB: 'yapıştırılan JSON', diffIdx: 0 }),
+      aBorder: pA.err ? '#a3382f' : '#e2e0d9',
+      bBorder: pB.err ? '#a3382f' : '#e2e0d9',
+      aMsg: pA.err ? `geçersiz${pA.err.line ? ' · satır ' + pA.err.line : ''}` : `geçerli · ${rawA.split('\n').length} satır`,
+      bMsg: pB.err ? `geçersiz${pB.err.line ? ' · satır ' + pB.err.line : ''}` : `geçerli · ${rawB.split('\n').length} satır`,
+      aMsgColor: pA.err ? '#a3382f' : '#6f7376',
+      bMsgColor: pB.err ? '#a3382f' : '#6f7376',
+      editA: () => this.setState({ tab: 'input', diffOn: false, text: rawA }),
+      pasteB: async () => {
+        try {
+          const t = await navigator.clipboard.readText();
+          if (t && t.trim()) this.setState({ textB: t, diffB: 'yapıştırılan JSON', diffIdx: 0 });
+        } catch { this.setState({ textB: VARIANT_TEXT, diffB: 'orderview-uat.json', diffIdx: 0 }); }
+      },
+      dAdded: D.counts.add,
+      dRemoved: D.counts.del,
+      dChanged: D.counts.chg,
+      addW: `${Math.round((D.counts.add / diffTotal) * 100)}%`,
+      delW: `${Math.round((D.counts.del / diffTotal) * 100)}%`,
+      chgW: `${Math.round((D.counts.chg / diffTotal) * 100)}%`,
+      diffNote: (pA.err || pB.err)
+        ? 'Bir taraf geçersiz; fark son geçerli hâle göre gösteriliyor.'
+        : 'Diziler kimliğe göre eşleşti (Order → OrderID); sıra değişikliği fark sayılmaz.',
+      diffAName: swap ? s.diffB : (s.textA === null ? 'orderview-prod.json' : 'düzenlenen JSON'),
+      diffBName: swap ? (s.textA === null ? 'orderview-prod.json' : 'düzenlenen JSON') : s.diffB,
+      swapDiff: () => this.set({ diffSwapped: !s.diffSwapped }),
+      exitDiff: () => this.set({ diffOn: false, tab: 'input' }),
+      diffRows: diffDisplay,
+      diffScrollRef: this.diffScrollRef,
+      diffPos: changeIdx.length ? `${Math.min(s.diffIdx + 1, changeIdx.length)}/${changeIdx.length}` : '0/0',
+      diffPrev: () => jumpDiff(-1),
+      diffNext: () => jumpDiff(1),
+      onlyChColor: on(s.diffOnlyChanges, '#2f6f5e', '#7a7d79'),
+      toggleOnlyChanges: () => this.set({ diffOnlyChanges: !s.diffOnlyChanges, diffIdx: 0 }),
+
+      // sağ panel
+      sideOpen: s.sideOpen && s.data !== null,
+      sideClosed: !s.sideOpen && s.data !== null,
+      toggleSide: () => this.set({ sideOpen: !s.sideOpen }),
+      msgLabel: 'OrderViewRS · %86 eşleşme',
+      selName: docKey,
+      selType: doc && doc[0] ? doc[0] : 'tip bilinmiyor',
+      selState: doc ? (doc[1] === 'exact' ? 'şemada var' : doc[1] === 'inferred' ? 'tahmini eşleşme' : 'karşılığı yok') : 'karşılığı yok',
+      selStateColor: doc && doc[1] === 'exact' ? '#2c6b45' : doc && doc[1] === 'inferred' ? '#2f5fa8' : '#8a5a00',
+      selDoc: doc ? doc[2] : 'Bu alan IATA 24.4 şemasında bulunamadı; adı ve içeriği standart dışı olabilir.',
+      selPath: ['json', ...selPath].join('.'),
+      distField: 'TotalPrice.CurCode dağılımı',
+      dist,
+      unmatched: [
+        { name: 'Order[4].PenaltyInd', path: ['IATA_OrderViewRS', 'Response', 'Order', '4', 'PenaltyInd'] },
+        { name: 'Order[9].RemarkText', path: ['IATA_OrderViewRS', 'Response', 'Order', '9', 'RemarkText'] },
+      ].map((u) => ({
+        name: u.name,
+        onGo: () => {
+          const open = { ...s.open };
+          for (let k = 0; k <= u.path.length; k++) open[u.path.slice(0, k).join('.')] = true;
+          this.setState({ path: u.path.slice(0, -1), open, view: 'grid', diffOn: false });
+          this.select(u.path);
+        },
+      })),
+      peekOpen: s.peek !== null,
+      peekTitle: s.peek ? s.peek.label : '',
+      peekFields: s.peek ? Object.entries(s.peek.obj).map(([k, v]) => ({ k, v: String(v) })) : [],
+      peekGo: () => {
+        if (!s.peek) return;
+        const open = { ...s.open };
+        for (let k = 0; k <= s.peek.path.length; k++) open[s.peek.path.slice(0, k).join('.')] = true;
+        this.setState({ path: s.peek.path, open, view: 'grid' });
+        this.select(s.peek.path);
+      },
+      closePeek: () => this.set({ peek: null }),
+
+      // durum
+      stNodes: `${nodeCount.toLocaleString('tr-TR')} node`,
+      stParse: `ayrıştırma ${Math.round(s.ms)} ms`,
+      stSync: s.activeLine ? `satır ${s.activeLine} · ${['json', ...(s.sel ?? [])].join('.')}` : 'grid ↔ json senkron',
+    };
+  }
+}
+
+</script>
+</body>
+</html>
