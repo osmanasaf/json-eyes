@@ -121,17 +121,17 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   padding: 10px 12px;
   border-radius: 8px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-popover);
+  background: var(--bg-chrome);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-menu);
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 12.5px;
   line-height: 1.5;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   text-align: left;
   white-space: normal;
 }
 .bubble.above { transform: translateY(-100%); }
 .bubble.pinned { border-color: var(--accent); }
-.bubble-hint { margin-top: 8px; font-size: 10px; color: var(--text-muted); font-style: italic; }
+.bubble-hint { margin-top: 8px; font-size: 10px; color: var(--ink-5); font-style: italic; }
 </style>

@@ -29,6 +29,11 @@ const props = defineProps<{
   insidePreview?: boolean
   /** Referanstan atlanan hedef yol; bu yola giden dugumler acilir ve hedef vurgulanir. */
   focusRequest?: { path: string; seq: number } | null
+  /**
+   * Toplu ac/kapa istegi. `seq` her istekte artiyor: ayni yonde iki kez
+   * basmak da izleyiciyi tetiklemeli.
+   */
+  bulk?: { open: boolean; seq: number } | null
 }>()
 
 const emit = defineEmits<{ focusPath: [path: string] }>()
@@ -38,6 +43,12 @@ const comments = inject(COMMENTS, null)
 const type = computed(() => getType(props.value))
 const isExpandable = computed(() => type.value === 'object' || type.value === 'array')
 const expanded = ref(props.defaultExpanded ?? props.depth < 2)
+
+// Arac cubugundaki "tümünü aç / kapat": kok haric her dugum istegi uygular.
+watch(() => props.bulk, (request) => {
+  if (!request) return
+  expanded.value = props.depth === 0 ? true : request.open
+})
 const copied = ref(false)
 const rowRef = ref<HTMLElement | null>(null)
 
@@ -311,6 +322,7 @@ function primitiveDisplay(value: JsonValue): string {
           :ref-index="refIndex"
           :inside-preview="insidePreview"
           :focus-request="focusRequest"
+          :bulk="bulk"
           @focus-path="emit('focusPath', $event)"
         />
       </template>
@@ -332,6 +344,7 @@ function primitiveDisplay(value: JsonValue): string {
           :ref-index="refIndex"
           :inside-preview="insidePreview"
           :focus-request="focusRequest"
+          :bulk="bulk"
           @focus-path="emit('focusPath', $event)"
         />
       </template>
@@ -355,49 +368,49 @@ function primitiveDisplay(value: JsonValue): string {
 
 <style scoped>
 .node { position: relative; }
-.node.matched > .row { background: var(--match-soft); border-radius: 4px; }
-.node.active > .row { background: var(--match-strong); box-shadow: inset 0 0 0 1px var(--match-ring); border-radius: 4px; }
-.node.focused > .row { background: var(--accent-dim); box-shadow: inset 0 0 0 1px var(--accent); border-radius: 4px; }
+.node.matched > .row { background: var(--search-hit); }
+.node.active > .row { background: var(--search-hit); box-shadow: inset 2px 0 0 var(--changed); }
+.node.focused > .row { background: var(--accent-sel-bg); box-shadow: inset 2px 0 0 var(--accent); }
 
-.ref-btn { font-size: 10px; color: var(--accent); background: var(--accent-dim); padding: 1px 7px; border-radius: 10px; margin-left: 8px; white-space: nowrap; flex-shrink: 0; }
-.ref-btn:hover, .ref-btn.open { background: var(--accent-strong); }
+.ref-btn { font-size: 10px; color: var(--accent); margin-left: 8px; white-space: nowrap; flex-shrink: 0; }
+.ref-btn:hover, .ref-btn.open { color: var(--accent-hover); }
 .ref-preview { margin: 2px 0 6px; padding: 6px 10px; border-left: 2px solid var(--accent); background: var(--accent-soft); border-radius: 0 6px 6px 0; }
 .ref-head { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
-.ref-path { font-size: 10px; color: var(--text-muted); word-break: break-all; }
-.ref-goto { font-size: 10px; color: var(--accent); padding: 1px 8px; border-radius: 4px; border: 1px solid var(--border); white-space: nowrap; }
-.ref-goto:hover { background: var(--accent-dim); }
-.row { display: flex; align-items: center; min-height: 26px; padding: 1px 8px 1px 0; border-radius: 4px; }
+.ref-path { font-size: 10px; color: var(--ink-5); word-break: break-all; }
+.ref-goto { font-size: 10px; color: var(--accent); padding: 1px 8px; border-radius: 4px; border: 1px solid var(--line); white-space: nowrap; }
+.ref-goto:hover { background: var(--accent-soft); }
+.row { display: flex; align-items: center; min-height: 22px; padding: 1px 8px 1px 0; font-size: 12px; }
 .row.expandable { cursor: pointer; }
-.row.expandable:hover { background: var(--bg-hover); }
+.row.expandable:hover { background: var(--bg-subtle); }
 .row:hover .copy { opacity: 1; }
 .indent { display: inline-block; flex-shrink: 0; }
-.toggle { width: 16px; text-align: center; color: var(--text-muted); transform: rotate(-90deg); transition: transform .15s; margin-right: 4px; font-size: 10px; }
+.toggle { width: 16px; text-align: center; color: var(--ink-5); transform: rotate(-90deg); transition: transform .15s; margin-right: 4px; font-size: 10px; }
 .toggle.open { transform: rotate(0deg); }
 .toggle-ph { display: inline-block; width: 20px; flex-shrink: 0; }
-.key { color: var(--color-key); margin-right: 2px; }
+.key { color: var(--ink-2); margin-right: 2px; }
 /* XSD karsiligi olan alanlarda aciklama isareti. */
 .info-dot { font-size: 10px; color: var(--accent); opacity: .55; cursor: pointer; margin-right: 3px; }
 .info-dot:hover { opacity: 1; }
-.colon { color: var(--text-muted); margin-right: 6px; }
-.comma { color: var(--text-muted); }
-.bracket { color: var(--color-bracket); font-weight: 500; }
-.collapsed { color: var(--text-muted); font-style: italic; margin: 0 6px; font-size: 11px; }
+.colon { color: var(--ink-5); margin-right: 6px; }
+.comma { color: var(--ink-5); }
+.bracket { color: var(--ink-5); }
+.collapsed { color: var(--ink-5); margin: 0 6px; font-size: 11px; }
 .val { flex: 1; }
-.val-string { color: var(--color-string); }
-.val-number { color: var(--color-number); }
-.val-boolean { color: var(--color-bool); font-weight: 500; }
-.val-null { color: var(--color-null); font-style: italic; }
+.val-string { color: var(--type-string); }
+.val-number { color: var(--type-number); }
+.val-boolean { color: var(--type-boolean); }
+.val-null { color: var(--type-null); font-style: italic; }
 .children { position: relative; }
-.more-btn { font-size: 11px; color: var(--accent); background: var(--accent-dim); padding: 2px 10px; border-radius: 5px; }
-.more-btn:hover { background: var(--accent-strong); }
-.comment-btn { opacity: 0; display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 7px; border-radius: 11px; font-size: 10px; color: var(--text-muted); margin-left: 6px; flex-shrink: 0; }
-.comment-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.more-btn { font-size: 11px; color: var(--accent); background: var(--accent-soft); padding: 2px 10px; border-radius: 5px; }
+.more-btn:hover { background: var(--accent-line); }
+.comment-btn { opacity: 0; display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 7px; border-radius: 11px; font-size: 10px; color: var(--ink-5); margin-left: 6px; flex-shrink: 0; }
+.comment-btn:hover { background: var(--bg-inset); color: var(--ink); }
 /* Yorumu olan satirlarda rozet her zaman gorunur. */
-.comment-btn.has, .comment-btn.open { opacity: 1; color: var(--purple); background: var(--purple-dim); }
+.comment-btn.has, .comment-btn.open { opacity: 1; color: var(--accent); background: var(--accent-soft); }
 .row:hover .comment-btn { opacity: 1; }
 .comment-count { font-weight: 600; }
 .thread-wrap { max-width: 620px; }
 
-.copy { opacity: 0; width: 22px; height: 22px; border-radius: 4px; color: var(--text-muted); margin-left: 6px; font-size: 11px; }
-.copy:hover { background: var(--bg-hover); color: var(--text-primary); }
+.copy { opacity: 0; width: 22px; height: 22px; border-radius: 4px; color: var(--ink-5); margin-left: 6px; font-size: 11px; }
+.copy:hover { background: var(--bg-inset); color: var(--ink); }
 </style>

@@ -692,6 +692,19 @@ function handleClear() {
   selectedNodePath.value = null
 }
 
+/** Bos durumdaki "Panodan yapıştır": veriyi tek tikla iceri alir. */
+async function pasteFromClipboard() {
+  try {
+    const value = await navigator.clipboard.readText()
+    if (value.trim()) {
+      applyInputNow(value)
+      fileName.value = 'yapıştırılan.json'
+    }
+  } catch {
+    loadError.value = 'Pano okunamadı; Ctrl+V ile editöre yapıştırabilirsiniz.'
+  }
+}
+
 function loadSample() {
   applyInputNow(SAMPLE_JSON)
   fileName.value = 'ornek.json'
@@ -1037,7 +1050,7 @@ const docView = computed(() => !comparing.value)
         kullanicinin; sag kenarindaki tutamactan surukleniyor.
       -->
       <div
-        v-if="editorVisible && !isShared"
+        v-if="editorVisible && !isShared && (hasData || parseError)"
         class="panel-slot"
         :style="{ width: `${panelW}px` }"
       >
@@ -1087,7 +1100,7 @@ const docView = computed(() => !comparing.value)
 
       <!-- Kapali panelin yerinde dikey serit kalir; tiklayinca geri acilir. -->
       <button
-        v-if="!editorVisible && !isShared"
+        v-if="!editorVisible && !isShared && (hasData || parseError)"
         class="rail"
         title="Girdi panelini aç"
         @click="toggleEditor"
@@ -1114,6 +1127,7 @@ const docView = computed(() => !comparing.value)
           :recents="recents"
           @pick-file="fileInputRef?.click()"
           @sample="loadSample"
+          @paste="pasteFromClipboard"
           @open-recent="openRecent"
           @drop="handleDrop"
         />
@@ -1150,20 +1164,19 @@ const docView = computed(() => !comparing.value)
             @focus-path="focusOnPath"
           />
 
-          <div v-else-if="viewMode === 'tree'" class="tree-scroll">
-            <JsonTree
-              :data="parsed!"
-              :root-key="ROOT_KEY"
-              :search-term="searchTerm"
-              :doc-lookup="docLookup"
-              :search="searchIndex"
-              :active-path="activePath"
-              :filter-matches="false"
-              :ref-index="refIndex"
-              :focus-request="focusRequest"
-              @focus-path="focusOnPath"
-            />
-          </div>
+          <JsonTree
+            v-else-if="viewMode === 'tree'"
+            :data="parsed!"
+            :root-key="ROOT_KEY"
+            :search-term="searchTerm"
+            :doc-lookup="docLookup"
+            :search="searchIndex"
+            :active-path="activePath"
+            :filter-matches="false"
+            :ref-index="refIndex"
+            :focus-request="focusRequest"
+            @focus-path="focusOnPath"
+          />
 
           <JsonGrid
             v-else-if="viewMode === 'grid'"
@@ -1352,20 +1365,20 @@ const docView = computed(() => !comparing.value)
 .stat.sync { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; }
 .footer-spacer { flex: 1; }
 
-.viewer { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg-primary); }
+.viewer { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg-app); }
 .tree-scroll { flex: 1; min-height: 0; overflow: auto; padding: 4px 16px 40px; }
-.center-note { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 40px; font-size: 13px; color: var(--text-muted); }
-.error-title { font-size: 17px; font-weight: 600; color: var(--red); }
+.center-note { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 40px; font-size: 13px; color: var(--ink-5); }
+.error-title { font-size: 17px; font-weight: 600; color: var(--removed); }
 .error-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
-.error-code { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--text-secondary); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; max-width: 560px; text-align: center; word-break: break-word; }
-.error-hint { font-size: 13px; color: var(--text-muted); max-width: 360px; text-align: center; text-wrap: pretty; }
-.error-action { margin-top: 4px; font-size: 13px; color: var(--accent); background: var(--accent-dim); border-radius: 8px; padding: 8px 18px; }
-.error-action:hover { background: var(--accent-strong); }
-.error-action.ghost { color: var(--text-secondary); background: transparent; border: 1px solid var(--border); font-size: 12px; padding: 7px 14px; }
+.error-code { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--ink-2); background: var(--bg-chrome); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; max-width: 560px; text-align: center; word-break: break-word; }
+.error-hint { font-size: 13px; color: var(--ink-5); max-width: 360px; text-align: center; text-wrap: pretty; }
+.error-action { margin-top: 4px; font-size: 13px; color: var(--accent); background: var(--accent-soft); border-radius: 8px; padding: 8px 18px; }
+.error-action:hover { background: var(--accent-line); }
+.error-action.ghost { color: var(--ink-2); background: transparent; border: 1px solid var(--line); font-size: 12px; padding: 7px 14px; }
 .error-action.ghost:hover { color: var(--accent); border-color: var(--accent); }
-.side-col { display: flex; flex-direction: column; width: var(--iata-w); flex-shrink: 0; min-height: 0; }
+.side-col { display: flex; flex-direction: column; width: var(--side-w); flex-shrink: 0; min-height: 0; }
 .side-col > :first-child { flex: 1 1 auto; min-height: 0; }
 .side-col > .values-panel { flex: 0 1 auto; max-height: 52%; }
-.values-reopen { flex-shrink: 0; font-size: 11px; color: var(--text-muted); background: var(--bg-secondary); border-top: 1px solid var(--border); padding: 7px 12px; text-align: left; }
+.values-reopen { flex-shrink: 0; font-size: 11px; color: var(--ink-5); background: var(--bg-chrome); border-top: 1px solid var(--line); padding: 7px 12px; text-align: left; }
 .values-reopen:hover { color: var(--accent); }
 </style>

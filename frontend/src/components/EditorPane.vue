@@ -447,11 +447,11 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
 
 /* XML sekmesinin cevirim seridi. */
 
-.code-area { flex: 1; min-height: 0; display: flex; background: var(--bg-primary); padding: 8px 0; }
+.code-area { flex: 1; min-height: 0; display: flex; background: var(--bg-app); padding: 8px 0; }
 .gutter { width: 34px; flex-shrink: 0; overflow: hidden; padding-left: 12px; }
 .gutter-inner { display: flex; flex-direction: column; }
-.line-no { font-size: 11.5px; line-height: var(--editor-line); height: var(--editor-line); color: var(--border); text-align: right; flex-shrink: 0; }
-.line-no.bad { color: var(--red); font-weight: 600; }
+.line-no { font-size: 11.5px; line-height: var(--editor-line); height: var(--editor-line); color: var(--ink-5); text-align: right; flex-shrink: 0; }
+.line-no.bad { color: var(--removed); font-weight: 600; }
 .line-no.synced { color: var(--accent); }
 /*
  * Sarma kapali: satir numaralari ve GridSync satir hesabi ancak boyle koda
@@ -459,9 +459,9 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
  * icin yatay kaydirma var.
  */
 .code-wrap { position: relative; flex: 1; min-width: 0; display: flex; }
-.sync-band { position: absolute; left: 0; right: 0; background: var(--accent-wash); border-left: 2px solid var(--accent); pointer-events: none; }
-.code { flex: 1; min-width: 0; position: relative; background: transparent; color: var(--text-primary); border: none; outline: none; resize: none; padding: 0 12px 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: var(--editor-line); white-space: pre; overflow-x: auto; }
-.code.invalid { color: var(--text-secondary); }
+.sync-band { position: absolute; left: 0; right: 0; background: var(--accent-sel-bg); border-left: 2px solid var(--accent); pointer-events: none; }
+.code { flex: 1; min-width: 0; position: relative; background: transparent; color: var(--ink); border: none; outline: none; resize: none; padding: 0 12px 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: var(--editor-line); white-space: pre; overflow-x: auto; }
+.code.invalid { color: var(--ink-2); }
 
 
 </style>
