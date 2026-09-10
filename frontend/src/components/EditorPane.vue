@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { RecentFile } from '../utils/storage'
-import { formatRelative, formatSize } from '../utils/storage'
 import { XmlParseError, xmlToJson } from '../utils/xml'
 
 /**
@@ -22,15 +20,14 @@ const props = defineProps<{
   /** Hatanin bulundugu satir; numara sutununda isaretlenir. */
   errorLine: number | null
   nodeCount: number
+  /** Ayristirma suresi (ms); durum satirinda gosterilir. */
+  parseMs?: number
   hasData: boolean
-  recents: RecentFile[]
   /**
    * Goruntuleyicide secili alanin metindeki yeri (GridSync). Verildiginde
    * editor o satira kayar ve satirlar isaretlenir.
    */
   syncRange?: { start: number; end: number; startLine: number; endLine: number } | null
-  /** Karsilastirma acik mi; dugme durumunu gosterir. */
-  comparing?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -40,16 +37,30 @@ const emit = defineEmits<{
   sample: []
   clear: []
   repair: []
-  openRecent: [file: RecentFile]
   drop: [event: DragEvent]
-  collapse: []
   /** XML cevrildi: JSON metni ve cevirim notlari. */
   xml: [payload: { text: string; name: string | null; root: string; notes: string[] }]
-  toggleCompare: []
 }>()
 
-type Tab = 'json' | 'xml' | 'history'
-const tab = ref<Tab>('json')
+/**
+ * Girdinin **bicimi**: JSON mu XML mi. Ayri bir ekran degil, ayni panelde bir
+ * satir — XML yapistirilir, istenince cevrilir ve sonuc girdinin kendisi olur.
+ */
+type Kind = 'json' | 'xml'
+const kind = ref<Kind>('json')
+
+/**
+ * Canli mi elle mi ayristirilacak.
+ *
+ * Canli modda her tus vurusu goruntuyu tazeler; birkac MB'lik bir NDC
+ * yanitinda bu yazarken donmaya yol aciyordu. Elle modda metin yerel kaliyor,
+ * `uygula` denince veriye donusuyor.
+ */
+const live = ref(true)
+/** Elle modda henuz uygulanmamis degisiklik var mi. */
+const dirty = ref(false)
+/** Elle moddaki yerel taslak. */
+const draft = ref(props.modelValue)
 
 /** XML girdisi ve cevirim secenekleri; CLI'daki bayraklarin aynisi. */
 const xmlText = ref('')
@@ -59,24 +70,60 @@ const numbers = ref(false)
 const xmlError = ref<string | null>(null)
 const xmlErrorLine = ref<number | null>(null)
 
-const isXml = computed(() => tab.value === 'xml')
+const isXml = computed(() => kind.value === 'xml')
 
 /**
  * Duzenlenen metin. Gutter, yapistirma ve senkron seridi tek bir textarea
  * uzerinden calisiyor; bicim degisince altindaki kaynak degisiyor.
  */
 const text = computed({
-  get: () => (isXml.value ? xmlText.value : props.modelValue),
+  get: () => {
+    if (isXml.value) return xmlText.value
+    return live.value ? props.modelValue : draft.value
+  },
   set: (value: string) => {
     if (isXml.value) {
       xmlText.value = value
       xmlError.value = null
       xmlErrorLine.value = null
-    } else {
-      emit('update:modelValue', value)
+      return
     }
+    if (live.value) {
+      emit('update:modelValue', value)
+      return
+    }
+    draft.value = value
+    dirty.value = value !== props.modelValue
   },
 })
+
+/** Elle moddaki taslagi veriye uygular. */
+function applyDraft() {
+  emit('update:modelValue', draft.value)
+  dirty.value = false
+}
+
+/** Mod degisince taslak guncel metinle esitlenir; kayip olmaz. */
+watch(live, (on) => {
+  if (on && dirty.value) applyDraft()
+  draft.value = props.modelValue
+  dirty.value = false
+})
+
+// Disaridan gelen metin (dosya, ornek, XML cevirimi) taslagi da tazeler.
+watch(() => props.modelValue, (value) => {
+  if (!live.value && !dirty.value) draft.value = value
+})
+
+/** Panodan yapistir: buyuk girdide elle moda gecmenin en pratik yolu. */
+async function pasteFromClipboard() {
+  try {
+    const value = await navigator.clipboard.readText()
+    if (value) text.value = value
+  } catch {
+    // Pano izni yoksa kullanici Ctrl+V ile yapistirir.
+  }
+}
 
 /** Gosterilecek hata satiri: JSON'da ayristirma, XML'de cevirim hatasi. */
 const activeErrorLine = computed(() => (isXml.value ? xmlErrorLine.value : props.errorLine))
@@ -97,8 +144,8 @@ function convertXml() {
       root: result.root,
       notes: result.notes,
     })
-    // Cevrilen JSON artik girdinin kendisi; kullanici JSON sekmesinde devam eder.
-    tab.value = 'json'
+    // Cevrilen JSON artik girdinin kendisi; bicim JSON'a doner.
+    kind.value = 'json'
   } catch (error) {
     if (error instanceof XmlParseError) {
       xmlError.value = error.message
@@ -116,7 +163,7 @@ function openXml(source: string, name: string | null) {
   xmlName.value = name
   xmlError.value = null
   xmlErrorLine.value = null
-  tab.value = 'xml'
+  kind.value = 'xml'
 }
 
 defineExpose({ openXml })
@@ -248,49 +295,41 @@ onMounted(() => {
 })
 onBeforeUnmount(() => resizeObserver?.disconnect())
 
-watch(() => props.recents.length, (count) => {
-  if (count === 0 && tab.value === 'history') tab.value = 'json'
-})
 </script>
 
 <template>
   <section class="editor-pane" @drop="emit('drop', $event)" @dragover.prevent>
-    <!-- Sekmeler girdinin *bicimi*: JSON mu XML mi, ya da gecmis. -->
-    <div class="tabs">
-      <button class="tab" :class="{ active: tab === 'json' }" @click="tab = 'json'">JSON</button>
+    <!-- Bicim satiri: XML ayri bir ekran degil, girdinin bir bicimi. -->
+    <div class="kinds">
+      <button class="kind" :class="{ active: kind === 'json' }" @click="kind = 'json'">JSON</button>
       <button
-        class="tab"
-        :class="{ active: tab === 'xml' }"
+        class="kind"
+        :class="{ active: kind === 'xml' }"
         title="XML yapıştır, JSON'a çevir — sonuç girdinin kendisi olur"
-        @click="tab = 'xml'"
+        @click="kind = 'xml'"
       >XML</button>
-      <button
-        class="tab"
-        :class="{ active: tab === 'history' }"
-        :disabled="recents.length === 0"
-        @click="tab = 'history'"
-      >Geçmiş</button>
-      <div class="tab-spacer" />
-      <button class="tab-action" :disabled="!hasData || isXml" title="Girintili biçime getir" @click="emit('format')">⤢</button>
-      <button class="tab-action" :disabled="!hasData || isXml" title="Tek satıra indir" @click="emit('minify')">⤡</button>
-      <button class="tab-action" title="Örnek JSON yükle" @click="emit('sample')">◇</button>
-      <button class="tab-action danger" title="Temizle" @click="emit('clear')">×</button>
-      <button class="tab-action collapse" title="Editörü gizle" @click="emit('collapse')">‹</button>
+      <div class="row-spacer" />
+      <span class="kind-meta">{{ lineCount.toLocaleString('tr-TR') }} satır</span>
     </div>
 
-    <!-- Karsilastirma da bir girdi isi: ikinci bir belge seciliyor. -->
-    <button
-      class="compare-btn"
-      :class="{ on: comparing }"
-      :disabled="!hasData"
-      :title="comparing ? 'Karşılaştırmayı kapat' : 'Bu JSON\'u ikinci bir JSON ile karşılaştır'"
-      @click="emit('toggleCompare')"
-    >
-      <span class="compare-glyph">⇄</span>
-      {{ comparing ? 'Karşılaştırma açık' : 'Karşılaştır' }}
-    </button>
+    <!-- Eylem satiri: hepsi cercevesiz metin dugme. -->
+    <div class="actions">
+      <button class="act" :disabled="!hasData || isXml" title="Girintili biçime getir" @click="emit('format')">biçim</button>
+      <button class="act" :disabled="!hasData || isXml" title="Tek satıra indir" @click="emit('minify')">küçült</button>
+      <button class="act" title="Panodan yapıştır" @click="pasteFromClipboard">yapıştır</button>
+      <button class="act" title="Örnek JSON yükle" @click="emit('sample')">örnek</button>
+      <div class="row-spacer" />
+      <button
+        class="act mode"
+        :class="{ on: live }"
+        :title="live ? 'Her tuş vuruşunda ayrıştırılıyor' : 'Uygula denince ayrıştırılır — büyük dosyada donmaz'"
+        @click="live = !live"
+      >{{ live ? 'canlı' : 'elle' }}</button>
+      <button v-if="!live && dirty" class="apply" @click="applyDraft">uygula</button>
+      <button class="act danger" title="Temizle" @click="emit('clear')">temizle</button>
+    </div>
 
-    <div v-if="tab !== 'history'" class="code-area">
+    <div class="code-area">
       <div class="gutter">
         <div class="gutter-inner" :style="{ transform: `translateY(${gutterOffset}px)` }">
           <span
@@ -321,88 +360,92 @@ watch(() => props.recents.length, (count) => {
     </div>
 
     <!-- XML sekmesinin cevirim seridi: secenekler CLI bayraklarinin aynisi. -->
+    <!-- XML seridi: cevirim secenekleri CLI bayraklarinin aynisi. -->
     <div v-if="isXml" class="xml-bar">
-      <label class="xml-opt" title="iata:Order → Order yerine olduğu gibi kalsın">
-        <input v-model="keepPrefixes" type="checkbox" />
-        önekleri koru
-      </label>
-      <label class="xml-opt" title="0123 gibi değerler yine metin kalır; kod alanları bozulmaz">
-        <input v-model="numbers" type="checkbox" />
-        sayıları çıkar
-      </label>
-      <div class="tab-spacer" />
+      <button class="xml-opt" :class="{ on: keepPrefixes }" title="iata:Order → Order yerine olduğu gibi kalsın" @click="keepPrefixes = !keepPrefixes">ad alanı önekleri</button>
+      <button class="xml-opt" :class="{ on: numbers }" title="0123 gibi değerler yine metin kalır; kod alanları bozulmaz" @click="numbers = !numbers">sayıya çevir</button>
+      <div class="row-spacer" />
       <button class="xml-go" :disabled="!text.trim()" @click="convertXml">JSON'a çevir</button>
     </div>
 
-    <div v-else class="history">
-      <button
-        v-for="file in recents"
-        :key="file.name"
-        class="history-item"
-        @click="emit('openRecent', file)"
-      >
-        <span class="history-name">{{ file.name }}</span>
-        <span class="history-meta">{{ formatSize(file.size) }} · {{ formatRelative(file.openedAt) }}</span>
-      </button>
-    </div>
-
-    <div v-if="isXml" class="status" :class="xmlError ? 'bad' : 'ok'">
-      <span class="status-dot" />
+    <!-- Durum satiri: gecerlilik, hata + duzelt, XML'de cevirim ozeti. -->
+    <div v-if="isXml" class="status" :class="{ bad: xmlError }">
       <span class="status-text">
         <template v-if="xmlError">
-          <template v-if="xmlErrorLine">Satır {{ xmlErrorLine }}: </template>{{ xmlError }}
+          {{ xmlError }}<template v-if="xmlErrorLine"> · satır {{ xmlErrorLine }}</template>
         </template>
-        <template v-else-if="xmlName">{{ xmlName }} · {{ lineCount.toLocaleString('tr-TR') }} satır XML</template>
-        <template v-else>XML → JSON · değerler metin kalır, öznitelikler "@ad" olur</template>
+        <template v-else>kök: XML · öznitelikler @ad, tekrarlar dizi</template>
       </span>
     </div>
     <div v-else-if="parseError" class="status bad">
-      <span class="status-dot" />
       <span class="status-text">
-        <template v-if="errorLine">Satır {{ errorLine }}: </template>{{ parseError }}
+        {{ parseError }}<template v-if="errorLine"> · satır {{ errorLine }}</template>
       </span>
-      <button class="status-fix" @click="emit('repair')">Düzelt</button>
+      <button class="status-fix" @click="emit('repair')">düzelt</button>
     </div>
-    <div v-else-if="hasData" class="status ok">
-      <span class="status-dot" />
-      Geçerli JSON · {{ nodeCount.toLocaleString('tr-TR') }} node
+    <div v-else-if="hasData" class="status">
+      <span class="status-text">
+        geçerli · {{ nodeCount.toLocaleString('tr-TR') }} node<template v-if="parseMs !== undefined"> · {{ parseMs }} ms</template>
+      </span>
     </div>
   </section>
 </template>
 
 <style scoped>
-.editor-pane { width: var(--editor-w); flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg-secondary); }
+.editor-pane { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; background: var(--bg-chrome); }
 
-.tabs { display: flex; align-items: center; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--border-subtle); }
-.tab { font-size: 11.5px; color: var(--text-muted); padding: 6px 11px; border-radius: 6px 6px 0 0; }
-.tab:hover:not(:disabled) { color: var(--text-primary); }
-.tab.active { color: var(--text-primary); background: var(--bg-tertiary); }
-.tab:disabled { opacity: .4; cursor: not-allowed; }
-.tab-spacer { flex: 1; }
-.tab-action { font-size: 12px; color: var(--text-muted); width: 22px; height: 22px; border-radius: 5px; }
-.tab-action:hover:not(:disabled) { color: var(--text-primary); background: var(--bg-tertiary); }
-.tab-action:disabled { opacity: .3; cursor: not-allowed; }
-.tab-action.danger:hover { color: var(--red); }
-.tab-action.collapse { margin-left: 4px; border-left: 1px solid var(--border-subtle); border-radius: 0 5px 5px 0; font-size: 15px; }
-.tab-action.collapse:hover { color: var(--accent); }
+/* Bicim satiri: JSON | XML — girdinin bicimi, ayri bir ekran degil. */
+.kinds {
+  display: flex; align-items: center; gap: 12px; height: var(--h-toolbar);
+  padding: 0 12px; flex-shrink: 0; border-bottom: 1px solid var(--line-panel);
+}
+.kind { font-size: 11.5px; color: var(--ink-5); white-space: nowrap; }
+.kind:hover { color: var(--ink-2); }
+.kind.active { color: var(--ink); }
+.kind-meta { font-size: 11px; color: var(--ink-4); white-space: nowrap; }
+.row-spacer { flex: 1; }
+
+/* Eylem satiri: hepsi cercevesiz metin dugme. */
+.actions {
+  display: flex; align-items: center; gap: 12px; height: 31px;
+  padding: 0 12px; flex-shrink: 0;
+}
+.act { font-size: 11px; color: var(--ink-2); white-space: nowrap; }
+.act:hover:not(:disabled) { color: var(--ink); }
+.act:disabled { opacity: .4; cursor: not-allowed; }
+.act.mode.on { color: var(--accent); }
+.act.danger { color: var(--ink-5); }
+.act.danger:hover { color: var(--removed); }
+.apply { font-size: 11px; color: var(--on-accent); background: var(--accent); border-radius: var(--radius); padding: 2px 9px; white-space: nowrap; }
+.apply:hover { background: var(--accent-hover); }
+
+/* XML seridi */
+.xml-bar { display: flex; align-items: center; gap: 12px; padding: 6px 12px; flex-shrink: 0; border-top: 1px solid var(--line-panel); }
+.xml-opt { font-size: 11px; color: var(--ink-4); white-space: nowrap; }
+.xml-opt:hover { color: var(--ink-2); }
+.xml-opt.on { color: var(--accent); }
+.xml-go { font-size: 11px; color: var(--on-accent); background: var(--accent); border-radius: var(--radius); padding: 3px 10px; white-space: nowrap; }
+.xml-go:hover:not(:disabled) { background: var(--accent-hover); }
+.xml-go:disabled { opacity: .4; cursor: not-allowed; }
+
+/* Durum satiri */
+.status {
+  display: flex; align-items: center; gap: 10px; padding: 6px 12px; flex-shrink: 0;
+  border-top: 1px solid var(--line-panel); font-size: 11px; color: var(--ink-2);
+}
+.status.bad { color: var(--removed); background: var(--removed-bg-soft); }
+.status-text { flex: 1; min-width: 0; line-height: 1.45; word-break: break-word; }
+.status-fix { font-size: 11px; color: var(--on-accent); background: var(--removed); border-radius: var(--radius); padding: 2px 9px; flex-shrink: 0; }
+
+
 
 /*
  * Karsilastir dugmesi: girdinin hemen altinda, gorunum anahtarinda degil.
  * Ikinci bir belge secmek bir *girdi* isi; sonucun fark gorunumu olmasi
  * ondan sonra geliyor.
  */
-.compare-btn { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 6px 8px 0; padding: 5px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: 11.5px; color: var(--text-secondary); }
-.compare-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
-.compare-btn.on { color: var(--accent); border-color: var(--accent); background: var(--accent-wash); }
-.compare-btn:disabled { opacity: .35; cursor: not-allowed; }
-.compare-glyph { font-size: 13px; }
 
 /* XML sekmesinin cevirim seridi. */
-.xml-bar { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-top: 1px solid var(--border-subtle); background: var(--bg-secondary); }
-.xml-opt { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); white-space: nowrap; cursor: pointer; }
-.xml-go { font-size: 11.5px; color: var(--accent); border: 1px solid var(--accent); background: var(--accent-dim); border-radius: 6px; padding: 3px 11px; white-space: nowrap; }
-.xml-go:hover:not(:disabled) { background: var(--accent-strong); }
-.xml-go:disabled { opacity: .4; cursor: not-allowed; border-color: var(--border); color: var(--text-muted); background: transparent; }
 
 .code-area { flex: 1; min-height: 0; display: flex; background: var(--bg-primary); padding: 8px 0; }
 .gutter { width: 34px; flex-shrink: 0; overflow: hidden; padding-left: 12px; }
@@ -420,18 +463,5 @@ watch(() => props.recents.length, (count) => {
 .code { flex: 1; min-width: 0; position: relative; background: transparent; color: var(--text-primary); border: none; outline: none; resize: none; padding: 0 12px 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: var(--editor-line); white-space: pre; overflow-x: auto; }
 .code.invalid { color: var(--text-secondary); }
 
-.history { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; }
-.history-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 8px 10px; border-radius: 8px; text-align: left; }
-.history-item:hover { background: var(--bg-tertiary); }
-.history-name { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
-.history-meta { font-size: 11px; color: var(--text-muted); }
 
-.status { display: flex; align-items: flex-start; gap: 8px; padding: 8px 14px; border-top: 1px solid var(--border-subtle); font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.5; }
-.status.ok { color: var(--green); align-items: center; }
-.status.bad { color: var(--red); background: var(--red-soft); }
-.status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; margin-top: 5px; }
-.status.ok .status-dot { margin-top: 0; }
-.status-text { flex: 1; min-width: 0; word-break: break-word; }
-.status-fix { font-size: 11px; color: var(--text-secondary); flex-shrink: 0; }
-.status-fix:hover { color: var(--text-primary); }
 </style>

@@ -328,13 +328,15 @@ function rowLabel(row: Row): string {
             </template>
           </template>
           <template v-else>
-            <span class="cell-text">{{ cellLabel(valueOf(row, column.name)) }}</span>
-            <button
-              v-if="refTargetOf(row, column.name)"
-              class="ref"
-              title="Referansın hedefini göster"
-              @click="onRef(row, column.name, $event)"
-            >↳</button>
+            <span class="scalar">
+              <span class="cell-text">{{ cellLabel(valueOf(row, column.name)) }}</span>
+              <button
+                v-if="refTargetOf(row, column.name)"
+                class="ref"
+                title="Referansın hedefini göster"
+                @click="onRef(row, column.name, $event)"
+              >↳</button>
+            </span>
           </template>
         </div>
       </template>
@@ -365,8 +367,10 @@ function rowLabel(row: Row): string {
           </template>
         </template>
         <template v-else>
-          <span class="cell-text">{{ cellLabel(row.value) }}</span>
-          <button v-if="grid.refFor(row.path, row.value!)" class="ref" @click="onRef(row, '', $event)">↳</button>
+          <span class="scalar">
+            <span class="cell-text">{{ cellLabel(row.value) }}</span>
+            <button v-if="grid.refFor(row.path, row.value!)" class="ref" @click="onRef(row, '', $event)">↳</button>
+          </span>
         </template>
       </div>
     </div>
@@ -457,7 +461,10 @@ function rowLabel(row: Row): string {
 .v-null .cell-text { color: var(--type-null); }
 .v-empty .cell-text { color: var(--ink-empty); }
 
-.ref { font-size: 10px; color: var(--accent); padding: 0 9px 3px; }
+/* Deger ve referans oku ayni satirda; ok degerin hemen sagina oturuyor. */
+.scalar { display: flex; align-items: baseline; gap: 5px; width: 100%; min-width: 0; }
+.scalar .cell-text { flex: 1; min-width: 0; }
+.ref { font-size: 10px; color: var(--accent); padding: 0 9px 0 0; flex-shrink: 0; }
 .ref:hover { color: var(--accent-hover); }
 
 .expand { display: flex; align-items: center; gap: 6px; padding: 4px 9px; max-width: 100%; }

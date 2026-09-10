@@ -8,6 +8,7 @@ import { countNodes, describeParseError, findNodePath, parseJson, toSchemaPath }
 import { buildSearchIndex, EMPTY_SEARCH } from './utils/search'
 import { buildRefIndex, EMPTY_REF_INDEX, type RefTarget } from './utils/references'
 import { tryRepair } from './utils/repair'
+import { changeList, diffJson, type DiffResult } from './utils/diff'
 import { collectFieldValues } from './utils/related'
 import { buildTextIndex, lineOfOffset, EMPTY_TEXT_INDEX, type JsonTextIndex } from './utils/textIndex'
 import { initialNode, jsonPathOf } from './utils/gridModel'
@@ -23,8 +24,7 @@ import JsonGrid from './components/JsonGrid.vue'
 import ColumnView from './components/ColumnView.vue'
 import DiffView from './components/DiffView.vue'
 import IataPanel from './components/IataPanel.vue'
-import FieldValuesPanel from './components/FieldValuesPanel.vue'
-import EditorPane from './components/EditorPane.vue'
+import InputPanel from './components/InputPanel.vue'
 import EmptyState from './components/EmptyState.vue'
 
 const SAMPLE_JSON = `{
@@ -59,15 +59,19 @@ const fileName = ref<string | null>(null)
  */
 const viewMode = ref<ViewMode>(readViewMode())
 /**
- * Karsilastirma acik mi. Fark artik bir "mod" degil: ikinci bir girdi
- * verildiginde goruntuleyici karsilastirmayi gosteriyor, kapatinca secili
- * gorunume donuyor. Gorunum anahtarinin isi ayni belgeye nasil bakildigini
- * secmek — belgenin nereden geldigini secmek degil.
+ * Sol panelin acik sekmesi. Fark bir *gorunum* degil, bir **girdi**: iki JSON
+ * da elle girilir, orta bolge o sekme acikken A/B'ye doner.
  */
-const comparing = ref(false)
+const inputTab = ref<'input' | 'diff' | 'history'>('input')
+const comparing = computed(() => inputTab.value === 'diff')
+
+/** Karsilastirmanin iki tarafi; ikisi de elle duzenlenebilir. */
+const textA = ref('')
+const textB = ref('')
+const diffOnlyChanges = ref(true)
+const diffIndex = ref(0)
 const searchInput = ref('')
 const searchTerm = ref('')
-const filterMatches = ref(false)
 const activeIndex = ref(0)
 const editorVisible = ref(true)
 const iataVisible = ref(true)
@@ -138,7 +142,7 @@ const annotationError = ref<string | null>(null)
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const filterInputRef = ref<HTMLInputElement | null>(null)
-const editorRef = ref<InstanceType<typeof EditorPane> | null>(null)
+const editorRef = ref<InstanceType<typeof InputPanel> | null>(null)
 const columnRef = ref<InstanceType<typeof ColumnView> | null>(null)
 
 // Her tus vurusunda tum belgeyi ayristirmamak icin girisi geciktiriyoruz;
@@ -324,14 +328,21 @@ watch(parsedInput, (text) => {
  * Secili alanin belge genelindeki degerleri. Yalnizca panel acikken hesaplanir;
  * tarama eslesmeyen dallari budadigi icin secim degistikce yeniden calisabilir.
  */
-const fieldValuesOpen = ref(true)
-
 const fieldValues = computed(() => {
-  if (!fieldValuesOpen.value || !iataVisible.value) return null
+  if (!iataVisible.value) return null
   const path = selectedNodePath.value
   if (!path || parsed.value === null || path === ROOT_KEY) return null
   return collectFieldValues(parsed.value, ROOT_KEY, path)
 })
+
+/**
+ * Sag panelden gelen "git" istekleri iki turlu: semada olmayan alan bir XSD
+ * yolu (dugume cevrilmeli), referans hedefi ve dagilim ise zaten dugum yolu.
+ */
+function onSideFocus(path: string) {
+  if (path.startsWith(`${ROOT_KEY}.`)) focusOnPath(path)
+  else focusUnmatched(path)
+}
 
 /** Secili alanin editordeki satir numarasi; footer bunu yaziyor. */
 const syncLine = computed(() => syncRange.value?.startLine ?? null)
@@ -413,7 +424,7 @@ function goToSibling(step: number) {
 
 function setViewMode(mode: ViewMode) {
   // Gorunum secmek karsilastirmayi kapatir: anahtar yalnizca belgeye bakis acisi.
-  comparing.value = false
+  inputTab.value = 'input'
   viewMode.value = mode
 }
 
@@ -428,7 +439,7 @@ function focusUnmatched(schemaPath: string) {
 
 function focusOnPath(path: string) {
   // Karsilastirmadan bir dugume gidilirse belge gorunumune donuluyor.
-  comparing.value = false
+  inputTab.value = 'input'
   selectedNodePath.value = path
   // Grid tek dugum cizdigi icin kirinti hedefi kapsayan tabloya tasinir;
   // yoksa "git" dedigin alan ekranda hic gorunmezdi.
@@ -523,17 +534,19 @@ function forkShared() {
  * karsilastirma malzemesi genellikle bir paylasim linki oluyor.
  */
 /**
- * Fark linkiyle acilan ikinci taraf (`?s=A&d=B`). `jse diff` bu adresi
- * uretiyor: link tek basina iki belgeyi de tasidigi icin acan kisinin elle
- * dosya yuklemesi gerekmiyor.
+ * `jse diff` linkiyle acilan ikinci taraf (`?s=A&d=B`). Link tek basina iki
+ * belgeyi de tasidigi icin acan kisinin elle dosya yuklemesi gerekmiyor;
+ * getirilen JSON dogrudan B kutusuna yaziliyor.
  */
-const diffShareId = ref<string | null>(null)
-
-async function loadShareForDiff(idOrUrl: string): Promise<{ json: JsonValue; label: string }> {
-  const match = /[?&]s=([A-Za-z0-9]+)/.exec(idOrUrl)
-  const id = match ? match[1] : idOrUrl.trim()
-  const share = await getShare(id)
-  return { json: share.json, label: share.title ?? `paylaşım ${share.id}` }
+async function loadDiffSide(id: string) {
+  try {
+    const share = await getShare(id)
+    textB.value = JSON.stringify(share.json, null, 2)
+    textA.value = rawInput.value
+    inputTab.value = 'diff'
+  } catch (e) {
+    loadError.value = `Karşılaştırma tarafı getirilemedi: ${(e as Error).message}`
+  }
 }
 
 async function runAnnotation(json: JsonValue) {
@@ -570,11 +583,10 @@ onMounted(async () => {
   if (shareId) {
     await loadFromShareId(shareId)
   }
-  // `d` varsa fark gorunumu acilir; ikinci tarafi DiffView kendisi getirir.
+  // `d` varsa karsilastirma acilir; ikinci taraf B kutusuna yukleniyor.
   const diffId = params.get('d')
   if (diffId && parsed.value !== null) {
-    diffShareId.value = diffId
-    comparing.value = true
+    await loadDiffSide(diffId)
   }
   // Yukleme basarisiz olsa da elimizdeki JSON icin aciklamalari getir; watch'in
   // bekleyen cagrisini iptal edip tek seferde calistiriyoruz.
@@ -722,7 +734,7 @@ function onXmlLoad(payload: { text: string; name: string | null; root: string; n
   xmlNotice.value = { root: payload.root, notes: payload.notes }
   loadError.value = null
   selectedNodePath.value = null
-  comparing.value = false
+  inputTab.value = 'input'
   if (payload.name) recents.value = pushRecent(payload.name, payload.text)
 }
 
@@ -820,6 +832,89 @@ function onKeydown(event: KeyboardEvent) {
 const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'girdi.json' : ''))
 
 watch(viewMode, writeViewMode)
+
+// --- Fark ---------------------------------------------------------------------
+
+/**
+ * Fark canli hesaplanir: iki kutunun icerigi degistikce yeniden ayristirilir.
+ * Girdi uzunlugu + bas 64 karakter uzerinden memoize ediliyor — buyuk girdide
+ * her tus vurusunda tam diff calistirmak paneli dondururdu.
+ */
+let diffCache: { key: string; result: DiffResult | null } | null = null
+
+function diffKeyOf(a: string, b: string): string {
+  return `${a.length}:${a.slice(0, 64)}|${b.length}:${b.slice(0, 64)}`
+}
+
+const diffResult = computed<DiffResult | null>(() => {
+  if (!comparing.value) return null
+  const a = parseJson(textA.value)
+  const b = parseJson(textB.value)
+  if (a.data === null || b.data === null) return diffCache?.result ?? null
+  const key = diffKeyOf(textA.value, textB.value)
+  if (diffCache?.key === key) return diffCache.result
+  const result = diffJson(a.data, b.data, ROOT_KEY)
+  diffCache = { key, result }
+  return result
+})
+
+const diffSummary = computed(() => {
+  const result = diffResult.value
+  if (!result) return null
+  const { added, removed, changed } = result.counts
+  return { added, removed, changed }
+})
+
+/** Degisiklik listesi; `↑ N/M ↓` gezinmesi bunun uzerinden. */
+const diffChanges = computed(() => (diffResult.value ? changeList(diffResult.value) : []))
+
+/**
+ * Ozetin altindaki not. Once bir taraf gecersizse onu soyler (son gecerli hal
+ * gosteriliyor), sonra dizilerin nasil eslestigini.
+ */
+const diffNote = computed(() => {
+  const aBad = textA.value.trim() && parseJson(textA.value).data === null
+  const bBad = textB.value.trim() && parseJson(textB.value).data === null
+  if (aBad || bBad) {
+    return `${aBad ? 'A' : 'B'} tarafı şu an geçersiz; son geçerli hâl gösteriliyor.`
+  }
+  const result = diffResult.value
+  if (!result) return 'İki tarafa da JSON verin.'
+  const keys = [...result.identityKeys.entries()]
+    .map(([path, key]) => `${path.split('.').pop()} → ${key}`)
+  if (keys.length === 0) return 'Diziler sırayla eşleşti; sıra değişikliği fark sayılır.'
+  return `Diziler kimliğe göre eşleşti (${keys.slice(0, 2).join(', ')}); sıra değişikliği fark sayılmaz.`
+})
+
+const diffFocus = ref<{ path: string; seq: number } | null>(null)
+let diffSeq = 0
+
+/** `↑ / ↓`: degisiklikler arasinda atlar, hedef satiri gorunur kilar. */
+function diffStep(step: number) {
+  const list = diffChanges.value
+  if (list.length === 0) return
+  diffIndex.value = (diffIndex.value + step + list.length) % list.length
+  diffFocus.value = { path: list[diffIndex.value].path, seq: ++diffSeq }
+}
+
+function diffSwap() {
+  const a = textA.value
+  textA.value = textB.value
+  textB.value = a
+  diffIndex.value = 0
+}
+
+/** "girdide düzenle": A tarafini ana editore alir. */
+function diffUseA() {
+  applyInputNow(textA.value)
+  inputTab.value = 'input'
+}
+
+// Fark sekmesi acilinca A tarafi editordeki belgeyle baslar.
+watch(inputTab, (tab) => {
+  if (tab === 'diff' && !textA.value.trim()) textA.value = rawInput.value
+  diffIndex.value = 0
+})
 
 /** Baglam seridi ve yan panel yalnizca belgeyi gosteren gorunumlerde anlamli. */
 const docView = computed(() => !comparing.value)
@@ -946,18 +1041,32 @@ const docView = computed(() => !comparing.value)
         class="panel-slot"
         :style="{ width: `${panelW}px` }"
       >
-      <EditorPane
+      <InputPanel
         ref="editorRef"
         v-model="rawInput"
         :parse-error="parseError"
         :error-line="errorDetail?.line ?? null"
         :node-count="nodeCount"
+        :parse-ms="Math.round(parseState.ms)"
         :has-data="hasData"
         :recents="recents"
         :sync-range="syncRange"
-        :comparing="comparing"
+        :text-a="textA"
+        :text-b="textB"
+        :current-name="displayName"
+        :diff-only-changes="diffOnlyChanges"
+        :diff-index="diffIndex"
+        :diff-total="diffChanges.length"
+        :diff-summary="diffSummary"
+        :diff-note="diffNote"
+        @update:text-a="textA = $event"
+        @update:text-b="textB = $event"
+        @update:diff-only-changes="diffOnlyChanges = $event"
+        @update:tab="inputTab = $event"
+        @diff-step="diffStep"
+        @diff-swap="diffSwap"
+        @diff-use-a="diffUseA"
         @xml="onXmlLoad"
-        @toggle-compare="comparing = !comparing"
         @format="handleFormat"
         @minify="handleMinify"
         @sample="loadSample"
@@ -1022,17 +1131,16 @@ const docView = computed(() => !comparing.value)
           -->
           <DiffView
             v-if="comparing"
-            :current="parsed"
-            :root-key="ROOT_KEY"
-            :current-name="displayName"
-            :load-share="loadShareForDiff"
-            :auto-share="diffShareId"
+            :result="diffResult"
+            :only-changes="diffOnlyChanges"
+            :name-a="displayName || 'A'"
+            :name-b="'B'"
+            :focus="diffFocus"
             @focus-path="focusOnPath"
-            @close="comparing = false"
           />
 
           <ColumnView
-            v-if="!comparing && viewMode === 'columns'"
+            v-else-if="viewMode === 'columns'"
             ref="columnRef"
             :data="parsed!"
             :root-key="ROOT_KEY"
@@ -1042,7 +1150,7 @@ const docView = computed(() => !comparing.value)
             @focus-path="focusOnPath"
           />
 
-          <div v-else-if="!comparing && viewMode === 'tree'" class="tree-scroll">
+          <div v-else-if="viewMode === 'tree'" class="tree-scroll">
             <JsonTree
               :data="parsed!"
               :root-key="ROOT_KEY"
@@ -1050,7 +1158,7 @@ const docView = computed(() => !comparing.value)
               :doc-lookup="docLookup"
               :search="searchIndex"
               :active-path="activePath"
-              :filter-matches="filterMatches"
+              :filter-matches="false"
               :ref-index="refIndex"
               :focus-request="focusRequest"
               @focus-path="focusOnPath"
@@ -1082,25 +1190,23 @@ const docView = computed(() => !comparing.value)
         @click="toggleIata"
       ><span class="rail-label">IATA</span></button>
 
-      <div v-if="iataVisible && hasData && docView" class="side-col">
-        <IataPanel
-          :annotation="annotation"
-          :loading="annotationLoading"
-          :error="annotationError"
-          :selected-path="selectedSchemaPath"
-          @focus-path="focusUnmatched"
-          @collapse="toggleIata"
-        />
-        <!-- Secili alanin belgedeki tum degerleri; NDC'de dagilima bakmak ilk adim. -->
-        <FieldValuesPanel
-          v-if="fieldValuesOpen"
-          :stats="fieldValues"
-          :has-selection="selectedNodePath !== null && selectedNodePath !== ROOT_KEY"
-          @focus-path="focusOnPath"
-          @collapse="fieldValuesOpen = false"
-        />
-        <button v-else class="values-reopen" @click="fieldValuesOpen = true">▴ Alan değerleri</button>
-      </div>
+      <!--
+        Sag panel: secili alanin XSD karsiligi, deger dagilimi ve semada
+        karsiligi olmayanlar. `×` ile kapaniyor, seritten geri aciliyor.
+      -->
+      <IataPanel
+        v-if="iataVisible && hasData && docView"
+        :annotation="annotation"
+        :loading="annotationLoading"
+        :error="annotationError"
+        :selected-path="selectedSchemaPath"
+        :node-path="selectedNodePath"
+        :ref-target="refTarget"
+        :values="fieldValues"
+        @focus-path="onSideFocus"
+        @close-ref="refTarget = null"
+        @collapse="toggleIata"
+      />
     </div>
 
     <footer class="footer">
