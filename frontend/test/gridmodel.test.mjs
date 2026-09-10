@@ -12,7 +12,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   COL_MAX, COL_MIN, applyFilters, cellLabel, columnWidth, jsonPathOf, listModel,
-  modelOf, nextSort, objectModel, recordModel,
+  initialNode, modelOf, nextSort, objectModel, recordModel,
 } from './.gridmodel.bundle.mjs'
 
 const order = (id, status, extra = {}) => ({ OrderID: id, StatusCode: status, ...extra })
@@ -110,4 +110,14 @@ test('JSONPath: sayisal segment kose parantez, digerleri nokta', () => {
     '$.IATA_OrderViewRS.Response.Order[2].StatusCode',
   )
   assert.equal(jsonPathOf('json'), '$')
+})
+
+test('acilis dugumu: tek alanli sarmalayici zinciri inilir, kayit dizisinde durulur', () => {
+  const doc = { IATA_OrderViewRS: { Response: { Order: [order('A', 'X')] } } }
+  assert.equal(initialNode(doc, 'json'), 'json.IATA_OrderViewRS.Response.Order')
+  // Coklu alan gorulunce durulur.
+  const multi = { A: { x: 1, y: 2 } }
+  assert.equal(initialNode(multi, 'json'), 'json.A')
+  // Skaler kokte kokte kalinir.
+  assert.equal(initialNode({ a: 1, b: 2 }, 'json'), 'json')
 })

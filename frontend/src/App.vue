@@ -6,12 +6,16 @@ import type { AnnotateResponse, JsonValue, ViewMode } from './types'
 import { annotateJson, createShare, getShare } from './api'
 import { countNodes, describeParseError, findNodePath, parseJson, toSchemaPath } from './utils/json'
 import { buildSearchIndex, EMPTY_SEARCH } from './utils/search'
-import { buildRefIndex, EMPTY_REF_INDEX } from './utils/references'
+import { buildRefIndex, EMPTY_REF_INDEX, type RefTarget } from './utils/references'
 import { tryRepair } from './utils/repair'
 import { collectFieldValues } from './utils/related'
 import { buildTextIndex, lineOfOffset, EMPTY_TEXT_INDEX, type JsonTextIndex } from './utils/textIndex'
+import { initialNode, jsonPathOf } from './utils/gridModel'
+import { childCount, isContainer, valueAtPath } from './utils/grid'
 import {
-  pushRecent, readRecents, readTheme, readViewMode, writeTheme, writeViewMode,
+  PANEL_W_DEFAULT, PANEL_W_MAX, PANEL_W_MIN,
+  pushRecent, readPanelWidth, readRecents, readTheme, readViewMode,
+  writePanelWidth, writeTheme, writeViewMode,
   type RecentFile, type Theme,
 } from './utils/storage'
 import JsonTree from './components/JsonTree.vue'
@@ -50,8 +54,8 @@ const ROOT_KEY = 'json'
 const rawInput = ref('')
 const fileName = ref<string | null>(null)
 /**
- * Acilis gorunumu **Kolon**: paylasim linkini acan kisi once belgenin
- * seviyelerini gorur ve kolon kolon iner. Secim tarayicida saklaniyor.
+ * Gorunum anahtari yalnizca **gorunum** tasir: Tree · Grid · Kolon, bu sirayla.
+ * Fark ve XML buraya asla eklenmez — ikisi de girdi tarafinda yasar.
  */
 const viewMode = ref<ViewMode>(readViewMode())
 /**
@@ -71,6 +75,39 @@ const iataVisible = ref(true)
 const editorPinned = ref(false)
 const iataPinned = ref(false)
 const recents = ref<RecentFile[]>(readRecents())
+
+/**
+ * Girdi panelinin genisligi. Tasarim paneli **surukleyerek** boyutlandiriyor:
+ * NDC yanitlarinda satirlar uzun, 344px cogu zaman dar geliyor. Sinirlar
+ * 210-760px, cift tiklama varsayilana dondurur.
+ */
+const panelW = ref(readPanelWidth())
+const resizing = ref(false)
+
+function startResize(event: MouseEvent) {
+  // Suruklerken metin secilmesini engelle; imlec col-resize'da kalsin.
+  event.preventDefault()
+  resizing.value = true
+  window.addEventListener('mousemove', onResize)
+  window.addEventListener('mouseup', endResize)
+}
+
+function onResize(event: MouseEvent) {
+  const next = Math.min(PANEL_W_MAX, Math.max(PANEL_W_MIN, event.clientX))
+  panelW.value = next
+}
+
+function endResize() {
+  resizing.value = false
+  writePanelWidth(panelW.value)
+  window.removeEventListener('mousemove', onResize)
+  window.removeEventListener('mouseup', endResize)
+}
+
+function resetPanelWidth() {
+  panelW.value = PANEL_W_DEFAULT
+  writePanelWidth(PANEL_W_DEFAULT)
+}
 
 const theme = ref<Theme>(readTheme())
 
@@ -95,12 +132,6 @@ const sharedAt = ref<string | null>(null)
 const sharedLoading = ref(false)
 const isShared = computed(() => sharedId.value !== null)
 
-const sharedAtLabel = computed(() => {
-  if (!sharedAt.value) return null
-  const date = new Date(sharedAt.value)
-  return Number.isNaN(date.getTime()) ? null : date.toLocaleString('tr-TR')
-})
-
 const annotation = ref<AnnotateResponse | null>(null)
 const annotationLoading = ref(false)
 const annotationError = ref<string | null>(null)
@@ -108,7 +139,6 @@ const annotationError = ref<string | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const filterInputRef = ref<HTMLInputElement | null>(null)
 const editorRef = ref<InstanceType<typeof EditorPane> | null>(null)
-const gridRef = ref<InstanceType<typeof JsonGrid> | null>(null)
 const columnRef = ref<InstanceType<typeof ColumnView> | null>(null)
 
 // Her tus vurusunda tum belgeyi ayristirmamak icin girisi geciktiriyoruz;
@@ -202,17 +232,26 @@ provide(COMMENTS, {
   canDelete: comments.canDelete,
 })
 
-/** Yorum birakilmis alanlar arasinda gezinme. */
-function goToComment(step: number) {
-  const paths = comments.commentedPaths.value
-  if (paths.length === 0) return
-  const current = openThreadPath.value ? paths.indexOf(openThreadPath.value) : -1
-  const next = (current + step + paths.length) % paths.length
-  openThreadPath.value = paths[next]
-  focusOnPath(paths[next])
-}
-
 // --- Secim, breadcrumb ve odak ----------------------------------------------
+
+/**
+ * Grid'in gosterdigi dugum. Secimden **ayri** bir kavram: secim bir alan,
+ * bu ise o alanin icinde bulundugu tablo. Kirinti bu yolu gosterir; bir
+ * hucrede `→ yolu aç` denince buraya taşinir.
+ */
+const nodePath = ref<string>(ROOT_KEY)
+
+/**
+ * Acik referans karti. Grid'deki `↳` tiklandiginda hedef kayit sag panelin
+ * en ustunde acilir — baglamdan cikmadan "bu referans neyi gosteriyor".
+ */
+const refTarget = ref<RefTarget | null>(null)
+
+function openRefCard(target: RefTarget) {
+  refTarget.value = target
+  iataVisible.value = true
+  iataPinned.value = true
+}
 
 const selectedNodePath = ref<string | null>(null)
 provide(SELECT_FIELD, (path: string | null) => { selectedNodePath.value = path })
@@ -294,22 +333,15 @@ const fieldValues = computed(() => {
   return collectFieldValues(parsed.value, ROOT_KEY, path)
 })
 
-/** Editorde secili alanin kacinci satirda oldugu; alt durum cubugunda gosterilir. */
-const syncLineLabel = computed(() => {
-  const range = syncRange.value
-  if (!range) return null
-  const span = range.endLine - range.startLine + 1
-  return span === 1
-    ? `editör satır ${range.startLine}`
-    : `editör satır ${range.startLine} · ${span.toLocaleString('tr-TR')} satır`
-})
+/** Secili alanin editordeki satir numarasi; footer bunu yaziyor. */
+const syncLine = computed(() => syncRange.value?.startLine ?? null)
 
 /**
  * Bağlam şeridi. Her parca kendi yolunu tasiyor: tiklanabilir olmasi ust
  * seviyelere donusun tek yolu (tablo akisinda "geri" tusu bu).
  */
 const crumbs = computed(() => {
-  const full = (selectedNodePath.value ?? ROOT_KEY).split('.')
+  const full = nodePath.value.split('.')
   const items = full.map((label, index) => ({
     label,
     path: full.slice(0, index + 1).join('.'),
@@ -320,24 +352,63 @@ const crumbs = computed(() => {
   return [{ label: '…', path: items[items.length - 8].path, last: false }, ...items.slice(-7)]
 })
 
-/** Breadcrumb tiklamasi: o seviyeye odaklanir, grid dalı oraya kadar açar. */
+/** Kirinti tiklamasi: grid o dugume tasinir ve dugum secilir. */
 function goToCrumb(path: string) {
-  focusOnPath(path)
+  goToNode(path)
 }
+
+/**
+ * Grid'i bir dugume tasi. Kirinti oraya gider, secim o dugum olur; ayni
+ * yol Tree ve Kolon gorunumunde odaklanma olarak calisir.
+ */
+function goToNode(path: string) {
+  nodePath.value = path
+  selectedNodePath.value = path
+  focusRequest.value = { path, seq: ++focusSeq }
+}
+
+/**
+ * Secili alanin canli JSONPath ifadesi. Kirinti "neredeyim"i, bu satir
+ * "bunu nasil adreslerim"i soyler — ikisi ayri sorular.
+ */
+const pathExpr = computed(() => jsonPathOf(selectedNodePath.value ?? ROOT_KEY))
 
 const pathCopied = ref(false)
 let copyTimer: ReturnType<typeof setTimeout> | null = null
 
 async function copySelectedPath() {
-  const path = selectedNodePath.value ?? ROOT_KEY
   try {
-    await navigator.clipboard.writeText(path)
+    await navigator.clipboard.writeText(pathExpr.value)
     pathCopied.value = true
     if (copyTimer) clearTimeout(copyTimer)
-    copyTimer = setTimeout(() => { pathCopied.value = false }, 1500)
+    // Tasarimin suresi: isaret 1600ms sonra kendi kendine geri doner.
+    copyTimer = setTimeout(() => { pathCopied.value = false }, 1600)
   } catch {
     pathCopied.value = false
   }
+}
+
+/**
+ * Bir dizi ogesindeyken kardes gezinme (`‹ 3/12 ›`). NDC'de "bir sonraki
+ * siparis" en sik yapilan hareket; kirintidan cikip diziye donmeden yapiliyor.
+ */
+const siblingNav = computed(() => {
+  const path = selectedNodePath.value
+  if (!path || parsed.value === null) return null
+  const cut = path.lastIndexOf('.')
+  if (cut < 0) return null
+  const last = path.slice(cut + 1)
+  if (!/^\d+$/.test(last)) return null
+  const parent = valueAtPath(parsed.value, ROOT_KEY, path.slice(0, cut))
+  if (!isContainer(parent) || !Array.isArray(parent)) return null
+  return { index: Number(last), total: childCount(parent), parent: path.slice(0, cut) }
+})
+
+function goToSibling(step: number) {
+  const nav = siblingNav.value
+  if (!nav || nav.total === 0) return
+  const next = (nav.index + step + nav.total) % nav.total
+  focusOnPath(`${nav.parent}.${next}`)
 }
 
 function setViewMode(mode: ViewMode) {
@@ -349,17 +420,32 @@ function setViewMode(mode: ViewMode) {
 /** IATA panelindeki XSD yolunu goruntuleyicideki dugume cevirip oraya atlar. */
 function focusUnmatched(schemaPath: string) {
   if (parsed.value === null) return
-  const nodePath = findNodePath(
+  const target = findNodePath(
     parsed.value, ROOT_KEY, annotation.value?.messageType ?? null, schemaPath,
   )
-  if (nodePath) focusOnPath(nodePath)
+  if (target) focusOnPath(target)
 }
 
 function focusOnPath(path: string) {
   // Karsilastirmadan bir dugume gidilirse belge gorunumune donuluyor.
   comparing.value = false
   selectedNodePath.value = path
+  // Grid tek dugum cizdigi icin kirinti hedefi kapsayan tabloya tasinir;
+  // yoksa "git" dedigin alan ekranda hic gorunmezdi.
+  nodePath.value = containerOf(path)
   focusRequest.value = { path, seq: ++focusSeq }
+}
+
+/**
+ * Bir yolun grid'de gosterilebilecek en yakin kapsayicisi. Skaler bir alana
+ * gidildiginde tablo onun *ustunu* cizmeli.
+ */
+function containerOf(path: string): string {
+  if (parsed.value === null) return ROOT_KEY
+  const value = valueAtPath(parsed.value, ROOT_KEY, path)
+  if (isContainer(value)) return path
+  const cut = path.lastIndexOf('.')
+  return cut > 0 ? path.slice(0, cut) : ROOT_KEY
 }
 
 // --- Arama -------------------------------------------------------------------
@@ -396,17 +482,6 @@ function clearSearch() {
   searchTerm.value = ''
   activeIndex.value = 0
 }
-
-const filterHint = computed(() => {
-  if (!searchTerm.value) return 'Ctrl+F'
-  if (matchCount.value === 0) return 'yok'
-  return `${activeIndex.value + 1}/${matchCount.value}`
-})
-
-const matchPercent = computed(() => {
-  if (!annotation.value?.messageType) return null
-  return Math.round((annotation.value.confidence ?? 0) * 100)
-})
 
 // --- Veri yukleme ------------------------------------------------------------
 
@@ -473,6 +548,12 @@ async function runAnnotation(json: JsonValue) {
     annotationLoading.value = false
   }
 }
+
+// Yeni belge: grid anlamli ilk dugume iner, eski yol artik gecerli degil.
+watch(parsed, (json) => {
+  nodePath.value = json === null ? ROOT_KEY : initialNode(json, ROOT_KEY)
+  selectedNodePath.value = null
+})
 
 watch(parsed, (json) => {
   if (annotateTimer) clearTimeout(annotateTimer)
@@ -656,6 +737,18 @@ function handleRepair() {
   applyInputNow(repaired)
 }
 
+/** Bant uzerindeki "kopyala"; isaret kisa sure "kopyalandi" olur. */
+async function copyShareUrl() {
+  if (!shareUrl.value) return
+  try {
+    await navigator.clipboard.writeText(shareUrl.value)
+    shareCopied.value = true
+    setTimeout(() => { shareCopied.value = false }, 1600)
+  } catch {
+    shareCopied.value = false
+  }
+}
+
 async function handleShare() {
   if (!parsed.value || isShared.value) return
   shareLoading.value = true
@@ -677,10 +770,6 @@ async function handleShare() {
     shareLoading.value = false
   }
 }
-
-// --- Alt durum cubugu --------------------------------------------------------
-
-const gridStats = ref({ rows: 0, tables: 0 })
 
 // --- Klavye ------------------------------------------------------------------
 
@@ -724,13 +813,6 @@ function onKeydown(event: KeyboardEvent) {
     return
   }
 
-  if (event.key === 'j' || event.key === 'J') {
-    event.preventDefault()
-    gridRef.value?.moveSelection(1)
-  } else if (event.key === 'k' || event.key === 'K') {
-    event.preventDefault()
-    gridRef.value?.moveSelection(-1)
-  }
 }
 
 // --- Basliktaki dosya adi ----------------------------------------------------
@@ -739,85 +821,64 @@ const displayName = computed(() => fileName.value ?? (rawInput.value.trim() ? 'g
 
 watch(viewMode, writeViewMode)
 
-/**
- * Grid ilk kez secildiginde kurulur, sonra mount'ta kalir (`v-show`): acilmis
- * dallar ve pencereleme korunsun. Acilis gorunumu Kolon oldugu icin, hic
- * girilmeyen bir grid'in DOM'unu kurmanin da anlami yok.
- */
-const gridUsed = ref(viewMode.value === 'grid')
-watch(viewMode, (mode) => { if (mode === 'grid') gridUsed.value = true })
-
 /** Baglam seridi ve yan panel yalnizca belgeyi gosteren gorunumlerde anlamli. */
 const docView = computed(() => !comparing.value)
 </script>
 
 <template>
-  <div class="app">
+  <div class="app" :class="{ resizing }">
+    <!--
+      Header: marka, dosya durumu, arama, tema, gorunum anahtari, paylas.
+      Gorunum anahtarinda yalnizca gorunum var — Fark ve XML girdi tarafinda.
+    -->
     <header class="header">
       <button class="brand" title="Ana sayfa — yeni JSON" @click="goHome">
-        <svg width="26" height="26" viewBox="0 0 24 24">
-          <rect x="1" y="1" width="22" height="22" rx="6" fill="var(--accent)" opacity=".14" />
-          <ellipse cx="12" cy="12" rx="8" ry="5.2" fill="none" stroke="var(--accent)" stroke-width="1.6" />
-          <circle cx="12" cy="12" r="2.7" fill="var(--accent)" />
-          <circle cx="13.4" cy="10.6" r="0.9" fill="var(--bg-primary)" />
-        </svg>
-        <span class="wordmark">JSON <span class="wordmark-accent">EYES</span></span>
+        <span class="brand-json">JSON</span><span class="brand-eyes">EYES</span>
       </button>
-      <div class="divider" />
 
       <div v-if="displayName" class="file">
-        <span class="file-name">{{ displayName }}</span>
-        <span v-if="hasData" class="valid-badge"><span class="dot" />geçerli</span>
-        <span v-else-if="parseError" class="valid-badge bad"><span class="dot" />geçersiz</span>
+        <span class="file-dot" :class="{ bad: !hasData && parseError }" />
+        <span class="file-name" :title="displayName">{{ displayName }}</span>
+      </div>
+      <span v-if="isShared" class="lock">salt okunur</span>
+
+      <div class="search">
+        <span class="search-icon">⌕</span>
+        <input
+          ref="filterInputRef"
+          v-model="searchInput"
+          class="search-input"
+          :class="{ filled: searchTerm }"
+          type="text"
+          placeholder="alan veya değer ara"
+          @keydown.enter.prevent="goToMatch($event.shiftKey ? -1 : 1)"
+          @keydown.esc="clearSearch"
+        />
+        <span class="search-hint">{{ searchTerm ? (matchCount > 0 ? 'eşleşenler işaretli' : 'eşleşme yok') : '⌘K' }}</span>
       </div>
 
-      <span v-if="isShared" class="lock-badge" :title="sharedAtLabel ? `Paylaşım: ${sharedAtLabel}` : undefined">
-        🔒 salt okunur
-      </span>
+      <button
+        class="theme"
+        :title="theme === 'dark' ? 'Aydınlık temaya geç' : 'Karanlık temaya geç'"
+        @click="theme = theme === 'dark' ? 'light' : 'dark'"
+      >{{ theme === 'dark' ? '☀' : '☾' }}</button>
 
-      <div class="command-wrap">
-        <button class="command" @click="filterInputRef?.focus()">
-          <span class="command-icon">⌕</span>
-          <span class="command-text" :class="{ filled: searchTerm }">
-            {{ searchTerm || 'Alan, değer veya komut' }}
-          </span>
-          <span v-if="searchTerm" class="command-count">{{ filterHint }}</span>
-          <span class="command-key">Ctrl K</span>
-        </button>
-      </div>
-
-      <span v-if="isShared && comments.total.value > 0" class="comment-total">
-        <button class="comment-nav" title="Önceki yorum" @click="goToComment(-1)">↑</button>
-        💬 {{ comments.total.value }}
-        <button class="comment-nav" title="Sonraki yorum" @click="goToComment(1)">↓</button>
-      </span>
-
-      <button class="theme-btn" :title="theme === 'dark' ? 'Aydınlık temaya geç' : 'Karanlık temaya geç'" @click="theme = theme === 'dark' ? 'light' : 'dark'">
-        {{ theme === 'dark' ? '☀' : '☾' }}
-      </button>
-
-      <div class="mode-switch">
-        <button class="mode" :class="{ active: viewMode === 'tree' }" @click="setViewMode('tree')">Tree</button>
-        <button class="mode" :class="{ active: viewMode === 'grid' }" @click="setViewMode('grid')">Grid</button>
-        <button
-          class="mode"
-          :class="{ active: viewMode === 'columns' }"
-          :disabled="!hasData"
-          title="Kolon görünümü — her seviye bir sütun, oklarla gezinme"
-          @click="setViewMode('columns')"
-        >Kolon</button>
+      <div class="views">
+        <button class="view" :class="{ active: viewMode === 'tree' }" @click="setViewMode('tree')">Tree</button>
+        <button class="view" :class="{ active: viewMode === 'grid' }" @click="setViewMode('grid')">Grid</button>
+        <button class="view" :class="{ active: viewMode === 'columns' }" @click="setViewMode('columns')">Kolon</button>
       </div>
 
       <div v-if="!isShared" class="share-wrap">
-        <button class="share-btn" :disabled="!hasData || shareLoading" @click="shareMenuOpen = !shareMenuOpen">
+        <button class="share" :disabled="!hasData || shareLoading" @click="shareMenuOpen = !shareMenuOpen">
           {{ shareLoading ? '…' : 'Paylaş' }}
         </button>
         <div v-if="shareMenuOpen" class="share-menu">
-          <label class="share-label">Başlık (isteğe bağlı)</label>
-          <input v-model="shareTitle" class="share-input" type="text" maxlength="120" @keydown.enter="handleShare" />
+          <input v-model="shareTitle" class="share-title" type="text" maxlength="120" placeholder="başlık (isteğe bağlı)" @keydown.enter="handleShare" />
           <label class="share-check">
-            <input v-model="shareCommentsEnabled" type="checkbox" />
-            Yorumlara açık olsun
+            <span class="check" :class="{ on: shareCommentsEnabled }">{{ shareCommentsEnabled ? '✓' : '' }}</span>
+            <input v-model="shareCommentsEnabled" type="checkbox" hidden />
+            alan yorumlarına açık
           </label>
           <p class="share-note">Link salt okunur açılır; veriyi kimse değiştiremez.</p>
           <button class="share-confirm" :disabled="shareLoading" @click="handleShare">
@@ -825,77 +886,67 @@ const docView = computed(() => !comparing.value)
           </button>
         </div>
       </div>
-      <button v-else class="fork-btn" @click="forkShared">Kopyasını al ve düzenle</button>
+      <button v-else class="share" @click="forkShared">Kopyasını al</button>
     </header>
 
-    <div v-if="shareUrl" class="banner accent">
-      {{ shareCopied ? 'Link kopyalandı —' : 'Link oluşturuldu (kopyalanamadı) —' }}
+    <!-- Bantlar: paylasim linki, XML cevirim notu, hatalar. -->
+    <div v-if="shareUrl" class="banner">
+      <span class="banner-label">paylaşım</span>
       <a :href="shareUrl" target="_blank" class="banner-link">{{ shareUrl }}</a>
       <span class="banner-note">Açan herkes yorum bırakabilir, veriyi değiştiremez.</span>
-      <button class="banner-close" @click="shareUrl = null">×</button>
+      <div class="banner-spacer" />
+      <button class="banner-btn" @click="copyShareUrl">{{ shareCopied ? 'kopyalandı' : 'kopyala' }}</button>
+      <button class="banner-btn" @click="shareUrl = null">×</button>
     </div>
-    <div v-if="isShared" class="banner accent">
+    <div v-if="isShared" class="banner">
+      <span class="banner-label">salt okunur</span>
       <strong v-if="sharedTitle" class="banner-strong">{{ sharedTitle }}</strong>
-      Paylaşılmış görünüm — düzenleme kapalı.
-      <span v-if="sharedAtLabel" class="banner-note">Paylaşım: {{ sharedAtLabel }}</span>
-      <!-- Paylasilan gorunumde girdi paneli yok; karsilastirma girisi buraya. -->
-      <button class="banner-action" :class="{ on: comparing }" @click="comparing = !comparing">
-        {{ comparing ? '⇄ Karşılaştırmayı kapat' : '⇄ Karşılaştır' }}
-      </button>
-      <button class="banner-action" @click="forkShared">Kopyasını al ve düzenle</button>
+      <span class="banner-note">Paylaşılmış görünüm — düzenleme kapalı.</span>
+      <div class="banner-spacer" />
+      <button class="banner-btn" @click="forkShared">kopyasını al ve düzenle</button>
     </div>
-    <div v-if="xmlNotice" class="banner accent">
-      <strong class="banner-strong">XML çevrildi</strong>
-      kök: <code class="banner-link">{{ xmlNotice.root }}</code>
-      <span class="banner-note">{{ xmlNotice.notes.join(' · ') }}</span>
-      <button class="banner-close" @click="xmlNotice = null">×</button>
+    <div v-if="xmlNotice" class="banner">
+      <span class="banner-label">xml</span>
+      <span class="banner-note">kök: {{ xmlNotice.root }} · {{ xmlNotice.notes.join(' · ') }}</span>
+      <div class="banner-spacer" />
+      <button class="banner-btn" @click="xmlNotice = null">×</button>
     </div>
-    <div v-if="shareError" class="banner bad">{{ shareError }}<button class="banner-close" @click="shareError = null">×</button></div>
-    <div v-if="loadError" class="banner bad">{{ loadError }}<button class="banner-close" @click="loadError = null">×</button></div>
-
-    <div v-if="hasData && docView" class="crumbs-bar">
-      <nav class="crumbs">
-        <template v-for="(crumb, index) in crumbs" :key="index">
-          <button
-            class="crumb"
-            :class="{ last: crumb.last }"
-            :title="`${crumb.path} — bu seviyeye git`"
-            @click="goToCrumb(crumb.path)"
-          >{{ crumb.label }}</button>
-          <span v-if="!crumb.last" class="crumb-sep">›</span>
-        </template>
-      </nav>
-      <button class="copy-path" @click="copySelectedPath">
-        {{ pathCopied ? '✓ kopyalandı' : '⧉ yolu kopyala' }}
-      </button>
-      <div class="crumbs-spacer" />
-
-      <div class="filter-box">
-        <span class="filter-icon">⌕</span>
-        <input
-          ref="filterInputRef"
-          v-model="searchInput"
-          class="filter-input"
-          type="text"
-          placeholder="Bu görünümü filtrele"
-          @keydown.enter.prevent="goToMatch($event.shiftKey ? -1 : 1)"
-          @keydown.esc="clearSearch"
-        />
-        <span class="filter-hint" :class="{ empty: searchTerm && matchCount === 0 }">{{ filterHint }}</span>
-      </div>
-      <button
-        class="only-matches"
-        :class="{ active: filterMatches }"
-        :disabled="!searchTerm"
-        title="Yalnızca eşleşen alanları ve onlara giden yolu göster"
-        @click="filterMatches = !filterMatches"
-      >yalnız eşleşen</button>
+    <div v-if="shareError || loadError" class="banner bad">
+      <span class="banner-label">hata</span>
+      <span class="banner-note">{{ shareError || loadError }}</span>
+      <div class="banner-spacer" />
+      <button class="banner-btn" @click="shareError = null; loadError = null">×</button>
     </div>
 
+    <!-- Kirinti: nerede oldugumuz. Dizi ogesindeyken kardes gezinme yaninda. -->
+    <div v-if="hasData && docView" class="crumbs">
+      <template v-for="(crumb, index) in crumbs" :key="index">
+        <button class="crumb" :class="{ last: crumb.last }" :title="crumb.path" @click="goToCrumb(crumb.path)">{{ crumb.label }}</button>
+        <span v-if="!crumb.last" class="crumb-sep">›</span>
+      </template>
+      <span v-if="siblingNav" class="siblings">
+        <button class="sib" title="Önceki kayıt" @click="goToSibling(-1)">‹</button>
+        {{ siblingNav.index + 1 }}/{{ siblingNav.total }}
+        <button class="sib" title="Sonraki kayıt" @click="goToSibling(1)">›</button>
+      </span>
+    </div>
+
+    <!-- Yol satiri: secili alanin JSONPath ifadesi, tek tikla kopyalanir. -->
+    <button v-if="hasData && docView" class="path-row" :title="'Panoya kopyala'" @click="copySelectedPath">
+      <span class="path-expr">{{ pathExpr }}</span>
+      <span class="path-copy" :class="{ done: pathCopied }">{{ pathCopied ? '✓ kopyalandı' : '⧉' }}</span>
+    </button>
     <div class="workspace">
-      <!-- Sol: JSON editoru (paylasilan gorunumde hic render edilmez) -->
-      <EditorPane
+      <!--
+        Sol: girdi paneli. Paylasilan gorunumde hic render edilmez. Genisligi
+        kullanicinin; sag kenarindaki tutamactan surukleniyor.
+      -->
+      <div
         v-if="editorVisible && !isShared"
+        class="panel-slot"
+        :style="{ width: `${panelW}px` }"
+      >
+      <EditorPane
         ref="editorRef"
         v-model="rawInput"
         :parse-error="parseError"
@@ -916,15 +967,22 @@ const docView = computed(() => !comparing.value)
         @drop="handleDrop"
         @collapse="toggleEditor"
       />
+        <div
+          class="resizer"
+          :class="{ on: resizing }"
+          title="Sürükleyerek genişlet · çift tıkla sıfırla"
+          @mousedown="startResize"
+          @dblclick="resetPanelWidth"
+        />
+      </div>
 
-      <!-- Kapali panelleri geri acan kenar seritleri; kucuk bir dugmeden cok
-           daha gorunur ve panelin nerede oldugunu da gosterir. -->
+      <!-- Kapali panelin yerinde dikey serit kalir; tiklayinca geri acilir. -->
       <button
         v-if="!editorVisible && !isShared"
-        class="rail left"
-        title="Editörü aç"
+        class="rail"
+        title="Girdi panelini aç"
         @click="toggleEditor"
-      ><span class="rail-glyph">›</span><span class="rail-label">Girdi</span></button>
+      ><span class="rail-label">GİRDİ</span></button>
 
       <!-- Orta: goruntuleyici -->
       <section class="viewer">
@@ -1000,32 +1058,29 @@ const docView = computed(() => !comparing.value)
           </div>
 
           <JsonGrid
-            v-if="gridUsed"
-            v-show="!comparing && viewMode === 'grid'"
-            ref="gridRef"
+            v-else-if="viewMode === 'grid'"
             :data="parsed!"
             :root-key="ROOT_KEY"
+            :node-path="nodePath"
+            :selected-path="selectedNodePath"
             :search-term="searchTerm"
             :doc-lookup="docLookup"
-            :filter-matches="filterMatches"
             :ref-index="refIndex"
-            :search="searchIndex"
-            :focus-request="focusRequest"
-            :selected-path="selectedNodePath"
             :schema-known="schemaKnown"
-            @focus-path="focusOnPath"
-            @stats="gridStats = $event"
+            @go-to="goToNode"
+            @select="selectedNodePath = $event"
+            @open-ref="openRefCard"
           />
         </template>
       </section>
 
-      <!-- Sag: IATA paneli -->
+      <!-- Sag: IATA paneli; `×` ile kapanir, seritten geri acilir. -->
       <button
         v-if="!iataVisible && hasData && docView"
-        class="rail right"
+        class="rail"
         title="IATA panelini aç"
         @click="toggleIata"
-      ><span class="rail-glyph">‹</span><span class="rail-label">IATA</span></button>
+      ><span class="rail-label">IATA</span></button>
 
       <div v-if="iataVisible && hasData && docView" class="side-col">
         <IataPanel
@@ -1048,17 +1103,13 @@ const docView = computed(() => !comparing.value)
       </div>
     </div>
 
-    <footer class="status-bar">
+    <footer class="footer">
       <span v-if="hasData" class="stat">{{ nodeCount.toLocaleString('tr-TR') }} node</span>
       <span v-if="hasData" class="stat">ayrıştırma {{ Math.round(parseState.ms) }} ms</span>
-      <span v-if="!comparing && viewMode === 'grid'" class="stat">{{ gridStats.rows }} satır · {{ gridStats.tables }} tablo açık</span>
-      <span v-if="syncLineLabel" class="stat accent">⌁ {{ syncLineLabel }}</span>
-      <span v-if="annotation?.messageType" class="stat">{{ annotation.messageType }} %{{ matchPercent }}</span>
-      <div class="status-spacer" />
-      <span class="stat">
-        Ctrl+K komutlar · Ctrl+F filtre ·
-        {{ viewMode === 'columns' ? '↑↓ kardeş, →← seviye' : 'J/K satır' }}
-      </span>
+      <div class="footer-spacer" />
+      <!-- Sag uc GridSync durumu: secili alan metnin kacinci satirinda. -->
+      <span v-if="syncLine" class="stat sync">satır {{ syncLine }} · {{ selectedNodePath }}</span>
+      <span v-else-if="hasData" class="stat">grid ↔ json senkron</span>
     </footer>
 
     <input ref="fileInputRef" type="file" accept=".json,.xml,application/json,text/xml,application/xml" hidden @change="handleFile" />
@@ -1066,102 +1117,137 @@ const docView = computed(() => !comparing.value)
 </template>
 
 <style scoped>
-.app { display: flex; flex-direction: column; height: 100vh; background: var(--bg-primary); overflow: hidden; }
+/*
+ * Kabuk. Butun olculer token; tasarimin sabit yukseklikleri (header 46,
+ * kirinti 32, yol satiri 25, footer 25) tek yerden okunuyor.
+ */
+.app { display: flex; flex-direction: column; height: 100vh; background: var(--bg-app); overflow: hidden; }
+/* Surukleme sirasinda imlec her yerde col-resize kalsin, metin secilmesin. */
+.app.resizing { cursor: col-resize; user-select: none; }
 
-/* --- Ust bar --------------------------------------------------------------- */
-.header { display: flex; align-items: center; gap: 14px; padding: 0 16px; height: var(--header-h); background: var(--bg-secondary); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.brand { display: flex; align-items: center; gap: 9px; flex-shrink: 0; border-radius: 8px; padding: 2px 4px; }
-.brand:hover { background: var(--bg-tertiary); }
-.wordmark { font-size: 15.5px; font-weight: 700; letter-spacing: .2px; white-space: nowrap; }
-.wordmark-accent { color: var(--accent); }
-.divider { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
+/* --- Header ---------------------------------------------------------------- */
+.header {
+  display: flex; align-items: center; gap: 14px; padding: 0 14px;
+  height: var(--h-header); background: var(--bg-chrome);
+  border-bottom: 1px solid var(--line); flex-shrink: 0;
+}
+.brand { display: flex; align-items: baseline; gap: 5px; flex-shrink: 0; letter-spacing: .3px; }
+.brand-json { font-size: 13px; font-weight: 600; color: var(--ink); }
+.brand-eyes { font-size: 13px; font-weight: 400; color: var(--ink-4); }
+.brand:hover .brand-eyes { color: var(--ink-2); }
 
-.file { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.file-name { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 190px; }
-.valid-badge { display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--green); background: var(--bg-array); border-radius: 20px; padding: 2px 8px; white-space: nowrap; }
-.valid-badge.bad { color: var(--red); background: var(--red-wash); }
-.dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-.lock-badge { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text-secondary); background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 20px; padding: 3px 9px; white-space: nowrap; }
+.file { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.file-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--added); flex-shrink: 0; }
+.file-dot.bad { background: var(--removed); }
+.file-name { font-size: 12px; color: var(--ink-2); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lock { font-size: 11px; color: var(--ink-4); white-space: nowrap; }
 
-.command-wrap { flex: 1; display: flex; justify-content: center; min-width: 0; }
-.command { display: flex; align-items: center; gap: 8px; width: 360px; max-width: 100%; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 9px; padding: 7px 11px; }
-.command:hover { border-color: var(--accent); }
-.command-icon { color: var(--text-muted); font-size: 12px; }
-.command-text { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text-muted); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.command-text.filled { color: var(--text-primary); }
-.command-count { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--accent); }
-.command-key { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; white-space: nowrap; }
+/* Arama: cerceve yok, yalniz alt cizgi — doluyken accent. */
+.search { flex: 1; display: flex; align-items: center; gap: 8px; max-width: 320px; margin: 0 auto; border-bottom: 1px solid var(--line); padding: 3px 2px; }
+.search:focus-within { border-bottom-color: var(--accent); }
+.search-icon { font-size: 11px; color: var(--ink-5); }
+.search-input { flex: 1; min-width: 0; background: none; border: none; outline: none; font-size: 11.5px; color: var(--ink); }
+.search-input::placeholder { color: var(--ink-5); }
+.search-hint { font-size: 10.5px; color: var(--ink-5); white-space: nowrap; }
 
-.comment-total { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--purple); background: var(--bg-object); border-radius: 20px; padding: 4px 10px; white-space: nowrap; }
-.comment-nav { color: var(--purple); font-size: 11px; line-height: 1; }
-.comment-nav:hover { color: var(--text-primary); }
+.theme { font-size: 12px; color: var(--ink-4); line-height: 1; padding: 4px; flex-shrink: 0; }
+.theme:hover { color: var(--ink); }
 
-.theme-btn { font-size: 14px; line-height: 1; color: var(--text-muted); border: 1px solid var(--border); border-radius: 8px; width: 30px; height: 30px; flex-shrink: 0; }
-.theme-btn:hover { color: var(--accent); border-color: var(--accent); }
-
-.mode-switch { display: flex; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 3px; gap: 2px; flex-shrink: 0; }
-.mode { padding: 5px 11px; border-radius: 6px; font-size: 12.5px; color: var(--text-muted); }
-.mode:hover:not(:disabled) { color: var(--text-primary); }
-.mode.active { background: var(--bg-tertiary); color: var(--text-primary); }
-.mode:disabled { opacity: .35; cursor: not-allowed; }
-
+/* Gorunum anahtari: yuva + aktif beyaz kart. */
+.views { display: flex; background: var(--bg-inset); border-radius: var(--radius); padding: 2px; gap: 2px; flex-shrink: 0; }
+.view { padding: 3px 11px; border-radius: var(--radius-sm); font-size: 11px; color: var(--ink-4); white-space: nowrap; }
+.view:hover { color: var(--ink-2); }
+.view.active { background: var(--bg-data); color: var(--ink); }
 
 .share-wrap { position: relative; flex-shrink: 0; }
-.share-btn { font-size: 12.5px; font-weight: 600; color: var(--bg-primary); background: var(--accent); border-radius: 7px; padding: 6px 13px; }
-.share-btn:hover:not(:disabled) { background: var(--cyan); }
-.share-btn:disabled { opacity: .4; cursor: not-allowed; }
-.share-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 20; width: 260px; display: flex; flex-direction: column; gap: 7px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
-.share-label { font-size: 11px; color: var(--text-muted); }
-.share-input { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 12px; padding: 6px 9px; outline: none; }
-.share-input:focus { border-color: var(--accent); }
-.share-check { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-secondary); cursor: pointer; }
-.share-check input { accent-color: var(--accent); cursor: pointer; }
-.share-note { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
-.share-confirm { font-size: 12px; font-weight: 600; color: var(--bg-primary); background: var(--accent); border-radius: 6px; padding: 6px 12px; }
-.fork-btn { font-size: 12px; color: var(--accent); border: 1px solid var(--border); border-radius: 6px; padding: 5px 11px; white-space: nowrap; }
-.fork-btn:hover { background: var(--accent-dim); }
+.share { font-size: 11px; color: var(--ink-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 12px; white-space: nowrap; }
+.share:hover:not(:disabled) { background: var(--bg-inset); color: var(--ink); }
+.share:disabled { opacity: .45; cursor: not-allowed; }
+.share-menu {
+  position: absolute; top: 34px; right: 0; z-index: 30; width: 270px;
+  display: flex; flex-direction: column; gap: 9px;
+  background: var(--bg-data); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 12px; box-shadow: var(--shadow-menu);
+}
+.share-title { background: none; border: none; border-bottom: 1px solid var(--line); outline: none; font-size: 11.5px; padding: 4px 2px; }
+.share-title:focus { border-bottom-color: var(--accent); }
+.share-check { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--ink-2); cursor: pointer; }
+.check { width: 14px; height: 14px; border: 1px solid var(--line-strong); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--on-accent); flex-shrink: 0; }
+.check.on { background: var(--accent); border-color: var(--accent); }
+.share-note { font-size: 11px; color: var(--ink-3); line-height: 1.45; }
+.share-confirm { font-size: 11px; color: var(--on-accent); background: var(--accent); border-radius: var(--radius); padding: 6px 12px; }
+.share-confirm:hover:not(:disabled) { background: var(--accent-hover); }
 
 /* --- Bantlar --------------------------------------------------------------- */
-.banner { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 12.5px; flex-shrink: 0; border-bottom: 1px solid var(--border-subtle); }
-.banner.accent { background: var(--accent-wash); color: var(--accent); }
-.banner.bad { background: var(--red-soft); color: var(--red); }
-.banner-link { font-family: 'JetBrains Mono', monospace; color: inherit; }
-.banner-note { font-size: 11.5px; color: var(--text-muted); }
-.banner-strong { color: var(--text-primary); }
-.banner-action { margin-left: auto; font-size: 12px; color: var(--accent); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; white-space: nowrap; }
-/* Ikinci ve sonraki banner dugmeleri yan yana dursun; ilki bosluga yapisir. */
-.banner-action + .banner-action { margin-left: 6px; }
-.banner-action.on { color: var(--accent); border-color: var(--accent); background: var(--accent-wash); }
-.banner-close { margin-left: auto; color: inherit; font-size: 16px; line-height: 1; opacity: .7; }
-.banner-close:hover { opacity: 1; }
+.banner {
+  display: flex; align-items: center; gap: 10px; padding: 0 14px;
+  height: var(--h-banner); background: var(--bg-subtle);
+  border-bottom: 1px solid var(--line); flex-shrink: 0; font-size: 11.5px;
+}
+.banner.bad { background: var(--removed-bg-soft); }
+.banner-label { font-size: 11px; color: var(--ink-4); flex-shrink: 0; }
+.banner-strong { font-weight: 600; color: var(--ink); }
+.banner-link { color: var(--accent); text-decoration: none; }
+.banner-link:hover { color: var(--accent-hover); text-decoration: underline; }
+.banner-note { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.banner-spacer { flex: 1; }
+.banner-btn { font-size: 11px; color: var(--ink-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 2px 9px; white-space: nowrap; }
+.banner-btn:hover { background: var(--bg-inset); color: var(--ink); }
 
-/* --- Baglam seridi --------------------------------------------------------- */
-.crumbs-bar { display: flex; align-items: center; gap: 8px; height: var(--crumbs-h); padding: 0 16px; background: var(--bg-primary); border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; overflow: hidden; }
-.crumbs { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; }
-.crumb { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; }
-.crumb:hover { color: var(--accent); }
-.crumb.last { color: var(--text-primary); background: var(--bg-tertiary); border-radius: 5px; padding: 2px 7px; }
-.crumb-sep { color: var(--border); font-size: 11px; }
-.copy-path { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; white-space: nowrap; flex-shrink: 0; }
-.copy-path:hover { color: var(--accent); border-color: var(--accent); }
-.crumbs-spacer { flex: 1; }
+/* --- Kirinti ve yol satiri -------------------------------------------------- */
+.crumbs {
+  display: flex; align-items: center; gap: 6px; padding: 0 14px;
+  height: var(--h-crumbs); background: var(--bg-app);
+  border-bottom: 1px solid var(--line-soft); flex-shrink: 0; overflow: hidden;
+}
+.crumb { font-size: 11.5px; color: var(--ink-4); white-space: nowrap; padding: 1px 2px; }
+.crumb:hover { color: var(--ink-2); }
+.crumb.last { color: var(--ink); font-weight: 500; }
+.crumb-sep { font-size: 10px; color: var(--ink-5); }
+.siblings { display: flex; align-items: center; gap: 5px; margin-left: 8px; font-size: 11px; color: var(--ink-4); }
+.sib { font-size: 11px; color: var(--ink-4); padding: 0 3px; }
+.sib:hover { color: var(--accent); }
 
-.filter-box { display: flex; align-items: center; gap: 6px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 7px; padding: 0 9px; flex-shrink: 0; }
-.filter-box:focus-within { border-color: var(--accent); }
-.filter-icon { color: var(--text-muted); font-size: 11px; }
-.filter-input { width: 190px; background: transparent; border: none; outline: none; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 5px 0; }
-.filter-hint { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
-.filter-hint.empty { color: var(--red); }
-.only-matches { font-size: 11px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; white-space: nowrap; flex-shrink: 0; }
-.only-matches:hover:not(:disabled) { color: var(--text-primary); }
-.only-matches.active { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
-.only-matches:disabled { opacity: .4; cursor: not-allowed; }
+.path-row {
+  display: flex; align-items: center; gap: 8px; padding: 0 14px; width: 100%;
+  height: var(--h-path); background: var(--bg-app); flex-shrink: 0; text-align: left;
+  border-bottom: 1px solid var(--line-soft);
+}
+.path-row:hover .path-copy { color: var(--ink-2); }
+.path-expr { font-size: 10.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.path-copy { font-size: 10.5px; color: var(--ink-5); white-space: nowrap; flex-shrink: 0; }
+.path-copy.done { color: var(--accent); }
 
-/* --- Calisma alani --------------------------------------------------------- */
+/* --- Calisma alani ---------------------------------------------------------- */
 .workspace { display: flex; flex: 1; min-height: 0; }
+
+.panel-slot { position: relative; flex-shrink: 0; display: flex; min-height: 0; }
+.panel-slot > :first-child { flex: 1; min-width: 0; }
+/* Tutamac panelin sag kenarina biner; yalniz surukleme sirasinda gorunur. */
+.resizer { position: absolute; top: 0; right: -3px; width: 7px; height: 100%; cursor: col-resize; z-index: 5; }
+.resizer:hover, .resizer.on { background: var(--accent-line); }
+
+/* Kapali panelin yerinde kalan dikey serit. */
+.rail {
+  width: var(--rail-w); flex-shrink: 0; background: var(--bg-chrome);
+  border-right: 1px solid var(--line); display: flex; align-items: center; justify-content: center;
+}
+.rail:hover { background: var(--bg-inset); }
+.rail-label { writing-mode: vertical-rl; font-size: 10px; letter-spacing: .4px; color: var(--ink-4); }
+.rail:hover .rail-label { color: var(--ink-2); }
+
+/* --- Footer ---------------------------------------------------------------- */
+.footer {
+  display: flex; align-items: center; gap: 14px; padding: 0 14px;
+  height: var(--h-footer); background: var(--bg-chrome);
+  border-top: 1px solid var(--line); flex-shrink: 0;
+}
+.stat { font-size: 10.5px; color: var(--ink-4); white-space: nowrap; }
+.stat.sync { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; }
+.footer-spacer { flex: 1; }
+
 .viewer { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg-primary); }
 .tree-scroll { flex: 1; min-height: 0; overflow: auto; padding: 4px 16px 40px; }
-
 .center-note { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 40px; font-size: 13px; color: var(--text-muted); }
 .error-title { font-size: 17px; font-weight: 600; color: var(--red); }
 .error-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
@@ -1171,33 +1257,9 @@ const docView = computed(() => !comparing.value)
 .error-action:hover { background: var(--accent-strong); }
 .error-action.ghost { color: var(--text-secondary); background: transparent; border: 1px solid var(--border); font-size: 12px; padding: 7px 14px; }
 .error-action.ghost:hover { color: var(--accent); border-color: var(--accent); }
-
-/* --- Alt durum cubugu ------------------------------------------------------ */
-.status-bar { display: flex; align-items: center; gap: 16px; height: var(--status-h); padding: 0 16px; background: var(--bg-secondary); border-top: 1px solid var(--border); flex-shrink: 0; }
-.stat { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
-.stat.accent { color: var(--accent); }
-.status-spacer { flex: 1; }
-
-/* Sag sutun: IATA paneli ustte esner, alan degerleri altta kendi payini alir. */
 .side-col { display: flex; flex-direction: column; width: var(--iata-w); flex-shrink: 0; min-height: 0; }
 .side-col > :first-child { flex: 1 1 auto; min-height: 0; }
 .side-col > .values-panel { flex: 0 1 auto; max-height: 52%; }
 .values-reopen { flex-shrink: 0; font-size: 11px; color: var(--text-muted); background: var(--bg-secondary); border-top: 1px solid var(--border); padding: 7px 12px; text-align: left; }
 .values-reopen:hover { color: var(--accent); }
-
-/* Kapali panelin kenar seridi: dikey yazili, tiklanabilir ince bir sutun. */
-.rail { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 10px; width: 26px; flex-shrink: 0; padding-top: 10px; background: var(--bg-secondary); color: var(--text-muted); }
-.rail.left { border-right: 1px solid var(--border); }
-.rail.right { border-left: 1px solid var(--border); }
-.rail:hover { color: var(--accent); background: var(--bg-tertiary); }
-.rail-glyph { font-size: 14px; line-height: 1; }
-.rail-label { font-size: 10.5px; font-weight: 600; letter-spacing: .5px; writing-mode: vertical-rl; text-orientation: mixed; }
-
-/* Dar ekranlarda once IATA paneli, sonra editor yer birakir. */
-@media (max-width: 1280px) {
-  .filter-input { width: 130px; }
-}
-@media (max-width: 1024px) {
-  .command-wrap { display: none; }
-}
 </style>

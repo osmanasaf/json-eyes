@@ -124,14 +124,29 @@ export function recordModel(items: JsonObject[], options: { sparse?: boolean } =
   return { shape: 'records', columns, hiddenColumns: hidden, total: items.length }
 }
 
-/** Nesnenin anahtar/deger tablosu: iki kolon, genislikler yine icerikten. */
+/**
+ * Nesnenin anahtar/deger tablosu: baslik satiri yok, iki kolon. Anahtar
+ * kolonu da icerikten olculur — NDC alan adlari uzun (`ServiceDefinitionRefID`)
+ * ve kirpilinca hangi alan oldugu anlasilmiyor.
+ */
 export function objectModel(value: JsonObject): GridModel {
   const entries = Object.entries(value)
   return {
     shape: 'object',
     columns: [
-      { name: 'anahtar', filled: entries.length, numeric: false, width: columnWidth('', entries.map(([key]) => key)) },
-      { name: 'değer', filled: entries.length, numeric: false, width: columnWidth('', entries.map(([, item]) => cellLabel(item))) },
+      {
+        name: 'anahtar',
+        filled: entries.length,
+        numeric: false,
+        // Sema isareti (`●` / `≈`) icin bir karakterlik pay birakiliyor.
+        width: columnWidth('', entries.map(([key]) => `${key} `)),
+      },
+      {
+        name: 'değer',
+        filled: entries.length,
+        numeric: entries.every(([, item]) => typeof item === 'number'),
+        width: columnWidth('', entries.map(([, item]) => cellLabel(item))),
+      },
     ],
     hiddenColumns: 0,
     total: entries.length,
@@ -202,4 +217,28 @@ export function jsonPathOf(path: string): string {
     out += /^\d+$/.test(segment) ? `[${segment}]` : `.${segment}`
   }
   return out
+}
+
+/**
+ * Acilista grid'in inecegi dugum.
+ *
+ * NDC yanitlari tek alanli sarmalayicilarla basliyor
+ * (`IATA_OrderViewRS > Response > Order`); koku gostermek kullaniciya uc
+ * tiklamalik bos bir tablo vermek demek. Zincir tek alan oldugu surece
+ * iniliyor, ilk **kayit dizisi** ya da coklu alan gorulunce duruluyor.
+ */
+export function initialNode(data: JsonValue, rootKey: string, maxDepth = 8): string {
+  let path = rootKey
+  let value = data
+  for (let depth = 0; depth < maxDepth; depth++) {
+    if (isRecordArray(value)) return path
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return path
+    const entries = Object.entries(value as JsonObject)
+    if (entries.length !== 1) return path
+    const [key, child] = entries[0]
+    if (child === null || typeof child !== 'object') return path
+    path = `${path}.${key}`
+    value = child
+  }
+  return path
 }

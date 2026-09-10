@@ -128,10 +128,16 @@ export const PANEL_W_DEFAULT = 344
 export const PANEL_W_MIN = 210
 export const PANEL_W_MAX = 760
 
-/** Kayitli girdi paneli genisligi; sinirlarin disi varsayilana duser. */
+/**
+ * Kayitli girdi paneli genisligi; kayit yoksa ya da bozuksa varsayilan.
+ * `Number(null)` sifir oldugu icin once *kayit var mi* diye bakiliyor —
+ * yoksa hic kaydi olmayan kullanici paneli en dar halinde bulurdu.
+ */
 export function readPanelWidth(): number {
-  const raw = Number(readStored(PANEL_W_KEY))
-  if (!Number.isFinite(raw)) return PANEL_W_DEFAULT
+  const stored = readStored(PANEL_W_KEY)
+  if (stored === null || stored.trim() === '') return PANEL_W_DEFAULT
+  const raw = Number(stored)
+  if (!Number.isFinite(raw) || raw <= 0) return PANEL_W_DEFAULT
   return Math.min(PANEL_W_MAX, Math.max(PANEL_W_MIN, Math.round(raw)))
 }
 

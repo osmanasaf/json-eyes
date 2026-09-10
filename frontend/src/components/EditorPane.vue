@@ -122,7 +122,12 @@ function openXml(source: string, name: string | null) {
 defineExpose({ openXml })
 
 /** Satir yuksekligi; numara sutunundaki pencereleme buna dayaniyor. */
-const LINE_HEIGHT = 20
+/**
+ * Satir yuksekligi. Tasarimin degeri 19px; oluk hizasi, kaydirma hesabi ve
+ * isaret seridi hep buna bagli oldugu icin CSS'teki `line-height` ile birebir
+ * ayni kalmali (token: `--editor-line`).
+ */
+const LINE_HEIGHT = 19
 
 const lineCount = computed(() => {
   const source = text.value
@@ -193,12 +198,9 @@ watch(() => props.syncRange, (range) => {
   const ta = codeEl.value
   // Senkron seridi JSON metnine ait; XML sekmesinde anlamsiz.
   if (!range || !ta || isXml.value) return
-  const top = (range.startLine - 1) * LINE_HEIGHT
-  const bottom = range.endLine * LINE_HEIGHT
-  const viewTop = ta.scrollTop
-  const viewBottom = viewTop + ta.clientHeight
-  if (top >= viewTop + LINE_HEIGHT && bottom <= viewBottom - LINE_HEIGHT) return
-  const target = Math.max(0, top - Math.max(LINE_HEIGHT * 2, ta.clientHeight / 3))
+  // Tasarimin hedefi: (satir-1)*19 - 130. `scrollIntoView` kullanilmiyor —
+  // sayfayi da kaydirip kabugu oynatiyor; dogrudan scrollTop atanıyor.
+  const target = Math.max(0, (range.startLine - 1) * LINE_HEIGHT - 130)
   ta.scrollTop = target
   scrollTop.value = ta.scrollTop
 })
@@ -405,7 +407,7 @@ watch(() => props.recents.length, (count) => {
 .code-area { flex: 1; min-height: 0; display: flex; background: var(--bg-primary); padding: 8px 0; }
 .gutter { width: 34px; flex-shrink: 0; overflow: hidden; padding-left: 12px; }
 .gutter-inner { display: flex; flex-direction: column; }
-.line-no { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 20px; height: 20px; color: var(--border); text-align: right; flex-shrink: 0; }
+.line-no { font-size: 11.5px; line-height: var(--editor-line); height: var(--editor-line); color: var(--border); text-align: right; flex-shrink: 0; }
 .line-no.bad { color: var(--red); font-weight: 600; }
 .line-no.synced { color: var(--accent); }
 /*
@@ -415,7 +417,7 @@ watch(() => props.recents.length, (count) => {
  */
 .code-wrap { position: relative; flex: 1; min-width: 0; display: flex; }
 .sync-band { position: absolute; left: 0; right: 0; background: var(--accent-wash); border-left: 2px solid var(--accent); pointer-events: none; }
-.code { flex: 1; min-width: 0; position: relative; background: transparent; color: var(--text-primary); border: none; outline: none; resize: none; padding: 0 12px 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 20px; white-space: pre; overflow-x: auto; }
+.code { flex: 1; min-width: 0; position: relative; background: transparent; color: var(--text-primary); border: none; outline: none; resize: none; padding: 0 12px 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: var(--editor-line); white-space: pre; overflow-x: auto; }
 .code.invalid { color: var(--text-secondary); }
 
 .history { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; }
