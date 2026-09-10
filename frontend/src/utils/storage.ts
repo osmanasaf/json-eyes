@@ -1,4 +1,4 @@
-import type { Density, ViewMode } from '../types'
+import type { ViewMode } from '../types'
 
 /**
  * Tarayici depolamasi. Urun "JSON Sarp" adiyla yayina girdigi icin eski anahtarlar
@@ -88,43 +88,18 @@ export function writeTheme(theme: Theme) {
 const VIEW_KEY = 'view'
 
 /**
- * Kayitli gorunum. Varsayilan **Grid**: tasarimin ana ekrani o — belgeyi
- * Alan · Tip · Deger olarak tarayip alan bulmak urunun asil isi. Kullanicinin
- * son secimi hatirlaniyor.
+ * Kayitli gorunum. Varsayilan **Kolon**: bir paylasim linkini acan kisi once
+ * belgenin seviyelerini gormeli, kolon kolon inebilmeli — grid'in genis
+ * tablolari ilk karsilasmada agir geliyor. Kullanicinin son secimi
+ * hatirlaniyor; kendi tercihini her acilista yeniden yapmasi gerekmiyor.
  */
 export function readViewMode(): ViewMode {
-  return readStored(VIEW_KEY) === 'tree' ? 'tree' : 'grid'
+  const stored = readStored(VIEW_KEY)
+  return stored === 'tree' || stored === 'grid' || stored === 'columns' ? stored : 'columns'
 }
 
 export function writeViewMode(mode: ViewMode) {
   writeStored(VIEW_KEY, mode)
-}
-
-const DENSITY_KEY = 'density'
-
-/** Kayitli satir yogunlugu; tasarimin varsayilani orta olan `normal`. */
-export function readDensity(): Density {
-  const stored = readStored(DENSITY_KEY)
-  return stored === 'compact' || stored === 'comfortable' ? stored : 'normal'
-}
-
-export function writeDensity(density: Density) {
-  writeStored(DENSITY_KEY, density)
-}
-
-const ARRAY_TABLE_KEY = 'array-table'
-
-/**
- * Nesne dizileri tablolassin mi (baglam seridindeki "Ic ice / Tablo"
- * segmenti). Varsayilan kapali: kullanici once agaci gorur, tabloyu isteyince
- * acar.
- */
-export function readArrayTableMode(): boolean {
-  return readStored(ARRAY_TABLE_KEY) === '1'
-}
-
-export function writeArrayTableMode(on: boolean) {
-  writeStored(ARRAY_TABLE_KEY, on ? '1' : '0')
 }
 
 export function formatSize(chars: number): string {
