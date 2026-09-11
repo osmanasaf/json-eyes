@@ -33,6 +33,12 @@ const props = defineProps<{
   diffTotal: number
   diffSummary: { added: number; removed: number; changed: number } | null
   diffNote: string
+  /**
+   * Acik sekme. Panelin kendi state'i degil: karsilastirmayi App de
+   * kapatabiliyor (bir alandan belgeye gidildiginde, ornek yuklendiginde).
+   * Yerel tutuldugunda orta bolge belgeye donuyor ama sekme "Fark"ta kaliyordu.
+   */
+  tab: InputTab
 }>()
 
 const emit = defineEmits<{
@@ -56,11 +62,9 @@ const emit = defineEmits<{
   diffUseA: []
 }>()
 
-const tab = ref<InputTab>('input')
 const editorRef = ref<InstanceType<typeof EditorPane> | null>(null)
 
 function setTab(next: InputTab) {
-  tab.value = next
   emit('update:tab', next)
 }
 

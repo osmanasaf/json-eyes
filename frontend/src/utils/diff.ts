@@ -466,6 +466,79 @@ export function diffJson(left: JsonValue, right: JsonValue, rootKey: string): Di
   return { root, counts: root.counts, identityKeys, degraded }
 }
 
+// --- Dallari elde acmak ------------------------------------------------------
+
+/**
+ * Diff motoru degismeyen, butunuyle eklenen ve butunuyle silinen dallari
+ * **cocuksuz** uretir: alt agacin tamami ayni hikayeyi anlattigi icin
+ * karsilastirmaya girmesi gereksizdir. Rapor icin dogru, elde kiyaslamak icin
+ * degil — `{ 12 alan }` yazip orada biten bir satir cikmaz sokak oluyor.
+ *
+ * Bu yuzden o dallarin cocuklari **istendiginde** ham degerden uretiliyor:
+ * acilmayan dal icin tek bir dugum bile kurulmuyor, acilan dal ise bir kez
+ * kurulup dugumde saklaniyor.
+ */
+const lazyChildren = new WeakMap<DiffNode, DiffNode[]>()
+
+/** Dugumun kendi ham degeri; silinen dugumlerde eski taraftan okunur. */
+function ownValue(node: DiffNode): JsonValue | undefined {
+  return node.kind === 'removed' ? node.left : (node.right ?? node.left)
+}
+
+function isNonEmptyContainer(value: JsonValue | undefined): boolean {
+  if (value === null || typeof value !== 'object') return false
+  return Array.isArray(value) ? value.length > 0 : Object.keys(value).length > 0
+}
+
+/** Satir acilabilir mi: diff cocugu olan ya da elde acilabilecek kapsayici. */
+export function isExpandable(node: DiffNode): boolean {
+  return node.children.length > 0 || isNonEmptyContainer(ownValue(node))
+}
+
+/**
+ * Dugumun cocuklari. Diff zaten uretmisse onlar, uretmemisse ham degerden
+ * turetilenler doner. Turetilen cocuklar dugumun kaderini paylasir: eklenen
+ * bir nesnenin icindeki her sey eklenmistir, silinenin icindeki silinmistir,
+ * degismeyenin icindeki degismemistir.
+ */
+export function childrenOf(node: DiffNode): DiffNode[] {
+  if (node.children.length > 0) return node.children
+  const cached = lazyChildren.get(node)
+  if (cached) return cached
+
+  const value = ownValue(node)
+  if (!isNonEmptyContainer(value)) return node.children
+
+  // 'moved' bir kapsayicinin icerigi degismemistir (yalnizca yeri degisti).
+  const kind: ChangeKind = node.kind === 'added' || node.kind === 'removed' ? node.kind : 'unchanged'
+  const entries: Array<[string, JsonValue]> = Array.isArray(value)
+    ? (value as JsonValue[]).map((item, index) => [String(index), item])
+    : Object.entries(value as JsonObject)
+
+  const built = entries.map(([key, child]) => mirrorNode(key, `${node.path}.${key}`, child, kind))
+  lazyChildren.set(node, built)
+  return built
+}
+
+/**
+ * Tek tarafli bir dugum. Sayilari sifir tutuluyor: bu satirlar rapora yeni bir
+ * degisiklik eklemiyor, zaten sayilmis bir dalin icini gosteriyor — saydirmak
+ * ozet cubuklarini ikiye katlardi.
+ */
+function mirrorNode(key: string, path: string, value: JsonValue, kind: ChangeKind): DiffNode {
+  return {
+    key,
+    path,
+    oldPath: kind === 'added' ? null : path,
+    kind,
+    type: getType(value),
+    left: kind === 'added' ? undefined : value,
+    right: kind === 'removed' ? undefined : value,
+    children: [],
+    counts: { ...EMPTY_COUNTS },
+  }
+}
+
 // --- Goruntuleme icin duzlestirme -------------------------------------------
 
 export interface DiffRow {
@@ -492,6 +565,10 @@ export interface FlattenDiffOptions {
  * kullanicidan raporu acmasini beklemek, raporun kendisini gizlemek olur.
  * "Yalnizca degisenler" acikken degismeyen kardesler tek bir ozet satirina
  * iner (git'in baglam katlamasi gibi).
+ *
+ * Acilabilirlik `isExpandable` ile sorulur: diff'in cocuk uretmedigi dallar da
+ * (degismeyen, butunuyle eklenen/silinen) elde acilabilir — ekran yalnizca
+ * rapor degil, alan alan gezilen bir agac.
  */
 export function flattenDiff(result: DiffResult, options: FlattenDiffOptions): DiffRow[] {
   const out: DiffRow[] = []
@@ -502,16 +579,20 @@ export function flattenDiff(result: DiffResult, options: FlattenDiffOptions): Di
   }
 
   function walk(node: DiffNode, depth: number) {
-    const expandable = node.children.length > 0
+    const expandable = isExpandable(node)
     const isOpen = expandable && options.expanded.has(node.path)
     out.push({ key: node.path, node, depth, expandable, isOpen })
     if (!isOpen) return
+
+    // Cocuklar yalnizca dal *acikken* isteniyor: kapali bir dalin icini
+    // kurmak, agacin tamamini bastan uretmek olurdu.
+    const children = childrenOf(node)
 
     // Katlanan kardesler tek bir ozet satirinda toplanir. Onceden her kesintisiz
     // grup icin ayri bir satir uretiliyordu; degisenlerle degismeyenler
     // dönüşümlü oldugunda "1 değişmeyen alan" satirlari raporu boguyordu.
     let skipped = 0
-    for (const child of node.children) {
+    for (const child of children) {
       if (options.onlyChanges && !hasChanges(child)) {
         skipped++
         continue

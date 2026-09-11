@@ -1072,6 +1072,7 @@ const docView = computed(() => !comparing.value)
         :diff-total="diffChanges.length"
         :diff-summary="diffSummary"
         :diff-note="diffNote"
+        :tab="inputTab"
         @update:text-a="textA = $event"
         @update:text-b="textB = $event"
         @update:diff-only-changes="diffOnlyChanges = $event"
@@ -1151,6 +1152,7 @@ const docView = computed(() => !comparing.value)
             :name-b="'B'"
             :focus="diffFocus"
             @focus-path="focusOnPath"
+            @update:only-changes="diffOnlyChanges = $event"
           />
 
           <ColumnView

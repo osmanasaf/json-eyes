@@ -8,7 +8,9 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { detectIdentityKey, diffJson, flattenDiff, changedPaths } from './.diff.bundle.mjs'
+import {
+  detectIdentityKey, diffJson, flattenDiff, changedPaths, isExpandable, childrenOf,
+} from './.diff.bundle.mjs'
 
 const order = (id, status, amount) => ({
   OrderID: id,
@@ -106,4 +108,108 @@ test('duzlestirme: degisen dallar acik, degismeyen kardesler tek satirda toplani
   assert.ok(rows.some(row => row.node.path === 'json.Order.1.StatusCode'))
   // Degismeyen kardes satirlar tek tek listelenmiyor.
   assert.equal(rows.filter(row => row.node.kind === 'unchanged' && row.collapsedCount === undefined).length, 0)
+})
+
+/**
+ * Fark ekrani yalnizca bir rapor degil, elde gezilen bir agac: degismeyen,
+ * butunuyle eklenen ve butunuyle silinen dallar da acilabilmeli. Motor bu
+ * dallarin cocuklarini uretmedigi icin (alt agac ayni hikayeyi anlatir)
+ * cocuklar istendiginde turetilir — asagidaki testler o sozlesmeyi sabitliyor.
+ */
+
+test('degismeyen dal acilabilir; cocuklari istendiginde turetilir', () => {
+  const doc = { Meta: { a: 1, b: { c: 2 } }, x: 1 }
+  const result = diffJson(doc, { ...structuredClone(doc), x: 2 }, 'json')
+
+  const meta = result.root.children.find(child => child.key === 'Meta')
+  assert.equal(meta.kind, 'unchanged')
+  // Motor degismeyen dala hic girmez...
+  assert.equal(meta.children.length, 0)
+  // ...ama ekran yine de icini acabilmeli.
+  assert.ok(isExpandable(meta))
+
+  const children = childrenOf(meta)
+  assert.deepEqual(children.map(child => child.key), ['a', 'b'])
+  assert.ok(children.every(child => child.kind === 'unchanged'))
+  // Iki taraf da dolu: satir A ve B sutununda ayni degeri gosterir.
+  assert.equal(children[0].left, 1)
+  assert.equal(children[0].right, 1)
+  assert.equal(children[0].path, 'json.Meta.a')
+  // Ic ice dallar da acilabilir.
+  assert.ok(isExpandable(children[1]))
+  assert.equal(childrenOf(children[1])[0].path, 'json.Meta.b.c')
+})
+
+test('eklenen ve silinen kapsayicilarin ici tek tarafli acilir', () => {
+  const result = diffJson({ Gone: { p: 1 } }, { New: { q: 2, r: [3] } }, 'json')
+
+  const added = result.root.children.find(child => child.key === 'New')
+  assert.equal(added.kind, 'added')
+  assert.ok(isExpandable(added))
+  const addedKids = childrenOf(added)
+  assert.deepEqual(addedKids.map(child => child.key), ['q', 'r'])
+  // Eklenen tarafta yalnizca B dolu; A sutunu bos kalmali.
+  assert.ok(addedKids.every(child => child.kind === 'added' && child.left === undefined))
+  assert.equal(addedKids[0].right, 2)
+
+  const removed = result.root.children.find(child => child.key === 'Gone')
+  assert.equal(removed.kind, 'removed')
+  const removedKids = childrenOf(removed)
+  assert.deepEqual(removedKids.map(child => child.key), ['p'])
+  assert.equal(removedKids[0].kind, 'removed')
+  assert.equal(removedKids[0].left, 1)
+  assert.equal(removedKids[0].right, undefined)
+})
+
+test('bos kapsayici ve skalerler acilamaz', () => {
+  const result = diffJson({ a: 1, bos: {}, liste: [] }, { a: 2, bos: {}, liste: [] }, 'json')
+  const byKey = Object.fromEntries(result.root.children.map(child => [child.key, child]))
+  assert.equal(isExpandable(byKey.a), false)
+  assert.equal(isExpandable(byKey.bos), false)
+  assert.equal(isExpandable(byKey.liste), false)
+})
+
+test('turetilen satirlar ozet sayilarina karismaz', () => {
+  const result = diffJson({}, { New: { q: 1, r: 2 } }, 'json')
+  assert.deepEqual(result.counts, { added: 1, removed: 0, changed: 0, moved: 0 })
+  const kids = childrenOf(result.root.children[0])
+  // Dal bir kez sayildi; icini acmak ayni degisikligi ikinci kez saydirmamali.
+  assert.ok(kids.every(child => child.counts.added === 0))
+})
+
+test('duzlestirme: elle acilan degismeyen dal satir uretir', () => {
+  const doc = { Meta: { a: 1, b: 2 }, x: 1 }
+  const result = diffJson(doc, { ...structuredClone(doc), x: 2 }, 'json')
+
+  // Kapali: Meta tek satir, acilabilir isaretli.
+  const closed = flattenDiff(result, { expanded: new Set(['json']), onlyChanges: false })
+  const metaRow = closed.find(row => row.node.path === 'json.Meta')
+  assert.equal(metaRow.expandable, true)
+  assert.equal(metaRow.isOpen, false)
+  assert.equal(closed.some(row => row.node.path === 'json.Meta.a'), false)
+
+  // Acik: alanlari tek tek listelenir — iki tarafi gozle kiyaslamanin yolu.
+  const open = flattenDiff(result, { expanded: new Set(['json', 'json.Meta']), onlyChanges: false })
+  assert.deepEqual(
+    open.filter(row => row.node.path.startsWith('json.Meta.')).map(row => row.node.path),
+    ['json.Meta.a', 'json.Meta.b'],
+  )
+  assert.equal(open.find(row => row.node.path === 'json.Meta.a').depth, 2)
+})
+
+test('duzlestirme: kok kapali oldugunda tek satir kalir', () => {
+  const result = diffJson({ a: 1 }, { a: 2 }, 'json')
+  const rows = flattenDiff(result, { expanded: new Set(), onlyChanges: true })
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].node.path, 'json')
+  assert.equal(rows[0].expandable, true)
+})
+
+test('birebir ayni belgelerde kok yine de gezilebilir', () => {
+  const doc = { Order: [order('A', 'OPEN', 1)] }
+  const result = diffJson(doc, structuredClone(doc), 'json')
+  assert.deepEqual(result.counts, { added: 0, removed: 0, changed: 0, moved: 0 })
+  assert.ok(isExpandable(result.root))
+  const rows = flattenDiff(result, { expanded: new Set(['json']), onlyChanges: false })
+  assert.ok(rows.some(row => row.node.path === 'json.Order'))
 })
