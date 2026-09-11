@@ -291,7 +291,7 @@ const syncRange = ref<SyncRange | null>(null)
 
 function updateSyncRange() {
   const path = selectedNodePath.value
-  if (!path || !editorVisible.value || isShared.value || parsed.value === null) {
+  if (!path || !editorVisible.value || parsed.value === null) {
     syncRange.value = null
     return
   }
@@ -309,11 +309,11 @@ function updateSyncRange() {
   }
 }
 
-watch([selectedNodePath, parsedInput, editorVisible, isShared], updateSyncRange, { immediate: true })
+watch([selectedNodePath, parsedInput, editorVisible], updateSyncRange, { immediate: true })
 
 // Ayristirma basariliysa indeksi bos zamanda kur: ilk tiklama beklemesin.
 watch(parsedInput, (text) => {
-  if (parsed.value === null || isShared.value || text.length > MAX_SYNC_CHARS) return
+  if (parsed.value === null || text.length > MAX_SYNC_CHARS) return
   const prewarm = () => {
     if (parsedInput.value !== text) return
     textIndexFor(text)
@@ -657,6 +657,8 @@ function handleFile(event: Event) {
 
 function handleDrop(event: DragEvent) {
   event.preventDefault()
+  // Paylasilan belge salt okunur; birakilan dosya onu sessizce ezmemeli.
+  if (isShared.value) return
   const file = event.dataTransfer?.files?.[0]
   if (file) readFile(file)
 }
@@ -760,6 +762,77 @@ function handleRepair() {
   }
   loadError.value = null
   applyInputNow(repaired)
+}
+
+/**
+ * Belgeyi **JSON olarak almak**: kopyala ve indir.
+ *
+ * Paylasim linkini acan kisinin elinde yalnizca goruntuleyici vardi; veriyi
+ * geri almanin yolu yoktu. Kaynak paneli artik salt okunur da olsa goruluyor,
+ * bu iki dugme de onun yanindan ve paylasim bandindan calisiyor.
+ */
+const sourceCopied = ref(false)
+
+/**
+ * Dosya adini ASCII'ye indirger.
+ *
+ * Chromium, `<a download>` adinda **tek bir ASCII disi karakter** gorurse adi
+ * butunuyle yok sayip dosyayi `download` diye kaydediyor. Uygulamanin kendi
+ * varsayilani `paylaşım-<id>.json` oldugu icin bu, indirilen her paylasimi
+ * adsiz birakiyordu. Turkce harfler karsiliklarina cevriliyor: `Sipariş
+ * yanıtı` -> `Siparis yaniti`.
+ *
+ * `ı` tek basina ayrisamadigi icin elle esleniyor; `ş ğ ü ö ç İ` NFD'de taban
+ * harf + birlesen isarete ayriliyor, isaretler atiliyor.
+ */
+function asciiFileName(value: string): string {
+  return value
+    .replace(/ı/g, 'i')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    // Dosya adinda yeri olmayanlar ve geriye kalan ASCII disi her sey.
+    .replace(/[^\u0020-\u007e]|[<>:"/\\|?*]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Indirilecek dosya adi; uzanti her zaman `.json` olur. */
+const downloadName = computed(() => {
+  const base = asciiFileName((fileName.value ?? 'json-eyes').replace(/\.[^.]+$/, ''))
+  return `${base || 'json-eyes'}.json`
+})
+
+async function copySource() {
+  if (!rawInput.value) return
+  try {
+    await navigator.clipboard.writeText(rawInput.value)
+    sourceCopied.value = true
+    setTimeout(() => { sourceCopied.value = false }, 1600)
+  } catch {
+    loadError.value = 'Pano yazılamadı; metni seçip elle kopyalayabilirsiniz.'
+  }
+}
+
+/**
+ * Blob + gecici `<a download>`: dosyayi sunucuya ugramadan verir.
+ *
+ * Baglanti belgeye eklenip tiklaniyor ve URL bir sonraki gecise birakiliyor:
+ * kopuk bir `<a>` ile ya da hemen `revoke` edilen bir URL ile Chromium
+ * `download` adini yok sayip dosyayi `download` diye kaydediyor.
+ */
+function downloadJson() {
+  const text = rawInput.value
+  if (!text.trim()) return
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = downloadName.value
+  link.rel = 'noopener'
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 /** Bant uzerindeki "kopyala"; isaret kisa sure "kopyalandi" olur. */
@@ -1009,8 +1082,12 @@ const docView = computed(() => !comparing.value)
     <div v-if="isShared" class="banner">
       <span class="banner-label">salt okunur</span>
       <strong v-if="sharedTitle" class="banner-strong">{{ sharedTitle }}</strong>
-      <span class="banner-note">Paylaşılmış görünüm — düzenleme kapalı.</span>
+      <span class="banner-note">Paylaşılmış görünüm — düzenleme kapalı, veri solda kaynak olarak duruyor.</span>
       <div class="banner-spacer" />
+      <button class="banner-btn" title="JSON metnini panoya al" @click="copySource">
+        {{ sourceCopied ? 'kopyalandı' : 'JSON kopyala' }}
+      </button>
+      <button class="banner-btn" :title="`${downloadName} olarak indir`" @click="downloadJson">JSON indir</button>
       <button class="banner-btn" @click="forkShared">kopyasını al ve düzenle</button>
     </div>
     <div v-if="xmlNotice" class="banner">
@@ -1046,11 +1123,13 @@ const docView = computed(() => !comparing.value)
     </button>
     <div class="workspace">
       <!--
-        Sol: girdi paneli. Paylasilan gorunumde hic render edilmez. Genisligi
-        kullanicinin; sag kenarindaki tutamactan surukleniyor.
+        Sol: girdi paneli. Paylasilan gorunumde de cizilir — ama salt okunur.
+        Onceden hic render edilmiyordu; linki acan kisi veriyi ham haliyle hic
+        goremiyor, JSON olarak da alamiyordu. Genisligi kullanicinin; sag
+        kenarindaki tutamactan surukleniyor.
       -->
       <div
-        v-if="editorVisible && !isShared && (hasData || parseError)"
+        v-if="editorVisible && (hasData || parseError)"
         class="panel-slot"
         :style="{ width: `${panelW}px` }"
       >
@@ -1073,6 +1152,8 @@ const docView = computed(() => !comparing.value)
         :diff-summary="diffSummary"
         :diff-note="diffNote"
         :tab="inputTab"
+        :readonly="isShared"
+        :source-copied="sourceCopied"
         @update:text-a="textA = $event"
         @update:text-b="textB = $event"
         @update:diff-only-changes="diffOnlyChanges = $event"
@@ -1089,6 +1170,8 @@ const docView = computed(() => !comparing.value)
         @open-recent="openRecent"
         @drop="handleDrop"
         @collapse="toggleEditor"
+        @copy-source="copySource"
+        @download="downloadJson"
       />
         <div
           class="resizer"
@@ -1101,11 +1184,11 @@ const docView = computed(() => !comparing.value)
 
       <!-- Kapali panelin yerinde dikey serit kalir; tiklayinca geri acilir. -->
       <button
-        v-if="!editorVisible && !isShared && (hasData || parseError)"
+        v-if="!editorVisible && (hasData || parseError)"
         class="rail"
-        title="Girdi panelini aç"
+        :title="isShared ? 'Kaynağı aç' : 'Girdi panelini aç'"
         @click="toggleEditor"
-      ><span class="rail-label">GİRDİ</span></button>
+      ><span class="rail-label">{{ isShared ? 'KAYNAK' : 'GİRDİ' }}</span></button>
 
       <!-- Orta: goruntuleyici -->
       <section class="viewer">

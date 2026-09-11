@@ -22,6 +22,8 @@ const props = defineProps<{
   total: number
   summary: { added: number; removed: number; changed: number } | null
   note: string
+  /** Paylasilan belge: A tarafi ana editore alinamaz, girdi salt okunur. */
+  readonly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -85,7 +87,7 @@ const canPick = computed(() => props.recents.some(file => file.content !== undef
         <span class="side">A</span>
         <span class="source">{{ currentName || 'girdi' }}</span>
         <div class="spacer" />
-        <button class="link" title="A'yı ana editöre al" @click="emit('useA')">girdide düzenle</button>
+        <button v-if="!readonly" class="link" title="A'yı ana editöre al" @click="emit('useA')">girdide düzenle</button>
       </div>
       <textarea
         class="box"

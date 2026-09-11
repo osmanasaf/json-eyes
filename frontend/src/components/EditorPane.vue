@@ -28,6 +28,14 @@ const props = defineProps<{
    * editor o satira kayar ve satirlar isaretlenir.
    */
   syncRange?: { start: number; end: number; startLine: number; endLine: number } | null
+  /**
+   * Salt okunur kaynak (paylasilan belge). Panel yine gorunur: veriyi ham
+   * haliyle okumak ve JSON olarak almak icin. Degistiren her sey kapanir —
+   * XML cevirimi, bicim/kucult/yapistir/ornek/temizle, canli-elle anahtari.
+   */
+  readonly?: boolean
+  /** Kopyala dugmesinin "kopyalandı" hali. */
+  copied?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -40,6 +48,9 @@ const emit = defineEmits<{
   drop: [event: DragEvent]
   /** XML cevrildi: JSON metni ve cevirim notlari. */
   xml: [payload: { text: string; name: string | null; root: string; notes: string[] }]
+  /** "JSON olarak al": panoya kopyala / dosya olarak indir. */
+  copy: []
+  download: []
 }>()
 
 /**
@@ -82,6 +93,7 @@ const text = computed({
     return live.value ? props.modelValue : draft.value
   },
   set: (value: string) => {
+    if (props.readonly) return
     if (isXml.value) {
       xmlText.value = value
       xmlError.value = null
@@ -117,6 +129,7 @@ watch(() => props.modelValue, (value) => {
 
 /** Panodan yapistir: buyuk girdide elle moda gecmenin en pratik yolu. */
 async function pasteFromClipboard() {
+  if (props.readonly) return
   try {
     const value = await navigator.clipboard.readText()
     if (value) text.value = value
@@ -220,6 +233,7 @@ function syncScroll(event: Event) {
 const LARGE_PASTE_THRESHOLD = 200_000
 
 function handlePaste(event: ClipboardEvent) {
+  if (props.readonly) return
   const pasted = event.clipboardData?.getData('text')
   if (pasted === undefined || pasted.length < LARGE_PASTE_THRESHOLD) return
   event.preventDefault()
@@ -298,35 +312,51 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
 </script>
 
 <template>
-  <section class="editor-pane" @drop="emit('drop', $event)" @dragover.prevent>
+  <section class="editor-pane" @drop="readonly ? undefined : emit('drop', $event)" @dragover.prevent>
     <!-- Bicim satiri: XML ayri bir ekran degil, girdinin bir bicimi. -->
     <div class="kinds">
-      <button class="kind" :class="{ active: kind === 'json' }" @click="kind = 'json'">JSON</button>
-      <button
-        class="kind"
-        :class="{ active: kind === 'xml' }"
-        title="XML yapıştır, JSON'a çevir — sonuç girdinin kendisi olur"
-        @click="kind = 'xml'"
-      >XML</button>
+      <span v-if="readonly" class="kind active">Kaynak</span>
+      <template v-else>
+        <button class="kind" :class="{ active: kind === 'json' }" @click="kind = 'json'">JSON</button>
+        <button
+          class="kind"
+          :class="{ active: kind === 'xml' }"
+          title="XML yapıştır, JSON'a çevir — sonuç girdinin kendisi olur"
+          @click="kind = 'xml'"
+        >XML</button>
+      </template>
       <div class="row-spacer" />
       <span class="kind-meta">{{ lineCount.toLocaleString('tr-TR') }} satır</span>
     </div>
 
-    <!-- Eylem satiri: hepsi cercevesiz metin dugme. -->
+    <!--
+      Eylem satiri: hepsi cercevesiz metin dugme. "kopyala" ve "indir" her iki
+      modda da var — veriyi JSON olarak geri almak belgenin duzenlenebilir
+      olmasina bagli degil.
+    -->
     <div class="actions">
-      <button class="act" :disabled="!hasData || isXml" title="Girintili biçime getir" @click="emit('format')">biçim</button>
-      <button class="act" :disabled="!hasData || isXml" title="Tek satıra indir" @click="emit('minify')">küçült</button>
-      <button class="act" title="Panodan yapıştır" @click="pasteFromClipboard">yapıştır</button>
-      <button class="act" title="Örnek JSON yükle" @click="emit('sample')">örnek</button>
+      <button class="act" :disabled="!hasData" title="JSON metnini panoya al" @click="emit('copy')">
+        {{ copied ? 'kopyalandı' : 'kopyala' }}
+      </button>
+      <button class="act" :disabled="!hasData" title="JSON dosyası olarak indir" @click="emit('download')">indir</button>
+      <template v-if="!readonly">
+        <button class="act" :disabled="!hasData || isXml" title="Girintili biçime getir" @click="emit('format')">biçim</button>
+        <button class="act" :disabled="!hasData || isXml" title="Tek satıra indir" @click="emit('minify')">küçült</button>
+        <button class="act" title="Panodan yapıştır" @click="pasteFromClipboard">yapıştır</button>
+        <button class="act" title="Örnek JSON yükle" @click="emit('sample')">örnek</button>
+      </template>
       <div class="row-spacer" />
-      <button
-        class="act mode"
-        :class="{ on: live }"
-        :title="live ? 'Her tuş vuruşunda ayrıştırılıyor' : 'Uygula denince ayrıştırılır — büyük dosyada donmaz'"
-        @click="live = !live"
-      >{{ live ? 'canlı' : 'elle' }}</button>
-      <button v-if="!live && dirty" class="apply" @click="applyDraft">uygula</button>
-      <button class="act danger" title="Temizle" @click="emit('clear')">temizle</button>
+      <template v-if="!readonly">
+        <button
+          class="act mode"
+          :class="{ on: live }"
+          :title="live ? 'Her tuş vuruşunda ayrıştırılıyor' : 'Uygula denince ayrıştırılır — büyük dosyada donmaz'"
+          @click="live = !live"
+        >{{ live ? 'canlı' : 'elle' }}</button>
+        <button v-if="!live && dirty" class="apply" @click="applyDraft">uygula</button>
+        <button class="act danger" title="Temizle" @click="emit('clear')">temizle</button>
+      </template>
+      <span v-else class="act-note">salt okunur</span>
     </div>
 
     <div class="code-area">
@@ -350,6 +380,7 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
           :class="{ invalid: isXml ? xmlError : parseError }"
           spellcheck="false"
           wrap="off"
+          :readonly="readonly"
           :placeholder="isXml
             ? 'XML yapıştırın veya .xml dosyası sürükleyin — sonra JSON\'a çevirin…'
             : 'JSON verisini buraya yapıştırın veya dosya sürükleyin…'"
@@ -416,6 +447,7 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
 .act.mode.on { color: var(--accent); }
 .act.danger { color: var(--ink-5); }
 .act.danger:hover { color: var(--removed); }
+.act-note { font-size: 11px; color: var(--ink-5); white-space: nowrap; }
 .apply { font-size: 11px; color: var(--on-accent); background: var(--accent); border-radius: var(--radius); padding: 2px 9px; white-space: nowrap; }
 .apply:hover { background: var(--accent-hover); }
 

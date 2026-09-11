@@ -39,6 +39,14 @@ const props = defineProps<{
    * Yerel tutuldugunda orta bolge belgeye donuyor ama sekme "Fark"ta kaliyordu.
    */
   tab: InputTab
+  /**
+   * Paylasilan (salt okunur) belge. Panel yine cizilir — linki acan kisi
+   * veriyi ham haliyle gormeli ve JSON olarak alabilmeli — ama degistiren
+   * her sey kapanir.
+   */
+  readonly?: boolean
+  /** Kopyala dugmesinin kisa "kopyalandı" hali; durum App'te. */
+  sourceCopied?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -60,6 +68,9 @@ const emit = defineEmits<{
   diffStep: [step: number]
   diffSwap: []
   diffUseA: []
+  /** "JSON olarak al": panoya kopyala / dosya olarak indir. */
+  copySource: []
+  download: []
 }>()
 
 const editorRef = ref<InstanceType<typeof EditorPane> | null>(null)
@@ -87,7 +98,8 @@ const model = computed({
 <template>
   <section class="panel" @drop="emit('drop', $event)" @dragover.prevent>
     <div class="tabs">
-      <button class="tab" :class="{ active: tab === 'input' }" @click="setTab('input')">Girdi</button>
+      <!-- Salt okunur belgede bu sekme bir girdi degil, belgenin kaynagi. -->
+      <button class="tab" :class="{ active: tab === 'input' }" @click="setTab('input')">{{ readonly ? 'Kaynak' : 'Girdi' }}</button>
       <button class="tab" :class="{ active: tab === 'diff' }" @click="setTab('diff')">Fark</button>
       <button
         class="tab"
@@ -96,7 +108,7 @@ const model = computed({
         @click="setTab('history')"
       >Geçmiş</button>
       <div class="tabs-spacer" />
-      <button class="collapse" title="Paneli gizle" @click="emit('collapse')">‹</button>
+      <button class="collapse" :title="readonly ? 'Kaynağı gizle' : 'Paneli gizle'" @click="emit('collapse')">‹</button>
     </div>
 
     <EditorPane
@@ -109,6 +121,8 @@ const model = computed({
       :parse-ms="parseMs"
       :has-data="hasData"
       :sync-range="syncRange"
+      :readonly="readonly"
+      :copied="sourceCopied"
       @xml="emit('xml', $event)"
       @format="emit('format')"
       @minify="emit('minify')"
@@ -116,6 +130,8 @@ const model = computed({
       @clear="emit('clear')"
       @repair="emit('repair')"
       @drop="emit('drop', $event)"
+      @copy="emit('copySource')"
+      @download="emit('download')"
     />
 
     <DiffPanel
@@ -129,6 +145,7 @@ const model = computed({
       :total="diffTotal"
       :summary="diffSummary"
       :note="diffNote"
+      :readonly="readonly"
       @update:text-a="emit('update:textA', $event)"
       @update:text-b="emit('update:textB', $event)"
       @update:only-changes="emit('update:diffOnlyChanges', $event)"
